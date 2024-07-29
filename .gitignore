@@ -1,0 +1,10 @@
+diary.md
+purgatory/
+node_modules
+lib/
+package-lock.json
+# yarn.lock
+scripts/
+sfu-local-files/
+yarn-error.log
+/.vscode

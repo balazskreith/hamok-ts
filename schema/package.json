@@ -1,0 +1,31 @@
+{
+    "name": "hamok-dev-ts-schema",
+    "version": "1.0.0",
+    "description": "Generate schema for hamok-ts",
+    "main": "index.js",
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/hamok-dev/baselib.git"
+    },
+    "keywords": [
+      "hamok",
+      "protobuf",
+      "schema"
+    ],
+    "author": "Balazs Kreith",
+    "license": "Apache-2.0",
+    "type": "module",
+    "bugs": {
+      "url": "https://github.com/hamok-dev/hamok-ts/issues"
+    },
+    "homepage": "https://github.com/hamok-dev/hamok-ts#readme",
+    "devDependencies": {
+      "@bufbuild/protoc-gen-es": "^1.0.0"
+    },
+    "dependencies": {
+      "@bufbuild/protobuf": "^1.0.0"
+    }
+  }

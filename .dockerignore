@@ -1,0 +1,7 @@
+yarn-error.log
+.dockerignore
+npm-debug.log
+Dockerfile
+.git
+.gitignore
+node_modules

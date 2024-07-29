@@ -1,0 +1,312 @@
+syntax = "proto2";
+
+package io.github.hamok.dev.schema;
+
+message HamokMessage {
+  enum MessageType {
+    /**
+     * Hello notifications are sent by every endpoint in order to inform every other endpoint
+     * about the existance.
+     */
+    HELLO_NOTIFICATION = 1;
+    /**
+     * Endpoint states are sent by the leader of the grid.
+     * Endpoint state contains information about active and inactive endpoints, so every endpoint can keep up to date
+     * about the remote endpoints
+     */
+    ENDPOINT_STATES_NOTIFICATION = 2;
+ 
+    /**
+    * Inform endpoint about the requests currently ongoing and prevent the requester to timeout those.
+    * (fetching took more time than time requestTimeout)
+    */
+    ONGOING_REQUESTS_NOTIFICATION = 3;
+
+
+    /**
+     * Storage sync is requested by a follower endpoint because it cannot follow the leader. In this case
+     * leader should dump every entry from storages synchronized by the endpoint (e.g.: replicated storage) and send it to the follower
+     */
+    STORAGE_SYNC_REQUEST = 8;
+    /**
+     * A sync response sent by the leader to the follower contains all entries plus the commit index of the raft
+     * the state is corresponded to, so the follower can refresh its raft and commit index.
+     */
+    STORAGE_SYNC_RESPONSE = 9;
+    
+
+    /**
+     * Raft Vote request is sent by a raccoon made itself a candidate 
+     * in order to be a leader of the cluster
+     */
+    RAFT_VOTE_REQUEST = 12;
+    /**
+     * Raft Vote Response is a response to a vote request
+     * contain if the voting is succeeded or not
+     */
+    RAFT_VOTE_RESPONSE = 13;
+
+
+    /**
+     * Raft Append entries chunk is sent by the leader to followers in a cluster
+     * for heartbeat and log distribution purposes
+     */
+    RAFT_APPEND_ENTRIES_REQUEST_CHUNK = 16;
+    /**
+     * Raft Append entries response is sent by a follower to the leader
+     * in order to inform the leader about the acceptance of the append request
+     */
+    RAFT_APPEND_ENTRIES_RESPONSE = 17;
+ 
+
+    /**
+     * Submit request is sent by any endpoint to the leader of the cluster
+     * in order to push a log entry to the Raft processed by Raccoons.
+     */
+    SUBMIT_MESSAGE_REQUEST = 20;
+     /**
+      * Submit response is a response from a leader endpoint to the follower
+      * inform about the success or failure correspondent to the request
+      */
+    SUBMIT_MESSAGE_RESPONSE = 21;
+ 
+
+    /**
+     * Request to clear the storage
+     */
+    CLEAR_ENTRIES_REQUEST = 24;
+    /**
+     * Response about the cleared storage
+     */
+    CLEAR_ENTRIES_RESPONSE = 25;
+    /**
+     * Clear entries notification
+     */
+    CLEAR_ENTRIES_NOTIFICATION = 26;
+ 
+
+
+    /**
+     * Request entries from remote endpoint(s).
+     */
+    GET_ENTRIES_REQUEST = 28;
+    /**
+     * Response to a gen entries request contain the found entries
+    */
+    GET_ENTRIES_RESPONSE = 29;
+
+
+    /**
+     * Request the size of a storage
+     */
+    GET_SIZE_REQUEST = 32;
+    /**
+     * Response to size request
+     */
+    GET_SIZE_RESPONSE = 33;
+ 
+
+    /**
+     * Request all the keys a storage on a remote endpoint(s) has.
+     */
+    GET_KEYS_REQUEST = 36;
+    /**
+     * Response to a keys request contain all the keys an endpoint has
+     */
+    GET_KEYS_RESPONSE = 37;
+ 
+
+    /**
+     * Request to delete entries on a remote endpoint
+     */
+    DELETE_ENTRIES_REQUEST = 40;
+    /**
+     * Response to a delete request
+     */
+    DELETE_ENTRIES_RESPONSE = 41;
+    /**
+     * Notification about deleting
+     */
+    DELETE_ENTRIES_NOTIFICATION = 42;
+
+
+    /**
+     * Request to delete entries on a remote endpoint
+     */
+    REMOVE_ENTRIES_REQUEST = 44;
+    /**
+     * Response to a delete request
+     */
+    REMOVE_ENTRIES_RESPONSE = 45;
+    /**
+     * Notification to remove specific entries from the storage.
+     * the difference between delete and remove that remove send the values
+     * specifically need to be removed and delete only send the keys. It is useful for distributed collections
+     *
+     */
+    REMOVE_ENTRIES_NOTIFICATION = 46;
+
+
+    /**
+     * Request to evict entries on a remote endpoint
+     */
+    EVICT_ENTRIES_REQUEST = 48;
+    /**
+     * Response for the evict request
+     */
+    EVICT_ENTRIES_RESPONSE = 49;
+    /**
+     * Notification to evict entries
+    */
+    EVICT_ENTRIES_NOTIFICATION = 50;
+
+
+    /**
+     * Insert item(s) only if they don't exist. if they
+     * exist then it returns with the value associated
+     *
+     * NOTE: Only the storage entries replicated by a
+     * distributed and coordinated way like by a Raft algorithm
+     * can guarantee that insert is atomic
+     *
+     */
+    INSERT_ENTRIES_REQUEST = 52;
+    /**
+     * Response to insert requests
+     */
+    INSERT_ENTRIES_RESPONSE = 53;
+    /**
+     * Notification about an insert operation.
+     */
+    INSERT_ENTRIES_NOTIFICATION = 54;
+
+
+    /**
+     * Request an update from a remote storage
+     */
+    UPDATE_ENTRIES_REQUEST = 56;
+    /**
+     * Response to an update request
+     */
+    UPDATE_ENTRIES_RESPONSE = 57;
+    /**
+     * Notification about the update
+     */
+    UPDATE_ENTRIES_NOTIFICATION = 58;
+
+    /**
+    * Restore entries request
+    */
+    RESTORE_ENTRIES_REQUEST = 60;
+    /**
+    * Response to a restore request
+    */
+    RESTORE_ENTRIES_RESPONSE = 61;
+    /**
+    * Notification about a restore
+    */
+    RESTORE_ENTRIES_NOTIFICATION = 62;
+
+    /**
+     * Request to add subscription
+     */
+    ADD_SUBSCRIPTION_REQUEST = 128;
+    /**
+     * Response to the request
+    */
+    ADD_SUBSCRIPTION_RESPONSE = 129;
+    /**
+     * Notification about an added subscription
+     */
+    ADD_SUBSCRIPTION_NOTIFICATION = 130;
+
+    /**
+     * Request to remove subscription
+     */
+    REMOVE_SUBSCRIPTION_REQUEST = 132;
+    /**
+    * Response to the request
+    */
+    REMOVE_SUBSCRIPTION_RESPONSE = 133;
+    /**
+    * Notification about a removed subscription
+    */
+    REMOVE_SUBSCRIPTION_NOTIFICATION = 134;
+
+
+  /**
+    * Request to publish data
+    */
+    PUBLISH_CUSTOM_DATA_REQUEST = 136;
+    /**
+    * Response to a publish data request
+    */
+    PUBLISH_CUSTOM_DATA_RESPONSE = 137;
+    /**
+     * Notification about an added subscription
+    */
+    PUBLISH_CUSTOM_DATA_NOTIFICATION = 138;
+
+    /**
+    * Request to provide all subscriptions a remote endpoint currently has
+    */
+    GET_SUBSCRIPTIONS_REQUEST = 140;
+    /**
+    * Response to a publish data request
+    */
+    GET_SUBSCRIPTIONS_RESPONSE = 141;
+  }
+
+  enum MessageProtocol {
+    /**
+    * Messages should be interpreted by a grid client
+    */
+    GRID_COMMUNICATION_PROTOCOL = 1;
+
+    /**
+    * Messages should be interpreted by a Raft implementation
+    */
+    RAFT_COMMUNICATION_PROTOCOL = 2;
+
+    /**
+    * Messages should be interpreted by a specific storage
+    */
+    STORAGE_COMMUNICATION_PROTOCOL = 3;
+
+    /**
+    * Messages should be interpreted by a publish / subscribe component
+    */
+    PUBSUB_COMMUNICATION_PROTOCOL = 4;
+  }
+
+  optional MessageProtocol protocol = 1;
+  optional MessageType type = 2;
+  optional string sourceId = 3;
+  optional string destinationId = 4;
+  optional string storageId = 5;
+  optional string requestId = 6;
+  optional uint64 timestamp = 7;
+  optional int32 storageSize = 8;
+
+  repeated bytes keys = 10;
+  repeated bytes values = 11;
+  repeated string activeEndpointIds = 12;
+  repeated HamokMessage embeddedMessages = 13;
+
+  optional bool success = 14;
+  optional bool executeSync = 15;
+  optional string raftLeaderId = 16;
+  optional int32 raftNumberOfLogs = 17;
+  optional int32 raftLastAppliedIndex = 18;
+  optional int32 raftCommitIndex = 19;
+  optional int32 raftLeaderNextIndex = 20;
+  optional int32 raftPrevLogTerm = 21;
+  optional int32 raftPrevLogIndex = 22;
+  optional int32 raftTerm = 23;
+  optional int32 raftPeerNextIndex = 24;
+  optional string raftCandidateId = 25;
+
+  optional int32 sequence = 26;
+  optional bool lastMessage = 27;
+  // optional int64 message_sequence = 28;
+}
