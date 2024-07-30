@@ -1,0 +1,6 @@
+diary.md
+purgatory/
+node_modules
+lib/
+package-lock.json
+# yarn.lock

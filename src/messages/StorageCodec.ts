@@ -1,5 +1,5 @@
 import * as Collections from '../common/Collections';
-import { HamokCodec, createHamokCodec, HamokDecoder, HamokEncoder } from '../common/HamokCodec';
+import { HamokCodec, HamokDecoder, HamokEncoder } from '../common/HamokCodec';
 import { UpdateEntriesNotification, UpdateEntriesRequest, UpdateEntriesResponse } from './messagetypes/UpdateEntries';
 import { HamokMessage as Message, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import { ClearEntriesNotification, ClearEntriesRequest, ClearEntriesResponse } from './messagetypes/ClearEntries';
@@ -10,7 +10,6 @@ import { RemoveEntriesNotification, RemoveEntriesRequest, RemoveEntriesResponse 
 import { EvictEntriesNotification, EvictEntriesRequest, EvictEntriesResponse } from './messagetypes/EvictEntries';
 import { InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
-import { OngoingRequestsNotification } from './messagetypes/OngoingRequests';
 import { RestoreEntriesNotification, RestoreEntriesRequest, RestoreEntriesResponse } from './messagetypes/RestoreEntries';
 
 const EMPTY_ARRAY: Uint8Array[] = [];
@@ -42,13 +41,7 @@ type Input<K, V> =
     UpdateEntriesResponse<K, V>
     ;
 
-const strCodec = createHamokCodec<string, Uint8Array>(
-	(input: string) => Buffer.from(input, 'utf-8'),
-	(input: Uint8Array) => Buffer.from(input).toString('utf-8')
-);
-
 export type StorageCodecMessageMap<K, V> = {
-	OngoingRequestsNotification: OngoingRequestsNotification;
 	ClearEntriesRequest: ClearEntriesRequest;
 	ClearEntriesResponse: ClearEntriesResponse;
 	ClearEntriesNotification: ClearEntriesNotification;
@@ -91,9 +84,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		let result: Message;
 
 		switch (input.constructor) {
-			case OngoingRequestsNotification:
-				result = this.encodeOngoingRequestsNotification(input as OngoingRequestsNotification);
-				break;
 			case ClearEntriesRequest:
 				result = this.encodeClearEntriesRequest(input as ClearEntriesRequest);
 				break;
@@ -201,10 +191,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		let result: Input<K, V> | undefined;
 
 		switch (message.type) {
-			case MessageType.ONGOING_REQUESTS_NOTIFICATION:
-				type = callback ? 'OngoingRequestsNotification' : undefined;
-				result = this.decodeOngoingRequestsNotification(message);
-				break;
 			case MessageType.CLEAR_ENTRIES_REQUEST:
 				type = callback ? 'ClearEntriesRequest' : undefined;
 				result = this.decodeClearEntriesRequest(message);
@@ -323,28 +309,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		}
 		
 		return result;
-	}
-
-	public encodeOngoingRequestsNotification(notification: OngoingRequestsNotification): Message {
-		const keys = this._encodeSet<string>(notification.requestIds, strCodec);
-        
-		return new Message({
-			type: MessageType.ONGOING_REQUESTS_NOTIFICATION,
-			destinationId: notification.destinationEndpointId,
-			keys,
-		});
-	}
-
-	public decodeOngoingRequestsNotification(message: Message): OngoingRequestsNotification {
-		if (message.type !== MessageType.ONGOING_REQUESTS_NOTIFICATION) {
-			throw new Error('decodeOngoingRequestsNotification(): Message type must be ONGOING_REQUESTS_NOTIFICATION');
-		}
-		const requestIds = this._decodeSet<string>(message.keys, strCodec);
-        
-		return new OngoingRequestsNotification(
-			requestIds,
-			message.destinationId,
-		);
 	}
 
 	public encodeClearEntriesRequest(request: ClearEntriesRequest): Message {
@@ -968,14 +932,14 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	private _encodeKeys(keys: ReadonlySet<K>): Uint8Array[] {
-		return this._encodeSet<K>(keys, this.keyCodec);
+		return StorageCodec._encodeSet<K>(keys, this.keyCodec);
 	}
 
 	private _decodeKeys(keys: Uint8Array[]): ReadonlySet<K> {
-		return this._decodeSet<K>(keys, this.keyCodec);
+		return StorageCodec._decodeSet<K>(keys, this.keyCodec);
 	}
     
-	private _encodeSet<T>(keys: ReadonlySet<T>, encoder: HamokEncoder<T, Uint8Array>): Uint8Array[] {
+	private static _encodeSet<T>(keys: ReadonlySet<T>, encoder: HamokEncoder<T, Uint8Array>): Uint8Array[] {
 		if (keys.size < 1) {
 			return EMPTY_ARRAY;
 		}
@@ -990,7 +954,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		return result;
 	}
 
-	private _decodeSet<T>(keys: Uint8Array[], decoder: HamokDecoder<T, Uint8Array>): ReadonlySet<T> {
+	private static _decodeSet<T>(keys: Uint8Array[], decoder: HamokDecoder<T, Uint8Array>): ReadonlySet<T> {
 		if (keys.length < 1) {
 			return Collections.EMPTY_SET;
 		}

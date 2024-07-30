@@ -3,6 +3,7 @@ export type StorageEventMap<K, V> = {
 	'update': [key: K, value: V],
 	'remove': [key: K, value: V],
 	'clear': [],
+	'close': [],
 }
 
 export interface Storage<K, V> {
@@ -50,7 +51,7 @@ export interface Storage<K, V> {
      * @param keys set of keys tried to be retrieved from the storage
      * @returns a map filled with key, value pair found in the storage
      */
-	getAll(keys: ReadonlySet<K>): Promise<ReadonlyMap<K, V>>;
+	getAll(keys: IterableIterator<K> | K[]): Promise<ReadonlyMap<K, V>>;
     
 	set(key: K, value: V): Promise<V | undefined>;
 	setAll(entries: ReadonlyMap<K, V>): Promise<ReadonlyMap<K, V>>;
@@ -59,13 +60,19 @@ export interface Storage<K, V> {
 	insertAll(entries: ReadonlyMap<K, V>): Promise<ReadonlyMap<K, V>>;
 
 	delete(key: K): Promise<boolean>;
-	deleteAll(keys: ReadonlySet<K>): Promise<ReadonlySet<K>>;
+	deleteAll(keys: IterableIterator<K> | K[]): Promise<ReadonlySet<K>>;
 
-	evict(key: K): Promise<void>;
-	evictAll(keys: ReadonlySet<K>): Promise<void>;
+	remove(key: K): Promise<boolean>;
+	removeAll(keys: IterableIterator<K> | K[]): Promise<ReadonlyMap<K, V>>;
 
-	restore(key: K, value: V): Promise<void>;
-	restoreAll(entries: ReadonlyMap<K, V>): Promise<void>;
+	// evict(key: K): Promise<void>;
+	// evictAll(keys: ReadonlySet<K>): Promise<void>;
+
+	// restore(key: K, value: V): Promise<void>;
+	// restoreAll(entries: ReadonlyMap<K, V>): Promise<void>;
 
 	[Symbol.asyncIterator](): AsyncIterableIterator<[K, V]>;
+
+	readonly closed: boolean;
+	close(): void;
 }

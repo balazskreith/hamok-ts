@@ -1,0 +1,52 @@
+{
+	"name": "hamok-example",
+	"version": "2.0.0",
+	"description": "Example for Hamok",
+	"main": "main.js",
+	"scripts": {
+		"format": "prettier --write \"src/**/*.ts\"",
+		"dev": "nodemon -x ts-node src/main.ts",
+		"build": "tsc",
+		"test": "jest --config jest.config.js",
+		"lint": "eslint --ext .ts src"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/hamok-dev/hamok-ts.git"
+	},
+	"keywords": [
+		"signal",
+		"server",
+		"webrtc"
+	],
+	"author": "Balazs Kreith",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/hamok-dev/hamok-ts/issues"
+	},
+	"resolutions": {
+		"wrap-ansi": "7.0.0",
+		"string-width": "4.1.0"
+	},
+	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
+	"dependencies": {
+		"pino": "^9.3.2",
+		"@hamok-dev/hamok-ts": "file:../"
+	},
+	"devDependencies": {
+		"@types/events": "^3.0.0",
+		"@types/pino": "^7.0.5",
+		"@types/uuid": "^10.0.0",
+		"@tsconfig/node20": "^1.0.2",
+		"@types/jest": "^29.5.1",
+		"@typescript-eslint/eslint-plugin": "^6.8.0",
+		"@typescript-eslint/parser": "^6.8.0",
+		"eslint": "^8.44.0",
+		"jest": "^29.5.0",
+		"nodemon": "^3.1.0",
+		"prettier": "^2.8.8",
+		"ts-jest": "^29.1.0",
+		"ts-node": "^10.9.1",
+		"typescript": "^5.1.6"
+	}
+}

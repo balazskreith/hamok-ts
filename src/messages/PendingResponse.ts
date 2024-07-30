@@ -26,6 +26,12 @@ export class PendingResponse {
 		return this.config.requestId;
 	}
 
+	public get storageId() {
+		if (this._messages.size < 1) return undefined;
+		
+		return [ ...this._messages.values() ][0].storageId;
+	}
+
 	public get isReady(): boolean {
 		return this._result !== undefined;
 	}

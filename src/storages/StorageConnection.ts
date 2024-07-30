@@ -4,7 +4,6 @@ import { GetEntriesRequest, GetEntriesResponse } from '../messages/messagetypes/
 import { StorageCodec } from '../messages/StorageCodec';
 import { v4 as uuid } from 'uuid';
 import { createLogger } from '../common/logger';
-import { PendingRequest } from '../messages/PendingRequest';
 import { OngoingRequestsNotification } from '../messages/messagetypes/OngoingRequests';
 import { ClearEntriesRequest, ClearEntriesNotification, ClearEntriesResponse } from '../messages/messagetypes/ClearEntries';
 import { DeleteEntriesRequest, DeleteEntriesNotification, DeleteEntriesResponse } from '../messages/messagetypes/DeleteEntries';
@@ -15,10 +14,9 @@ import { InsertEntriesRequest, InsertEntriesNotification, InsertEntriesResponse 
 import { RemoveEntriesRequest, RemoveEntriesNotification, RemoveEntriesResponse } from '../messages/messagetypes/RemoveEntries';
 import { RestoreEntriesRequest, RestoreEntriesNotification, RestoreEntriesResponse } from '../messages/messagetypes/RestoreEntries';
 import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse } from '../messages/messagetypes/UpdateEntries';
-import { PendingResponse } from '../messages/PendingResponse';
 import { createResponseChunker, ResponseChunker } from '../messages/ResponseChunker';
 import * as Collections from '../common/Collections';
-import { OngoingRequestsNotifier } from '../messages/OngoingRequestsNotifier';
+import { HamokGrid } from '../HamokGrid';
 
 const logger = createLogger('StorageConnection');
 
@@ -48,26 +46,19 @@ export type StorageConnectionConfig = {
 	/**
      * The maximum number of keys a response can contain.
      */
-	maxResponseKeys?: number,
+
+	maxOutboundKeys?: number,
 
 	/**
      * The maximum number of values a response can contain.
      */
-	maxResponseValues?: number,
+	maxOutboundValues?: number,
 
-	/**
-     * In case a requestId is added explicitly to the ongoing requests set
-     * by calling the addOngoingRequestId() this setting determines the period 
-     * to send notification to the source(s) about an ongoing requests to prevent timeout there
-     * The notification stopped sent if removeOngoingRequestId is called, and it is very important 
-     * to call it explicitly in any case. In another word comlink is not responsible to handle 
-     * automatically an explicitly postponed request to stop sending notification about.
-     */
-	ongoingRequestsSendingPeriodInMs: number;
 }
 
 export type StorageConnectionEventMap<K, V> = {
 	'message': [message: HamokMessage, submit: boolean],
+	'leader-changed': [newLeaderId: string | undefined],
 	close: [],
 
 	OngoingRequestsNotification: [OngoingRequestsNotification];
@@ -101,43 +92,22 @@ export type StorageConnectionResponseMap<K, V> = {
 	RestoreEntriesResponse: RestoreEntriesResponse;
 }
 
-export type StorageConnectionNotificationMap<K, V> = {
-	OngoingRequestsNotification: OngoingRequestsNotification;
-	ClearEntriesNotification: ClearEntriesNotification;
-	DeleteEntriesNotification: DeleteEntriesNotification<K>;
-	RemoveEntriesNotification: RemoveEntriesNotification<K>;
-	EvictEntriesNotification: EvictEntriesNotification<K>;
-	InsertEntriesNotification: InsertEntriesNotification<K, V>;
-	UpdateEntriesNotification: UpdateEntriesNotification<K, V>;
-	RestoreEntriesNotification: RestoreEntriesNotification<K, V>;
-}
-
 export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEventMap<K, V>> {
-	private readonly _pendingRequests = new Map<string, PendingRequest>();
-	private readonly _pendingResponses = new Map<string, PendingResponse>();
 	private readonly _responseChunker: ResponseChunker;
 
 	private _closed = false;
 
 	public constructor(
-		private readonly config: StorageConnectionConfig,
+		public readonly config: StorageConnectionConfig,
 		public readonly codec: StorageCodec<K, V>,
-		public readonly remotePeers: ReadonlySet<string>,
-		public readonly ongoingRequestsNotifier: OngoingRequestsNotifier,
+		public readonly grid: HamokGrid,
 	) {
 		super();
 
 		this._responseChunker = createResponseChunker(
-			config.maxResponseKeys ?? 0,
-			config.maxResponseValues ?? 0,
+			config.maxOutboundKeys ?? 0,
+			config.maxOutboundValues ?? 0,
 		);
-
-		// this is emitted by the Hamok instance
-		this.on('OngoingRequestsNotification', (notification) => {
-			notification.requestIds.forEach((requestId) => {
-				this._pendingRequests.get(requestId)?.postponeTimeout();
-			});
-		});
 	}
 
 	public get closed() {
@@ -148,12 +118,22 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		if (this._closed) return;
 		this._closed = true;
 
-		for (const pendingRequest of this._pendingRequests.values()) {
+		const rejectedRequestIds: string[] = [];
+
+		for (const pendingRequest of this.grid.pendingRequests.values()) {
+			if (pendingRequest.config.storageId !== this.config.storageId) continue;
 			pendingRequest.reject('Connection is closed');
-			this.ongoingRequestsNotifier.remove(pendingRequest.id);
+
+			rejectedRequestIds.push(pendingRequest.id);
 		}
-		this._pendingRequests.clear();
-		this._pendingResponses.clear();
+
+		this.grid.purgeResponseForRequests(rejectedRequestIds);
+
+		for (const activeOngoingRequest of this.grid.ongoingRequestsNotifier.activeOngoingRequests.values()) {
+			if (activeOngoingRequest.storageId !== this.config.storageId) continue;
+
+			this.grid.ongoingRequestsNotifier.remove(activeOngoingRequest.requestId);
+		}
 
 		this.emit('close');
 
@@ -161,22 +141,6 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 	}
 
 	public accept(message: HamokMessage) {
-		switch (message.type) {
-			case HamokMessageType.ADD_SUBSCRIPTION_RESPONSE:
-			case HamokMessageType.REMOVE_SUBSCRIPTION_RESPONSE:
-			case HamokMessageType.GET_ENTRIES_RESPONSE:
-			case HamokMessageType.GET_KEYS_RESPONSE:
-			case HamokMessageType.GET_SIZE_RESPONSE:
-			case HamokMessageType.CLEAR_ENTRIES_RESPONSE:
-			case HamokMessageType.DELETE_ENTRIES_RESPONSE:
-			case HamokMessageType.REMOVE_ENTRIES_RESPONSE:
-			case HamokMessageType.EVICT_ENTRIES_RESPONSE:
-			case HamokMessageType.INSERT_ENTRIES_RESPONSE:
-			case HamokMessageType.UPDATE_ENTRIES_RESPONSE:
-			case HamokMessageType.RESTORE_ENTRIES_RESPONSE:
-				return this._processResponse(message);
-		}
-
 		this.codec.decode(message, this._emitDecoded.bind(this));
 	}
 
@@ -186,22 +150,49 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		}
 	}
 
-	public async getEntries(
+	public async requestGetEntries(
 		keys: ReadonlySet<K>,
-		targetPeerIds?: ReadonlySet<string>
+		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlyMap<K, V>> {
-		const requestId = uuid();
-		const message = this.codec.encodeGetEntriesRequest(
-			new GetEntriesRequest(
+		const result = new Map<K, V>();
+		const responseMessages = await Promise.all(
+			Collections.splitSet<K>(
 				keys,
-				requestId,
-			)
+				this.config.maxOutboundKeys ?? 0,
+				() => [ keys ]
+			).map((batchedEntries) => this._request({
+				message: this.codec.encodeGetEntriesRequest(
+					new GetEntriesRequest(
+						batchedEntries,
+						uuid(),
+					)
+				),
+				targetPeerIds, 
+			}))
 		);
+
+		responseMessages.flatMap((responses) => responses)
+			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.forEach((response) => Collections.concatMaps(
+				result,
+				response.foundEntries
+			));
+		
+		return result;
+	}
+
+	public async requestGetKeys(
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<ReadonlyMap<K, V>> {
 		const result = new Map<K, V>();
 
 		(await this._request({
-			message, 
-			targetPeerIds
+			message: this.codec.encodeGetKeysRequest(
+				new GetKeysRequest(
+					uuid(),
+				)
+			),
+			targetPeerIds,
 		}))
 			.map((response) => this.codec.decodeGetEntriesResponse(response))
 			.forEach((response) => Collections.concatMaps(
@@ -210,6 +201,191 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 			));
 		
 		return result;
+	}
+
+	public async requestClearEntries(
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<void> {
+		return this._request({
+			message: this.codec.encodeClearEntriesRequest(
+				new ClearEntriesRequest(
+					uuid(),
+				)
+			),
+			targetPeerIds
+		}).then(() => void 0);
+	}
+
+	public notifyClearEntries(targetPeerIds?: ReadonlySet<string>) {
+		this._sendMessage(this.codec.encodeClearEntriesNotification(new ClearEntriesNotification()), targetPeerIds);
+	}
+
+	public async requestDeleteEntries(
+		keys: ReadonlySet<K>,
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<ReadonlySet<K>> {
+		const result = new Set<K>();
+
+		const responseMessages = await Promise.all(
+			Collections.splitSet<K>(
+				keys,
+				this.config.maxOutboundKeys ?? 0,
+				() => [ keys ]
+			).map((batchedEntries) => this._request({
+				message: this.codec.encodeDeleteEntriesRequest(
+					new DeleteEntriesRequest(
+						uuid(),
+						batchedEntries,
+					)
+				),
+				targetPeerIds
+			}))
+		);
+
+		responseMessages.flatMap((responses) => responses)
+			.map((response) => this.codec.decodeDeleteEntriesResponse(response))
+			.forEach((response) => Collections.concatSet(
+				result,
+				response.deletedKeys
+			));
+		
+		return result;
+	}
+
+	public notifyDeleteEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string>) {
+		Collections.splitSet<K>(
+			keys,
+			this.config.maxOutboundKeys ?? 0,
+			() => [ keys ]
+		)
+			.map((batchedEntries) => this.codec.encodeDeleteEntriesNotification(new DeleteEntriesNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
+	public async requestRemoveEntries(
+		keys: ReadonlySet<K>,
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<ReadonlyMap<K, V>> {
+		const result = new Map<K, V>();
+
+		const responseMessages = await Promise.all(
+			Collections.splitSet<K>(
+				keys,
+				this.config.maxOutboundKeys ?? 0,
+				() => [ keys ]
+			).map((batchedEntries) => this._request({
+				message: this.codec.encodeRemoveEntriesRequest(
+					new RemoveEntriesRequest(
+						uuid(),
+						batchedEntries,
+					)
+				),
+				targetPeerIds
+			}))
+		);
+
+		responseMessages.flatMap((responses) => responses)
+			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.forEach((response) => Collections.concatMaps(
+				result,
+				response.foundEntries
+			));
+		
+		return result;
+	}
+
+	public notifyRemoveEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string>) {
+		Collections.splitSet<K>(
+			keys,
+			this.config.maxOutboundKeys ?? 0,
+			() => [ keys ]
+		)
+			.map((batchedEntries) => this.codec.encodeRemoveEntriesNotification(new RemoveEntriesNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
+	public async requestInsertEntries(
+		entries: ReadonlyMap<K, V>,
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<ReadonlyMap<K, V>> {
+		const result = new Map<K, V>();
+
+		const responseMessages = await Promise.all(
+			Collections.splitMap<K, V>(
+				entries,
+				Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+				() => [ entries ]
+			).map((batchedEntries) => this._request({
+				message: this.codec.encodeInsertEntriesRequest(
+					new InsertEntriesRequest(
+						uuid(),
+						batchedEntries,
+					)
+				),
+				targetPeerIds
+			}))
+		);
+
+		responseMessages.flatMap((responses) => responses)
+			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.forEach((response) => Collections.concatMaps(
+				result,
+				response.foundEntries
+			));
+		
+		return result;
+	}
+
+	public notifyInsertEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string>) {
+		Collections.splitMap<K, V>(
+			entries,
+			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+			() => [ entries ]
+		)
+			.map((batchedEntries) => this.codec.encodeInsertEntriesNotification(new InsertEntriesNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
+	public async requestUpdateEntries(
+		entries: ReadonlyMap<K, V>,
+		targetPeerIds?: ReadonlySet<string> | string[]
+	): Promise<ReadonlyMap<K, V>> {
+		const result = new Map<K, V>();
+
+		const responseMessages = await Promise.all(
+			Collections.splitMap<K, V>(
+				entries,
+				Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+				() => [ entries ]
+			).map((batchedEntries) => this._request({
+				message: this.codec.encodeUpdateEntriesRequest(
+					new UpdateEntriesRequest(
+						uuid(),
+						batchedEntries,
+					)
+				),
+				targetPeerIds
+			}))
+		);
+
+		responseMessages.flatMap((responses) => responses)
+			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.forEach((response) => Collections.concatMaps(
+				result,
+				response.foundEntries
+			));
+		
+		return result;
+	}
+
+	public notifyUpdateEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string>) {
+		Collections.splitMap<K, V>(
+			entries,
+			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+			() => [ entries ]
+		)
+			.map((batchedEntries) => this.codec.encodeUpdateEntriesNotification(new UpdateEntriesNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
 	}
 
 	public respond<U extends keyof StorageConnectionResponseMap<K, V>>(type: U, response: StorageConnectionResponseMap<K, V>[U], targetPeerIds?: string | string[]): void {
@@ -254,180 +430,24 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		}
 	}
 
-	public notify<U extends keyof StorageConnectionNotificationMap<K, V>>(type: U, notification: StorageConnectionNotificationMap<K, V>[U], targetPeerIds?: string[]) {
-		let message: HamokMessage | undefined;
-
-		switch (type) {
-			case 'OngoingRequestsNotification':
-				message = this.codec.encodeOngoingRequestsNotification(notification as OngoingRequestsNotification);
-				break;
-			case 'ClearEntriesNotification':
-				message = this.codec.encodeClearEntriesNotification(notification as ClearEntriesNotification);
-				break;
-			case 'DeleteEntriesNotification':
-				message = this.codec.encodeDeleteEntriesNotification(notification as DeleteEntriesNotification<K>);
-				break;
-			case 'RemoveEntriesNotification':
-				message = this.codec.encodeRemoveEntriesNotification(notification as RemoveEntriesNotification<K>);
-				break;
-			case 'EvictEntriesNotification':
-				message = this.codec.encodeEvictEntriesNotification(notification as EvictEntriesNotification<K>);
-				break;
-			case 'InsertEntriesNotification':
-				message = this.codec.encodeInsertEntriesNotification(notification as InsertEntriesNotification<K, V>);
-				break;
-			case 'UpdateEntriesNotification':
-				message = this.codec.encodeUpdateEntriesNotification(notification as UpdateEntriesNotification<K, V>);
-				break;
-			case 'RestoreEntriesNotification':
-				message = this.codec.encodeRestoreEntriesNotification(notification as RestoreEntriesNotification<K, V>);
-				break;
-		}
-
-		if (!message) {
-			return logger.warn('Cannot encode notification for type %s', type);
-		}
-
-		this._sendMessage(
-			message,
-			targetPeerIds ? new Set(targetPeerIds) : undefined
-		);
-	}
-
 	private async _request(options: {
 		message: HamokMessage, 
-		targetPeerIds?: ReadonlySet<string>, 
+		targetPeerIds?: ReadonlySet<string> | string[], 
 	}): Promise<HamokMessage[]> {
-		const requestId = options.message.requestId;
-
-		if (!requestId) {
-			logger.warn('Cannot send request message without a requestId %o', options.message);
-			
-			return Promise.resolve([]);
-		}
-		const remotePeers = options.targetPeerIds ?? this.remotePeers;
-		const pendingRequest = new PendingRequest({
-			requestId,
-			neededResponses: this.config.neededResponse,
-			remotePeers,
+		options.message.storageId = this.config.storageId;
+		
+		return this.grid.request({
+			message: options.message,
 			timeoutInMs: this.config.requestTimeoutInMs,
+			neededResponses: this.config.neededResponse,
+			targetPeerIds: options.targetPeerIds,
+			submit: options.message.type ? this.config.submitting?.has(options.message.type) : false,
 		});
-		const prevPendingRequest = this._pendingRequests.get(pendingRequest.id);
-
-		if (prevPendingRequest) {
-			prevPendingRequest.reject('Request is overridden');
-		}
-		this._pendingRequests.set(pendingRequest.id, pendingRequest);
-		try {
-			this._sendMessage(options.message, remotePeers);
-			const response = await pendingRequest;
-
-			return response;
-		} finally {
-			this._purgeResponseForRequest(requestId!);
-			this._pendingRequests.delete(pendingRequest.id);
-		}
 	}
 
-	private _processResponse(message: HamokMessage): void {
-		if (!message.requestId || !message.sourceId) {
-			logger.warn('_processResponse(): Message does not have a requestId or sourceId. message: %o', message);
-			
-			return;
-		}
-		const chunkedResponse = message.sequence !== undefined && message.lastMessage !== undefined;
-		const onlyOneChunkExists = message.sequence === 0 && message.lastMessage === true;
-		// console.warn("_responseReceived ", message);
-
-		if (chunkedResponse && !onlyOneChunkExists) {
-			const pendingResponseId = `${message.sourceId}#${message.requestId}`;
-			let pendingResponse = this._pendingResponses.get(pendingResponseId);
-
-			if (!pendingResponse) {
-				pendingResponse = new PendingResponse({
-					requestId: message.requestId,
-					sourcePeerId: message.sourceId,
-				});
-				this._pendingResponses.set(pendingResponseId, pendingResponse);
-			}
-			pendingResponse.accept(message);
-			if (!pendingResponse.isReady) {
-				const pendingRequest = this._pendingRequests.get(message.requestId ?? 'notExists');
-				// let's postpone the timeout if we knoe responses are coming
-
-				if (pendingRequest) {
-					pendingRequest.postponeTimeout();
-				}
-				
-				return;
-			}
-			if (!this._pendingResponses.delete(pendingResponseId)) {
-				logger.warn(`Unsuccessful deleting for pending response ${pendingResponseId}`);
-			}
-			const assembledResponse = pendingResponse.result;
-
-			if (!assembledResponse) {
-				logger.warn(`Undefined Assembled response, cannot make a response for request ${message.requestId}`, message);
-				
-				return;
-			}
-			message = assembledResponse;
-		}
-		if (!message.requestId) {
-			logger.warn('response message does not have a requestId', message);
-			
-			return;
-		}
-		const pendingRequest = this._pendingRequests.get(message.requestId);
-
-		if (!pendingRequest) {
-			logger.warn(`Cannot find pending request for requestId ${message.requestId}`, message);
-			
-			return;
-		}
-		if (pendingRequest.completed) {
-			logger.warn('Response is received for an already completed request. pendingRequest: %o, response: %o', pendingRequest, message);
-			
-			return;
-		}
-		pendingRequest.accept(message);
-	}
-
-	private _sendMessage(
-		message: HamokMessage, 
-		destinationPeerIds?: ReadonlySet<string>,
-	) {
+	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[]) {
 		message.storageId = this.config.storageId;
-		const submit = message.type ? this.config.submitting?.has(message.type) ?? false : false;
 
-		if (!destinationPeerIds) {
-			return this.emit('message', message, submit);
-		} else if (destinationPeerIds.size < 1) {
-			return logger.warn('Empty set of destination has been provided for request %o', message);   
-		} else if (destinationPeerIds.size === 1) {
-			for (const destinationId of destinationPeerIds) {
-				message.destinationId = destinationId;
-				this.emit('message', message, submit);
-			}
-		} else {
-			for (const destinationId of destinationPeerIds) {
-				this.emit('message', new HamokMessage({
-					...message,
-					destinationId
-				}), submit);
-			}
-		}
+		this.grid.sendMessage(message, targetPeerIds);
 	}
-
-	private _purgeResponseForRequest(requestId: string) {
-		const pendingResponseKeys: string[] = [];
-
-		for (const [ key, pendingResponse ] of this._pendingResponses) {
-			if (pendingResponse.requestId === requestId) {
-				pendingResponseKeys.push(key);
-			}
-		}
-		pendingResponseKeys.forEach((pendingResponseKey) => this._pendingResponses.delete(pendingResponseKey));
-	}
-	
 }

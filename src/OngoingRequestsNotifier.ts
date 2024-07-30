@@ -1,24 +1,27 @@
-import * as Collections from '../common/Collections';
-import { createLogger } from '../common/logger';
-import { OngoingRequestsNotification } from './messagetypes/OngoingRequests';
+import * as Collections from './common/Collections';
+import { createLogger } from './common/logger';
+import { OngoingRequestsNotification } from './messages/messagetypes/OngoingRequests';
 
 const logger = createLogger('OngoingRequests');
 
 export type ActiveOngoingRequest = {
 	requestId: string,
 	remotePeerId: string,
-	storageId?: string
+	storageId: string
 }
 
 export class OngoingRequestsNotifier {
 	private readonly _activeOngoingRequests = new Map<string, ActiveOngoingRequest>();
 	private _timer?: ReturnType<typeof setInterval>;
 	
-	public sender?: (notification: OngoingRequestsNotification) => void;
-
 	public constructor(
 		public readonly timeoutInMs: number,
+		private readonly _sender: (notification: OngoingRequestsNotification) => void,
 	) {
+	}
+
+	public get activeOngoingRequests(): ReadonlyMap<string, ActiveOngoingRequest> {
+		return this._activeOngoingRequests;
 	}
 
 	public add(activeOngoingRequest: ActiveOngoingRequest): void {
@@ -57,19 +60,18 @@ export class OngoingRequestsNotifier {
 			if (this._activeOngoingRequests.size < 1) {
 				return (this._timer = undefined);
 			}
-			if (!this.sender) {
-				return logger.warn('Cannot send notifications, becasue the sender is undefined');
-			}
 
 			const remotePeerActiveRequests = Collections.groupArrayBy([ ...this._activeOngoingRequests.values() ], (item) => item.remotePeerId);
 
 			for (const [ remotePeerId, ongoingRequests ] of remotePeerActiveRequests) {
+
 				const notification = new OngoingRequestsNotification(
 					new Set(ongoingRequests.map((item) => item.requestId)),
 					remotePeerId
 				);
 
-				this.sender(notification);
+				this._sender(notification);
+				
 			}
 		}, this.timeoutInMs);
 	}

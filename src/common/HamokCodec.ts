@@ -13,6 +13,26 @@ export function createHamokCodec<U, R>(encode: (input: U) => R, decode: (input: 
 	};
 }
 
+export function createHamokJsonBinaryCodec<T>(): HamokCodec<T, Uint8Array> {
+	const encoder = new TextEncoder();
+	const decoder = new TextDecoder();
+
+	return {
+		encode: (data: T) => {
+			const jsonString = JSON.stringify(data);
+			const encoded = encoder.encode(jsonString);
+            
+			return encoded;
+		},
+		decode: (data: Uint8Array) => {
+			const jsonString = decoder.decode(data);
+			const decoded = JSON.parse(jsonString);
+            
+			return decoded;
+		},
+	};
+}
+
 export interface HamokCodec<U, R> extends HamokEncoder<U, R>, HamokDecoder<U, R> {}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

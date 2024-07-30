@@ -1,22 +1,24 @@
 import * as Collections from '../common/Collections';
 
+export type BaseMapUpdateResult<K, V> = {
+	inserted: [K, V][],
+	updated: [K, oldvalue: V][],
+}
+
 export interface BaseMap<K, V> extends Map<K, V> {
 	getAll(keys: IterableIterator<K>): ReadonlyMap<K, V>;
 	set(key: K, value: V, callback?: (oldValue: V | undefined) => void): this;
-	setAll(entries: IterableIterator<[K, V]>): {
-		inserted: [K, V][],
-		updated: [K, oldvalue: V][],
-	};
+	setAll(entries: ReadonlyMap<K, V>, callback?: (result: BaseMapUpdateResult<K, V>) => void): this;
 	insert(key: K, value: V): V | undefined;
-	insertAll(entries: IterableIterator<[K, V]>): ReadonlyMap<K, V>;
+	insertAll(entries: ReadonlyMap<K, V>): ReadonlyMap<K, V>;
 	deleteAll(keys: IterableIterator<K>): K[];
 	remove(key: K): V | undefined;
-	removeAll(keys: IterableIterator<K>): [K, V][];
+	removeAll(keys: IterableIterator<K>): ReadonlyMap<K, V>;
 }
 
 export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 
-	private constructor(
+	public constructor(
 		entries?: ReadonlyMap<K, V>,
 	) {
 		super(entries);
@@ -45,10 +47,7 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 		return this;
 	}
 
-	public setAll(entries: IterableIterator<[K, V]>): {
-		inserted: [K, V][],
-		updated: [K, oldvalue: V][],
-	} {
+	public setAll(entries: ReadonlyMap<K, V>, callback?: (result: BaseMapUpdateResult<K, V>) => void): this {
 		const inserted: [K, V][] = [];
 		const updated: [K, V][] = [];
 
@@ -62,11 +61,13 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 				}
 			);
 		}
-		
-		return {
+
+		callback?.({
 			inserted,
 			updated,
-		};
+		});
+		
+		return this;
 	}
     
 	public insert(key: K, value: V): V | undefined {
@@ -78,7 +79,7 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 		super.set(key, value);
 	}
 
-	public insertAll(entries: IterableIterator<[K, V]>): ReadonlyMap<K, V> {
+	public insertAll(entries: ReadonlyMap<K, V>): ReadonlyMap<K, V> {
 		const result = new Map<K, V>();
 
 		for (const [ key, value ] of entries) {
@@ -117,7 +118,7 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 		return value;
 	}
 
-	public removeAll(keys: IterableIterator<K>): [K, V][] {
+	public removeAll(keys: IterableIterator<K>): ReadonlyMap<K, V> {
 		const result: [K, V][] = [];
 
 		for (const key of keys) {
@@ -129,6 +130,6 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 			result.push([ key, value ]);
 		}
 
-		return result;
+		return new Map(result);
 	}
 }

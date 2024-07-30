@@ -8,6 +8,7 @@ export type PendingRequestConfig = {
 	timeoutInMs?: number;
 	neededResponses?: number;
 	remotePeers?: ReadonlySet<string>;
+	storageId?: string,
 }
 
 export type PendingRequestState = 'pending' | 'resolved' | 'rejected';
