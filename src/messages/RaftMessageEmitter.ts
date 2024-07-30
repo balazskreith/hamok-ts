@@ -2,8 +2,11 @@ import { EndpointStatesNotification } from './messagetypes/EndpointNotification'
 import { HelloNotification } from './messagetypes/HelloNotification';
 import { RaftAppendEntriesRequestChunk, RaftAppendEntriesResponse } from './messagetypes/RaftAppendEntries';
 import { RaftVoteRequest, RaftVoteResponse } from './messagetypes/RaftVote';
-import { HamokMessage, HamokMessage_MessageType as MessageType } from './HamokMessage';
+import { HamokMessage, HamokMessage_MessageProtocol as MessageProtocol, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import EventEmitter from 'events';
+import { createLogger } from '../common/logger';
+
+const logger = createLogger('RaftMessageEmitter');
 
 type Input = 
     HelloNotification |
@@ -37,7 +40,12 @@ function arrayToSet<T>(array?: T[]): Set<T> | undefined {
 }
 
 export class RaftMessageEmitter extends EventEmitter<EventMap> {
-    
+	public constructor() {
+		super();
+
+		logger.trace('RaftMessageEmitter created');
+	}
+
 	public send(input: Input) {
 		switch (input.constructor) {
 			case HelloNotification:
@@ -72,6 +80,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 				this.emit('EndpointStatesNotification', this.decodeEndpointStateNotification(message));
 				break;
 			case MessageType.RAFT_VOTE_REQUEST:
+				// logger.debug('Received RaftVoteRequest %o, request: %o', message, this.decodeRaftVoteRequest(message));
 				this.emit('RaftVoteRequest', this.decodeRaftVoteRequest(message));
 				break;
 			case MessageType.RAFT_VOTE_RESPONSE:
@@ -90,6 +99,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 
 	public encodeHelloNotification(notification: HelloNotification): HamokMessage {
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.HELLO_NOTIFICATION,
 			sourceId: notification.sourcePeerId,
 			destinationId: notification.destinationPeerId,
@@ -113,6 +123,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 		const activeEndpointIds = setToArray<string>(notification.activeEndpointIds);
         
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.ENDPOINT_STATES_NOTIFICATION,
 			sourceId: notification.sourceEndpointId,
 			destinationId: notification.destinationEndpointId,
@@ -143,6 +154,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 
 	public encodeRaftVoteRequest(request: RaftVoteRequest): HamokMessage {
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.RAFT_VOTE_REQUEST,
 			raftTerm: request.term,
 			raftPrevLogIndex: request.lastLogIndex,
@@ -168,6 +180,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
     
 	public encodeRaftVoteResponse(response: RaftVoteResponse): HamokMessage {
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.RAFT_VOTE_RESPONSE,
 			raftTerm: response.term,
 			success: response.voteGranted,
@@ -191,6 +204,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 
 	public encodeRaftAppendEntriesRequest(request: RaftAppendEntriesRequestChunk): HamokMessage {
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.RAFT_APPEND_ENTRIES_REQUEST_CHUNK,
 			requestId: request.requestId,
 			destinationId: request.peerId,
@@ -236,6 +250,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 
 	public encodeRaftAppendEntriesResponse(response: RaftAppendEntriesResponse): HamokMessage {
 		return new HamokMessage({
+			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
 			type: MessageType.RAFT_APPEND_ENTRIES_RESPONSE,
 			requestId: response.requestId,
 			sourceId: response.sourcePeerId,

@@ -15,8 +15,6 @@ export type RaftEngineConfig = {
 	electionTimeoutInMs: number;
 	followerMaxIdleInMs: number,
 	heartbeatInMs: number,
-	peerMaxIdleTimeInMs: number;
-	sendingHelloTimeoutInMs: number,
 }
 
 export class RaftEngine {
@@ -52,7 +50,7 @@ export class RaftEngine {
 
 		this._leaderId = newLeaderId;
 
-		logger.info(`Leader changed from ${prevLeaderId} to ${newLeaderId}`);
+		logger.info(`%s Leader changed from ${prevLeaderId} to ${newLeaderId}`, this.localPeerId);
 		
 		this.events.emit('leader-changed', newLeaderId);
 	}
@@ -68,7 +66,7 @@ export class RaftEngine {
 		prevState.close();
 		this._state = newState;
 
-		logger.info(`State changed from ${prevState.stateName} to ${newState.stateName}`);
+		logger.info(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
 
 		this.events.emit('state-changed', newState.stateName);
 	}

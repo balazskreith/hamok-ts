@@ -2,7 +2,8 @@
 	"name": "@hamok-dev/hamok-ts",
 	"version": "2.0.0",
 	"description": "Distributed Object Storage",
-	"main": "main.js",
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
 	"scripts": {
 		"format": "prettier --write \"src/**/*.ts\"",
 		"dev": "nodemon -x ts-node src/main.ts",
@@ -30,15 +31,16 @@
 	},
 	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
 	"dependencies": {
+		"@bufbuild/protobuf": "^1.10.0",
 		"pino": "^9.3.2",
 		"uuid": "^9.0.0"
 	},
 	"devDependencies": {
+		"@tsconfig/node20": "^1.0.2",
 		"@types/events": "^3.0.0",
+		"@types/jest": "^29.5.1",
 		"@types/pino": "^7.0.5",
 		"@types/uuid": "^10.0.0",
-		"@tsconfig/node20": "^1.0.2",
-		"@types/jest": "^29.5.1",
 		"@typescript-eslint/eslint-plugin": "^6.8.0",
 		"@typescript-eslint/parser": "^6.8.0",
 		"eslint": "^8.44.0",

@@ -6,7 +6,7 @@ import { RaftState } from './RaftState';
 import { createRaftFollowerState } from './RaftFollowerState';
 import { v4 as uuid } from 'uuid';
 
-const logger = createLogger('RaftFollowerState');
+const logger = createLogger('RaftLeaderState');
 
 export type RaftLeaderStateContext = {
 	raftEngine: RaftEngine;
@@ -71,7 +71,6 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 		}
 		if (currentTerm < response.term) {
 			// I am not the leader anymore, so it is best to go back to a follower state
-			raftEngine.leaderId = undefined;
             
 			return follow();
 		}
@@ -253,10 +252,13 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 	};
 
 	follow = () => {
+		raftEngine.leaderId = undefined;
 		raftEngine.state = createRaftFollowerState({
 			raftEngine,
 		});
 	};
+
+	raftEngine.leaderId = localPeerId;
 	
 	return {
 		stateName: 'leader' as const,

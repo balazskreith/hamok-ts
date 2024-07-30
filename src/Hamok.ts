@@ -61,18 +61,16 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	private readonly _codec = new HamokGridCodec();
 	public readonly grid: HamokGrid;
     
-	public constructor(providedConfig: Partial<HamokConstructorConfig>) {
+	public constructor(providedConfig?: Partial<HamokConstructorConfig>) {
 		super();
 		this.raft = new RaftEngine({
-			peerId: providedConfig.peerId ?? uuid(),
-			electionTimeoutInMs: providedConfig.electionTimeoutInMs ?? 3000,
-			followerMaxIdleInMs: providedConfig.followerMaxIdleInMs ?? 1000,
-			heartbeatInMs: providedConfig.heartbeatInMs ?? 100,
-			peerMaxIdleTimeInMs: providedConfig.peerMaxIdleTimeInMs ?? 1000,
-			sendingHelloTimeoutInMs: providedConfig.sendingHelloTimeoutInMs ?? 1000
+			peerId: providedConfig?.peerId ?? uuid(),
+			electionTimeoutInMs: providedConfig?.electionTimeoutInMs ?? 3000,
+			followerMaxIdleInMs: providedConfig?.followerMaxIdleInMs ?? 1000,
+			heartbeatInMs: providedConfig?.heartbeatInMs ?? 100,
 		}, new RaftLogs(
-			providedConfig.initialLogEntries ?? new Map(), 
-			providedConfig.logEntriesExpirationTimeInMs ?? 0
+			providedConfig?.initialLogEntries ?? new Map(), 
+			providedConfig?.logEntriesExpirationTimeInMs ?? 0
 		), this);
 
 		this.config = {
@@ -82,7 +80,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			this._emitMessage.bind(this),
 			this.submit.bind(this),
 			new OngoingRequestsNotifier(
-				providedConfig.ongoingRequestsSendingPeriodInMs ?? 1000,
+				providedConfig?.ongoingRequestsSendingPeriodInMs ?? 1000,
 				(msg) => this.emit('message', this._codec.encodeOngoingRequestsNotification(msg))
 			),
 			this.raft.remotePeers,
@@ -140,11 +138,15 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	public addRemotePeerId(remoteEndpointId: string): void {
 		this.raft.remotePeers.add(remoteEndpointId);
 
+		logger.info('%s added remote peer %s', this.localPeerId, remoteEndpointId);
+
 		this.emit('remote-peer-joined', remoteEndpointId);
 	}
 
 	public removeRemotePeerId(remoteEndpointId: string): void {
 		this.raft.remotePeers.delete(remoteEndpointId);
+
+		logger.info('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
 
 		this.emit('remote-peer-left', remoteEndpointId);
 	}
@@ -222,22 +224,25 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		return storage;
 	}
 
-	public async submit(message: HamokMessage): Promise<void> {
+	public async submit(entry: HamokMessage): Promise<void> {
 		if (!this.raft.leaderId) {
-			throw new Error(`No leader is elected, cannot submit message type ${message.type}`);
+			throw new Error(`No leader is elected, cannot submit message type ${entry.type}`);
 		}
 		if (this.leader) {
-			return (this.raft.submit(message), void 0);
+			return (this.raft.submit(entry), void 0);
 		}
 		const request = new SubmitMessageRequest(
 			uuid(),
 			this.localPeerId,
-			message,
+			entry,
 			this.raft.leaderId,
 		);
+		const message = this._codec.encodeSubmitMessageRequest(request);
 
+		message.protocol = HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL;
+        
 		const response = (await this.grid.request({
-			message: this._codec.encodeSubmitMessageRequest(request),
+			message,
 			neededResponses: 1,
 			targetPeerIds: [ this.raft.leaderId ],
 			timeoutInMs: 5000,
@@ -284,6 +289,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 		switch (message.protocol) {
 			case HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL:
+				this.raft.transport.receive(message);
 				break;
 			// case undefined:
 			case HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL:
@@ -303,7 +309,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			// case HamokMessageProtocol.PUBSUB_COMMUNICATION_PROTOCOL:
 			// 	this._dispatchToPubSub(message);
 			default:
-				return logger.warn('Unknown protocol', message.protocol);
+				return logger.warn('Unknown protocol %s, message: %o', message.protocol, message);
 		}
 	}
 

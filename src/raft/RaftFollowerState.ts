@@ -9,7 +9,7 @@ const logger = createLogger('RaftFollowerState');
 
 export type RaftFollowerStateContext = {
 	raftEngine: RaftEngine;
-	numberOfUnsuccessfulElection?: number,
+	extraWaitingTime?: number,
 };
 
 export type RaftFollowerState = ReturnType<typeof createRaftFollowerState>;
@@ -62,6 +62,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		// set the actual leader
 		if (requestChunk.leaderId !== undefined) {
 			raftEngine.leaderId = requestChunk.leaderId;
+			context.extraWaitingTime = undefined;
 		}
 
 		// let's touch the leader (wierd sentence and I don't want to elaborate)
@@ -192,10 +193,8 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	const run = () => {
 		const now = Date.now();
 		const elapsedInMs = now - updated;
-		const numberOfUnsuccessfulElection = raftEngine.leaderId === undefined ? (context.numberOfUnsuccessfulElection ?? 0) + 1 : 0;
-		const extraWaitingTime = Math.min(10000, (numberOfUnsuccessfulElection ?? 0) * 1000 * (Math.random() + 1.0));
 
-		if (elapsedInMs <= config.followerMaxIdleInMs + extraWaitingTime) {
+		if (elapsedInMs <= config.followerMaxIdleInMs + (context.extraWaitingTime ?? 0)) {
 			// we have still time before we start an election
 			return;
 		}
@@ -206,12 +205,11 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			return;
 		}
 
-		logger.debug(`${localPeerId} is timed out to wait for append logs request (maxIdle: ${config.followerMaxIdleInMs}, elapsed: ${elapsedInMs}) Previously unsuccessful elections: ${numberOfUnsuccessfulElection}, extra waiting time: ${extraWaitingTime}`);
+		logger.debug(`${localPeerId} is timed out to wait for append logs request (maxIdle: ${config.followerMaxIdleInMs}, elapsed: ${elapsedInMs}) extraWaitingTime: ${context.extraWaitingTime}`);
 		
 		raftEngine.state = createRaftCandidateState({
 			electionTerm: props.currentTerm + 1,
 			raftEngine,
-			numberOfUnsuccessfulElection,
 		});
 	};
 

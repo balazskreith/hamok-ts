@@ -1,5 +1,9 @@
 import { EventEmitter } from 'events';
-import { HamokMessage, HamokMessage_MessageType as HamokMessageType } from '../messages/HamokMessage';
+import { 
+	HamokMessage, 
+	HamokMessage_MessageProtocol as HamokMessageProtocol, 
+	HamokMessage_MessageType as HamokMessageType 
+} from '../messages/HamokMessage';
 import { GetEntriesRequest, GetEntriesResponse } from '../messages/messagetypes/GetEntries';
 import { StorageCodec } from '../messages/StorageCodec';
 import { v4 as uuid } from 'uuid';
@@ -435,6 +439,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		targetPeerIds?: ReadonlySet<string> | string[], 
 	}): Promise<HamokMessage[]> {
 		options.message.storageId = this.config.storageId;
+		options.message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 		
 		return this.grid.request({
 			message: options.message,
@@ -447,6 +452,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 
 	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[]) {
 		message.storageId = this.config.storageId;
+		message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 
 		this.grid.sendMessage(message, targetPeerIds);
 	}

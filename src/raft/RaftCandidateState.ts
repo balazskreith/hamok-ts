@@ -6,12 +6,11 @@ import { RaftState } from './RaftState';
 import { createRaftFollowerState } from './RaftFollowerState';
 import { createRaftLeaderState } from './RaftLeaderState';
 
-const logger = createLogger('RaftFollowerState');
+const logger = createLogger('RaftCandidateState');
 
 export type RaftCandidateStateContext = {
 	raftEngine: RaftEngine;
 	electionTerm: number;
-	numberOfUnsuccessfulElection?: number,
 };
 
 export function createRaftCandidateState(context: RaftCandidateStateContext): RaftState {
@@ -27,7 +26,9 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 	const localPeerId = raftEngine.localPeerId;
 	const remotePeers = raftEngine.remotePeers;
 	const respondedRemotePeerIds = new Set<string>();
-	const receivedVotes = new Set<string>();
+	const receivedVotes = new Set<string>([
+		localPeerId, // vote for itself
+	]);
 	const notifiedRemotePeers = new Set<string>();
 	let closed = false;
 	let started: number | undefined;
@@ -52,8 +53,8 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 		return logger.debug('%s Received an append entries response from %s', localPeerId, response.sourcePeerId);
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
-		if (!remotePeers.has(request.peerId)) {
-			return logger.warn(`Received a vote request from an unknown peer: ${request.peerId}`);
+		if (!remotePeers.has(request.candidateId)) {
+			return logger.warn('%s Received a vote request from an unknown peer: %s. remotePeers: %s, request: %o', localPeerId, request.candidateId, Array.from(remotePeers).join(', '), request);
 		}
 		logger.debug('%s Received a vote request from %s', localPeerId, request.peerId);
 	};
@@ -69,7 +70,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 			return follow();
 		}
 		if (response.term < context.electionTerm) {
-			return logger.warn('A vote response from a term smaller than the current is received:', response);
+			return logger.warn('A vote response from a term smaller than the current is received: %o', response);
 		}
 		respondedRemotePeerIds.add(response.sourcePeerId);
 		if (!response.voteGranted) {
@@ -79,7 +80,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 
 		const numberOfPeerIds = remotePeers.size + 1; // +1, because of a local peer!
 
-		logger.debug('Received vote for leadership: %d, number of peers: %d.', receivedVotes.size, numberOfPeerIds);
+		logger.debug('%s Received vote for leadership: %d, number of peers: %d.', localPeerId, receivedVotes.size, numberOfPeerIds);
 		
 		if (numberOfPeerIds < receivedVotes.size * 2) {
 			// won the election
@@ -116,8 +117,8 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 				localPeerId,
 			);
 
+			logger.info('%s Send vote request to %s', localPeerId, request.peerId);
 			messageEmitter.send(request);
-			logger.info('Send vote request to %s', request.peerId);
 			notifiedRemotePeers.add(remotePeerId);
 		}
 
@@ -126,15 +127,14 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 		const elapsedTimeInMs = Date.now() - started;
 		
 		if (config.electionTimeoutInMs < elapsedTimeInMs) {
-			const numberOfUnsuccessfulElection = (context.numberOfUnsuccessfulElection ?? 0) + 1;
 			// election timeout
 
-			logger.warn(`Timeout occurred during the election process 
+			logger.warn(`${localPeerId} Timeout occurred during the election process 
                 (electionTimeoutInMs: ${config.electionTimeoutInMs}, 
                 elapsedTimeInMs: ${elapsedTimeInMs}, 
                 respondedRemotePeerIds: ${Array.from(respondedRemotePeerIds).join(', ')}). 
                 This can be a result because of split vote. 
-                previously timed out elections: ${numberOfUnsuccessfulElection}. elapsedTimeInMs: ${elapsedTimeInMs}`, 
+                elapsedTimeInMs: ${elapsedTimeInMs}`, 
 			);
 			
 			return follow();
@@ -143,7 +143,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 	const follow = () => {
 		raftEngine.state = createRaftFollowerState({
 			raftEngine,
-			numberOfUnsuccessfulElection: (context.numberOfUnsuccessfulElection ?? 0) + 1,
+			extraWaitingTime: Math.random() * 10000,
 		});
 	};
 	const lead = () => {

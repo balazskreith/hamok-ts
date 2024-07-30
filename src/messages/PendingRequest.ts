@@ -141,7 +141,7 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
      * @param reason 
      * @returns 
      */
-	reject(reason: string): void {
+	public reject(reason: string): void {
 		if (this.completed || !this._reject) return logger.warn(`Attempted to reject a not pending request (${this})`);
 
 		this._reject(reason);
@@ -151,7 +151,7 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
      * Explicitly resolve the pending request if it is in the pending state
      * @returns 
      */
-	resolve(): void {
+	public resolve(): void {
 		if (this.completed || !this._resolve) return logger.warn(`Attempted to resolve a not pending request (${this})`);
 
 		if (!this.isReady) {
@@ -191,7 +191,7 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
 				if (this.config.remotePeers.has(resolvedPeerId)) {
 					--pendingPeerIds;
 				} else {
-					logger.warn(`Remote peer ${resolvedPeerId} is not in the list of remote peers for request ${this.id}`);
+					logger.warn(`Remote peer ${resolvedPeerId} is not in the list of remote peers for request ${this}`);
 				}
 			}
 			noMorePendingPeers = pendingPeerIds < 1;
@@ -206,6 +206,12 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
 	}
 
 	public get [Symbol.toStringTag](): string {
-		return 'PendingRequest';
+		return [
+			`PendingRequest (${this.id})`,
+			`neededResponses: ${this.config.neededResponses}`,
+			`remotePeers: ${Array.from(this.config.remotePeers ?? []).join(', ')}`,
+			`timeoutInMs: ${this.config.timeoutInMs}`,
+			`state: ${this._state}`,
+		].join(', ');
 	}
 }
