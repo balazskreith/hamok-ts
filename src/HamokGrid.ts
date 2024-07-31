@@ -70,6 +70,8 @@ export class HamokGrid {
 
 		try {
 			if (options.submit) {
+				// we need to make the request ongoing at the leader, so the follower original request will not timeout
+				// becasue of commiting the log entry
 				await this.submit(options.message);
 			} else {
 				this.sendMessage(options.message, remotePeers);

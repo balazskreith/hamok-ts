@@ -105,13 +105,17 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 				this._processRequest(async () => {
 					const removedEntries = this.baseMap.removeAll(request.keys.values());
 
-					this.connection.respond(
-						'RemoveEntriesResponse',
-						request.createResponse(
+					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+						const response = request.createResponse(
 							removedEntries
-						),
-						request.sourceEndpointId
-					);
+						);
+
+						this.connection.respond(
+							'RemoveEntriesResponse',
+							response,
+							request.sourceEndpointId
+						);
+					}
 
 					return Promise.resolve(
 						removedEntries.forEach((v, k) => this.emit('remove', k, v))
@@ -127,11 +131,13 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 						inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
 						updated.forEach(([ key, value ]) => this.emit('update', key, value));
 
-						this.connection.respond(
-							'UpdateEntriesResponse',
-							request.createResponse(new Map<K, V>(updated)),
-							request.sourceEndpointId
-						);
+						if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+							this.connection.respond(
+								'UpdateEntriesResponse',
+								request.createResponse(new Map<K, V>(updated)),
+								request.sourceEndpointId
+							);
+						}
 					}));
 				}, {
 					requestId: request.requestId,

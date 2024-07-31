@@ -27,12 +27,16 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	let updated = Date.now();
 	let closed = false;
 	let currentTerm = props.currentTerm;
+	let syncRequested = false;
 	const updateCommitIndex = (leaderCommitIndex: number) => {
+		logger.trace('%s updateCommitIndex leaderCommitIndex: %d, logsCommitIndex: %d', localPeerId, leaderCommitIndex, logs.commitIndex);
 		if (leaderCommitIndex <= logs.commitIndex) {
 			return;
 		}
 		const expectedCommitIndex = Math.min(logs.nextIndex - 1, leaderCommitIndex);
 		const committedLogEntries = logs.commitUntil(expectedCommitIndex);
+
+		logger.trace('%s updateCommitIndex committedLogEntries: %d', localPeerId, committedLogEntries.length);
 
 		for (const logEntry of committedLogEntries) {
 			raftEngine.events.emit('commit', logEntry.entry);
@@ -63,11 +67,6 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			context.extraWaitingTime = undefined;
 		}
 
-		// let's touch the leader (wierd sentence and I don't want to elaborate)
-		// if (localPeerId !== requestChunk.leaderId) {
-		// 	remotePeers.touch(requestChunk.leaderId);
-		// }
-
 		if (requestChunk.entry === undefined && requestChunk.sequence === 0) {
 			if (requestChunk.lastMessage === false) {
 				logger.warn('Entries cannot be null if it is a part of chunks and thats not the last message');
@@ -76,6 +75,9 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 				return messageEmitter.send(response);
 			}
 			// that was a keep alive message
+			if (!syncRequested) {
+				updateCommitIndex(requestChunk.leaderCommit);
+			}
 			const response = requestChunk.createResponse(true, logs.nextIndex, true);
 
 			return messageEmitter.send(response);
@@ -96,18 +98,25 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 		pendingRequests.delete(requestChunk.requestId);
 
-		logger.trace(`Received RaftAppendEntriesRequest ${request} Entries: ${request.entries?.length}`);
+		logger.trace('%s Received RaftAppendEntriesRequest %o Entries: %d', localPeerId, requestChunk, request.entries?.length);
 
 		if (logs.nextIndex < request.leaderNextIndex - (request.entries?.length ?? 0)) {
+			if (syncRequested) {
+				// we already requested a sync
+				return;
+			}
 			logger.warn(`The next index is 
 				${logs.nextIndex}, and the leader index is: 
 				${request.leaderNextIndex}, the provided entries are: 
 				${request.entries?.length}. It is insufficient to close the gap for this node. Execute sync request is necessary from the leader to request and the timeout of the raft logs should be large enough to close the gap after the sync.`,
 			);
-			if (!raftEngine.events.emit('unresolvable-commit-gap', {
+			if (raftEngine.events.emit('unresolvable-commit-gap', {
 				localPeerCommitIndex: logs.commitIndex,
 				leaderLowestCommitIndex: request.leaderNextIndex - (request.entries?.length ?? 0),
+				callback: () => (syncRequested = false),
 			})) {
+				syncRequested = true;
+			} else {
 				throw new Error('The gap between the leader and the follower is not resolvable');
 			}
 			// we send success and processed response as the problem is not with the request,
@@ -139,6 +148,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 				success = false;
 			}
 		}
+		
 		updateCommitIndex(requestChunk.leaderCommit);
 		const response = requestChunk.createResponse(success, logs.nextIndex, true);
 

@@ -306,7 +306,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				break;
 		}
 
-		logger.debug('Decoded message %o', message);
+		logger.trace('Decoded message %o', message);
 
 		if (!result) {
 			throw new Error(`Cannot decode message ${message.type}`);

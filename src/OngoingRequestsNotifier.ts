@@ -24,11 +24,20 @@ export class OngoingRequestsNotifier {
 		return this._activeOngoingRequests;
 	}
 
+	public has(requestId: string): boolean {
+		if (!requestId) return false;
+		
+		return this._activeOngoingRequests.has(requestId);
+	}
+
 	public add(activeOngoingRequest: ActiveOngoingRequest): void {
 		if (this._activeOngoingRequests.has(activeOngoingRequest.requestId)) {
 			return;
 		}
 		this._activeOngoingRequests.set(activeOngoingRequest.requestId, activeOngoingRequest);
+
+		logger.trace('Added ongoing request %o', activeOngoingRequest);
+
 		if (!this._timer) {
 			this._startTimer();
 		}
@@ -39,6 +48,8 @@ export class OngoingRequestsNotifier {
 			return false;
 		}
 		this._activeOngoingRequests.delete(requestId);
+
+		logger.trace('Removed ongoing request %s', requestId);
 
 		if (this._activeOngoingRequests.size < 1) {
 			this._stopTimer();

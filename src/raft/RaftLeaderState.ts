@@ -135,10 +135,13 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			}
 		}
 		if (0 <= maxCommitIndex) {
-			logger.trace('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
+			logger.debug('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
+			// setTimeout(() => {
 			for (const committedLogEnty of logs.commitUntil(maxCommitIndex)) {
 				raftEngine.events.emit('commit', committedLogEnty.entry);
 			}
+			// }, 10000);
+			
 		}
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
@@ -188,6 +191,8 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 
 			const entries = logs.collectEntries(peerNextIndex);
 
+			logger.trace('%s Collected %d entries for peer %s', localPeerId, entries.length, peerId);
+
 			if (peerNextIndex < logs.lastAppliedIndex) {
 				if (unsyncedRemotePeers.add(peerId)) {
 					logger.warn(`Collected ${entries.length} entries, but peer ${peerId} should need ${logs.nextIndex - peerNextIndex}. The peer should request a commit sync`);
@@ -208,6 +213,15 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			}
 			const requestId = uuid();
 			// we should only sent an entryfull request if the remote peer does not have one, and we have something to add
+
+			logger.trace('%s Sending append entries request to %s with requestId %s, sentRequest: [%s, %s], entries: %d', 
+				localPeerId, 
+				peerId, 
+				requestId,
+				sentRequest?.[0] ?? 'undefined',
+				sentRequest ? new Date(sentRequest?.[1] ?? 0).toISOString() : 'undefined',
+				entries.length
+			);
 
 			if (sentRequest === undefined && entries !== undefined && 0 < entries.length) {
 				for (let sequence = 0; sequence < entries.length; ++sequence) {

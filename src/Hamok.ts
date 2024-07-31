@@ -50,6 +50,7 @@ export type HamokEventMap = {
 	'unresolvable-commit-gap': [{
 		localPeerCommitIndex: number,
 		leaderLowestCommitIndex: number,
+		callback: () => void,
 	}],
 }
 
@@ -81,7 +82,10 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			this.submit.bind(this),
 			new OngoingRequestsNotifier(
 				providedConfig?.ongoingRequestsSendingPeriodInMs ?? 1000,
-				(msg) => this.emit('message', this._codec.encodeOngoingRequestsNotification(msg))
+				(msg) => this._emitMessage(
+					this._codec.encodeOngoingRequestsNotification(msg), 
+					msg.destinationEndpointId, 
+					HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL)
 			),
 			this.raft.remotePeers,
 			() => this.raft.localPeerId,
@@ -137,6 +141,14 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	private _acceptCommit(message: HamokMessage): void {
 		logger.debug('%s accepted committed message %o', this.localPeerId, message);
+		
+		// if we put this request to hold when we accepted the submit request we remove the ongoing request notification
+		// so from this moment it is up to the storage / pubsub to accomplish the request
+		if (message.requestId && this.grid.ongoingRequestsNotifier.has(message.requestId)) {
+			this.grid.ongoingRequestsNotifier.remove(message.requestId);
+
+			logger.info('%s Request %s is removed ongoing requests', this.localPeerId, message.requestId);
+		}
 		this.accept(message);
 	}
 
@@ -237,7 +249,21 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		entry.sourceId = this.localPeerId;
 
 		if (this.leader) {
-			return (this.raft.submit(entry), void 0);
+			const success = this.raft.submit(entry);
+
+			if (success && entry.requestId && entry.storageId && entry.sourceId) {
+				// we add the request to the ongoing requests set to prevent timeout at the follower side
+				// when the leader is processing the request until it commits the log entry
+				this.grid.ongoingRequestsNotifier.add({
+					remotePeerId: entry.sourceId,
+					requestId: entry.requestId,
+					storageId: entry.storageId,
+				});
+    
+				logger.info('%s Request %s is added to ongoing requests set', this.localPeerId, entry.requestId);
+			}
+			
+			return;
 		}
 		const request = new SubmitMessageRequest(
 			uuid(),
@@ -332,14 +358,34 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				const ongoingRequestNotification = this._codec.decodeOngoingRequestsNotification(message);
 
 				for (const requestId of ongoingRequestNotification.requestIds) {
-					this.grid.pendingRequests.get(requestId)?.postponeTimeout();
+					const pendingRequest = this.grid.pendingRequests.get(requestId);
+
+					if (!pendingRequest) {
+						logger.warn('%s Received ongoing request notification for unknown request %s', this.localPeerId, requestId);
+						continue;
+					}
+
+					pendingRequest.postponeTimeout();
 				}
 				break;
 			}
 			case HamokMessageType.SUBMIT_MESSAGE_REQUEST: {
 				const request = this._codec.decodeSubmitMessageRequest(message);
+				const entry = request.entry;
 				const success = this.leader ? this.raft.submit(request.entry) : false;
 				const response = request.createResponse(success, this.raft.leaderId);
+
+				if (success && this.leader && entry.requestId && entry.storageId && entry.sourceId) {
+					// we add the request to the ongoing requests set to prevent timeout at the follower side
+					// when the leader is processing the request until it commits the log entry
+					this.grid.ongoingRequestsNotifier.add({
+						remotePeerId: entry.sourceId,
+						requestId: entry.requestId,
+						storageId: entry.storageId,
+					});
+
+					logger.info('%s Request %s is added to ongoing requests set', this.localPeerId, entry.requestId);
+				}
 
 				this.grid.sendMessage(
 					this._codec.encodeSubmitMessageResponse(response),
@@ -353,8 +399,13 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	private _emitMessage(
 		message: HamokMessage, 
 		destinationPeerIds?: ReadonlySet<string> | string[] | string,
+		protocol?: HamokMessageProtocol
 	) {
 		message.sourceId = this.localPeerId;
+
+		if (protocol) {
+			message.protocol = protocol;
+		}
 
 		if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
 			logger.debug('%s sending message %o', this.localPeerId, message);
