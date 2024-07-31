@@ -135,7 +135,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			}
 		}
 		if (0 <= maxCommitIndex) {
-			logger.debug(`Committing index until ${maxCommitIndex} at leader state`);
+			logger.trace('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
 			for (const committedLogEnty of logs.commitUntil(maxCommitIndex)) {
 				raftEngine.events.emit('commit', committedLogEnty.entry);
 			}
@@ -258,11 +258,15 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 		});
 	};
 
-	raftEngine.leaderId = localPeerId;
+	const init = () => {
+		// we need to assign it here after the state is changed
+		raftEngine.leaderId = localPeerId;
+	};
 	
 	return {
 		stateName: 'leader' as const,
 		run,
 		close,
+		init,
 	};
 }

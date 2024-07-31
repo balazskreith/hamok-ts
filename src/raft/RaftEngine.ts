@@ -65,8 +65,10 @@ export class RaftEngine {
 
 		prevState.close();
 		this._state = newState;
-
+		
 		logger.info(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
+		
+		newState.init?.();
 
 		this.events.emit('state-changed', newState.stateName);
 	}

@@ -4,7 +4,7 @@ import { PendingRequest } from './messages/PendingRequest';
 import { PendingResponse } from './messages/PendingResponse';
 import { OngoingRequestsNotifier } from './OngoingRequestsNotifier';
 
-const logger = createLogger('HamokTransport');
+const logger = createLogger('HamokGrid');
 
 export class HamokGrid {
 	public readonly pendingRequests = new Map<string, PendingRequest>();
@@ -60,6 +60,14 @@ export class HamokGrid {
 			prevPendingRequest.reject('Request is overridden');
 		}
 		this.pendingRequests.set(pendingRequest.id, pendingRequest);
+
+		logger.debug('%s Request is created %s, submit: %s, message: %o', 
+			this.localPeerId, 
+			pendingRequest, 
+			options.submit ? 'yes' : 'no',
+			options.message,
+		);
+
 		try {
 			if (options.submit) {
 				await this.submit(options.message);
@@ -130,7 +138,7 @@ export class HamokGrid {
 		const pendingRequest = this.pendingRequests.get(message.requestId);
 
 		if (!pendingRequest) {
-			logger.warn(`Cannot find pending request for requestId ${message.requestId}`, message);
+			logger.warn(`%s Cannot find pending request for requestId ${message.requestId}`, this.localPeerId, message);
 			
 			return;
 		}

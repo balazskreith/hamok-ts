@@ -187,8 +187,8 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 
 	public async requestGetKeys(
 		targetPeerIds?: ReadonlySet<string> | string[]
-	): Promise<ReadonlyMap<K, V>> {
-		const result = new Map<K, V>();
+	): Promise<ReadonlySet<K>> {
+		const result = new Set<K>();
 
 		(await this._request({
 			message: this.codec.encodeGetKeysRequest(
@@ -198,10 +198,10 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 			),
 			targetPeerIds,
 		}))
-			.map((response) => this.codec.decodeGetEntriesResponse(response))
-			.forEach((response) => Collections.concatMaps(
+			.map((response) => this.codec.decodeGetKeysResponse(response))
+			.forEach((response) => Collections.concatSet(
 				result,
-				response.foundEntries
+				response.keys
 			));
 		
 		return result;
@@ -289,10 +289,10 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		);
 
 		responseMessages.flatMap((responses) => responses)
-			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.map((response) => this.codec.decodeRemoveEntriesResponse(response))
 			.forEach((response) => Collections.concatMaps(
 				result,
-				response.foundEntries
+				response.removedEntries
 			));
 		
 		return result;
@@ -331,10 +331,10 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		);
 
 		responseMessages.flatMap((responses) => responses)
-			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.map((response) => this.codec.decodeInsertEntriesResponse(response))
 			.forEach((response) => Collections.concatMaps(
 				result,
-				response.foundEntries
+				response.existingEntries
 			));
 		
 		return result;
@@ -373,10 +373,10 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		);
 
 		responseMessages.flatMap((responses) => responses)
-			.map((response) => this.codec.decodeGetEntriesResponse(response))
+			.map((response) => this.codec.decodeUpdateEntriesResponse(response))
 			.forEach((response) => Collections.concatMaps(
 				result,
-				response.foundEntries
+				response.updatedEntries
 			));
 		
 		return result;

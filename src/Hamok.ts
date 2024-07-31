@@ -112,7 +112,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		const raftEngine = this.raft;
 
 		raftEngine.transport.on('message', this._emitMessage.bind(this));
-		this.on('commit', this.accept.bind(this));
+		this.on('commit', this._acceptCommit.bind(this));
 
 		raftEngine.state = createRaftFollowerState({
 			raftEngine,
@@ -131,8 +131,13 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		clearInterval(this._timer);
 		
 		this.raft.transport.off('message', this._emitMessage.bind(this));
-		this.off('commit', this.accept.bind(this));
+		this.off('commit', this._acceptCommit.bind(this));
 		this.emit('stopped');
+	}
+
+	private _acceptCommit(message: HamokMessage): void {
+		logger.debug('%s accepted committed message %o', this.localPeerId, message);
+		this.accept(message);
 	}
 
 	public addRemotePeerId(remoteEndpointId: string): void {
@@ -228,6 +233,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		if (!this.raft.leaderId) {
 			throw new Error(`No leader is elected, cannot submit message type ${entry.type}`);
 		}
+		
+		entry.sourceId = this.localPeerId;
+
 		if (this.leader) {
 			return (this.raft.submit(entry), void 0);
 		}
@@ -240,7 +248,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		const message = this._codec.encodeSubmitMessageRequest(request);
 
 		message.protocol = HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL;
-        
+
 		const response = (await this.grid.request({
 			message,
 			neededResponses: 1,
@@ -265,7 +273,12 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	}
 
 	public accept(message: HamokMessage) {
-		logger.trace('%s received message %o', this.localPeerId, message);
+		if (message.destinationId && message.destinationId !== this.localPeerId) {
+			return logger.trace('%s Received message address is not matching with the local peer %o', this.localPeerId, message);
+		}
+
+		if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
+			logger.debug('%s received message %o', this.localPeerId, message);
 
 		switch (message.type) {
 			case HamokMessageType.ADD_SUBSCRIPTION_RESPONSE:
@@ -342,8 +355,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		destinationPeerIds?: ReadonlySet<string> | string[] | string,
 	) {
 		message.sourceId = this.localPeerId;
-		
-		logger.trace('%s sending message %o', this.localPeerId, message);
+
+		if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
+			logger.debug('%s sending message %o', this.localPeerId, message);
 
 		if (!destinationPeerIds) {
 			return this.emit('message', message);
@@ -365,11 +379,19 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		if (remotePeers.size === 1) {
 			return [ ...remotePeers ].forEach((destinationId) => {
 				message.destinationId = destinationId;
+				if (message.destinationId === this.localPeerId) {
+					return this.accept(message);
+				}
+				
 				this.emit('message', message);
 			});
 		}
 
 		for (const destinationId of remotePeers) {
+			if (destinationId === this.localPeerId) {
+				return this.accept(message);
+			}
+
 			this.emit('message', new HamokMessage({
 				...message,
 				destinationId

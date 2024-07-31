@@ -47,6 +47,7 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 	}
 
 	public send(input: Input) {
+		
 		switch (input.constructor) {
 			case HelloNotification:
 				this.emit('message', this.encodeHelloNotification(input as HelloNotification));

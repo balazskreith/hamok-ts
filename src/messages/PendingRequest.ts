@@ -51,7 +51,10 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
 			};
     
 			this._timer = setTimeout(process, this.config.timeoutInMs);
+
+			logger.trace('Pending Request %s is created with timeout %d', this, this.config.timeoutInMs);
 		}
+        
 		this._promise = new Promise<HamokMessage[]>((resolve, reject) => {
 			this._resolve = () => {
 				if (this._timer) {

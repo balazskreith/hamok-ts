@@ -80,13 +80,18 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			})
 			.on('InsertEntriesRequest', (request) => {
 				this._processRequest(async () => {
+					logger.debug('%s InsertEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
 					const existingEntries = this.baseMap.insertAll(request.entries);
 
-					this.connection.respond(
-						'InsertEntriesResponse',
-						request.createResponse(existingEntries),
-						request.sourceEndpointId
-					);
+					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+						const response = request.createResponse(existingEntries);
+
+						this.connection.respond(
+							'InsertEntriesResponse',
+							response,
+							request.sourceEndpointId
+						);
+					}
 
 					return Promise.resolve(
 						request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', k, v))

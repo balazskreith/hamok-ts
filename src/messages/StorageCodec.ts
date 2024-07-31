@@ -11,6 +11,9 @@ import { EvictEntriesNotification, EvictEntriesRequest, EvictEntriesResponse } f
 import { InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
 import { RestoreEntriesNotification, RestoreEntriesRequest, RestoreEntriesResponse } from './messagetypes/RestoreEntries';
+import { createLogger } from '../common/logger';
+
+const logger = createLogger('StorageCodec');
 
 const EMPTY_ARRAY: Uint8Array[] = [];
 
@@ -178,6 +181,8 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				throw new Error(`Cannot encode input${ input}`);
 
 		}
+
+		logger.trace('Encoded message %o', input);
 		
 		if (callback) {
 			callback(input.constructor.name as keyof StorageCodecMessageMap<K, V>, result);
@@ -300,6 +305,8 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				result = this.decodeRestoreEntriesNotification(message);
 				break;
 		}
+
+		logger.debug('Decoded message %o', message);
 
 		if (!result) {
 			throw new Error(`Cannot decode message ${message.type}`);

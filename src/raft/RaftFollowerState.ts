@@ -39,6 +39,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 	};
 	const appendEntriesRequestListener = (requestChunk: RaftAppendEntriesRequestChunk) => {
+		logger.trace('%s received RaftAppendEntriesRequestChunk %o', localPeerId, requestChunk);
 
 		if (requestChunk.term < currentTerm) {
 			logger.warn(`Append entries request appeared from a previous term. currentTerm: ${currentTerm}, received entries request term: ${requestChunk.term}`);
@@ -55,9 +56,6 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 		// let's restart the timer
 		updated = Date.now();
-
-		// and make sure next election we don't add unnecessary offset
-		// timedOutElection = 0;
 
 		// set the actual leader
 		if (requestChunk.leaderId !== undefined) {
