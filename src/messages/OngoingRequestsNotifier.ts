@@ -1,6 +1,6 @@
-import * as Collections from './common/Collections';
-import { createLogger } from './common/logger';
-import { OngoingRequestsNotification } from './messages/messagetypes/OngoingRequests';
+import * as Collections from '../common/Collections';
+import { createLogger } from '../common/logger';
+import { OngoingRequestsNotification } from './messagetypes/OngoingRequests';
 
 const logger = createLogger('OngoingRequests');
 

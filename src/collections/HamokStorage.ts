@@ -4,10 +4,11 @@ import { StorageConnection } from './StorageConnection';
 import { ConcurrentExecutor } from '../common/ConcurrentExecutor';
 import { BaseMap } from './BaseMap';
 import * as Collections from '../common/Collections';
+import { HamokStorageSnapshot } from '../HamokSnapshot';
 
 const logger = createLogger('ReplicatedStorage');
 
-export type ReplicatedStorageEventMap<K, V> = {
+export type HamokStorageEventMap<K, V> = {
 	'insert': [key: K, value: V],
 	'update': [key: K, value: V],
 	'remove': [key: K, value: V],
@@ -18,7 +19,7 @@ export type ReplicatedStorageEventMap<K, V> = {
 /**
  * Replicated storage replicates all entries on all distributed storages
  */
-export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEventMap<K, V>> {
+export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>> {
 	private _standalone: boolean;
 	private readonly _executor = new ConcurrentExecutor(1);
 	private _closed = false;
@@ -36,11 +37,14 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			.on('ClearEntriesRequest', (request) => {
 				this._processRequest(async () => {
 					this.baseMap.clear();
-					this.connection.respond(
-						'ClearEntriesResponse', 
-						request.createResponse(), 
-						request.sourceEndpointId
-					);
+					
+					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+						this.connection.respond(
+							'ClearEntriesResponse', 
+							request.createResponse(), 
+							request.sourceEndpointId
+						);
+					}
 					
 					return Promise.resolve(this.emit('clear'));
 				}, {
@@ -52,13 +56,16 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 				this._processRequest(async () => {
 					const removedEntries = this.baseMap.removeAll(request.keys.values());
 
-					this.connection.respond(
-						'DeleteEntriesResponse', 
-						request.createResponse(
-							new Set(removedEntries.keys())
-						), 
-						request.sourceEndpointId
-					);
+					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+
+						this.connection.respond(
+							'DeleteEntriesResponse', 
+							request.createResponse(
+								new Set(removedEntries.keys())
+							), 
+							request.sourceEndpointId
+						);
+					}
 					
 					return Promise.resolve(
 						removedEntries.forEach((v, k) => this.emit('remove', k, v))
@@ -84,11 +91,10 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 					const existingEntries = this.baseMap.insertAll(request.entries);
 
 					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
-						const response = request.createResponse(existingEntries);
 
 						this.connection.respond(
 							'InsertEntriesResponse',
-							response,
+							request.createResponse(existingEntries),
 							request.sourceEndpointId
 						);
 					}
@@ -106,13 +112,12 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 					const removedEntries = this.baseMap.removeAll(request.keys.values());
 
 					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
-						const response = request.createResponse(
-							removedEntries
-						);
 
 						this.connection.respond(
 							'RemoveEntriesResponse',
-							response,
+							request.createResponse(
+								removedEntries
+							),
 							request.sourceEndpointId
 						);
 					}
@@ -127,18 +132,42 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			})
 			.on('UpdateEntriesRequest', (request) => {
 				this._processRequest(async () => {
-					return Promise.resolve(this.baseMap.setAll(request.entries, ({ inserted, updated }) => {
-						inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
-						updated.forEach(([ key, value ]) => this.emit('update', key, value));
 
-						if (request.sourceEndpointId === this.connection.grid.localPeerId) {
-							this.connection.respond(
-								'UpdateEntriesResponse',
-								request.createResponse(new Map<K, V>(updated)),
-								request.sourceEndpointId
-							);
+					logger.debug('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
+					const updatedEntries: [K, V][] = [];
+					const insertedEntries: [K, V][] = [];
+
+					if (request.prevValue) {
+						// this is a conditional update
+						if (request.entries.size !== 1) {
+							// we let the request to timeout
+							return logger.warn('Conditional update request must have only one entry: %o', request);
 						}
-					}));
+						const [ key, value ] = [ ...request.entries ][0];
+
+						const existingEntries = this.baseMap.get(key);
+
+						if (existingEntries && this.equalValues(existingEntries, request.prevValue)) {
+							this.baseMap.set(key, value);
+							updatedEntries.push([ key, value ]);
+						}
+					} else {
+						this.baseMap.setAll(request.entries, ({ inserted, updated }) => {
+							insertedEntries.push(...inserted);
+							updatedEntries.push(...updated);
+						});
+					}
+
+					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+						this.connection.respond(
+							'UpdateEntriesResponse',
+							request.createResponse(new Map<K, V>(updatedEntries)),
+							request.sourceEndpointId
+						);
+					}
+					insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
+
+					return Promise.resolve(updatedEntries.forEach(([ key, value ]) => this.emit('update', key, value)));
 				}, {
 					requestId: request.requestId,
 					remotePeerId: request.sourceEndpointId,
@@ -251,7 +280,10 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			return Collections.emptyMap<K, V>();
 		}
 		if (this._standalone) {
-			return this.baseMap.setAll(entries);
+			return this.baseMap.setAll(entries, ({ inserted, updated }) => {
+				inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
+				updated.forEach(([ key, value ]) => this.emit('update', key, value));
+			});
 		}
 
 		return this.connection.requestUpdateEntries(entries);
@@ -275,7 +307,11 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			return Collections.emptyMap<K, V>();
 		}
 		if (this._standalone) {
-			return this.baseMap.insertAll(entries);
+			const existingEntries = this.baseMap.insertAll(entries);
+
+			entries.forEach((value, key) => existingEntries.has(key) || this.emit('insert', key, value));
+			
+			return existingEntries;
 		}
 
 		return this.connection.requestInsertEntries(entries);
@@ -298,8 +334,12 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			return Collections.emptySet<K>();
 		}
 		if (this._standalone) {
+			const removedEntries = this.baseMap.removeAll(keys.values());	
+
+			removedEntries.forEach((v, k) => this.emit('remove', k, v));
+			
 			return Collections.setOf(
-				...this.baseMap.deleteAll(keys.values())
+				...removedEntries.keys()
 			);
 		}
 		
@@ -323,14 +363,73 @@ export class ReplicatedStorage<K, V> extends EventEmitter<ReplicatedStorageEvent
 			return Collections.emptyMap<K, V>();
 		}
 		if (this._standalone) {
-			return this.baseMap.removeAll(keys.values());
+			const existingEntries = this.baseMap.removeAll(keys.values());
+
+			existingEntries.forEach((v, k) => this.emit('remove', k, v));
+
+			return existingEntries;
 		}
         
 		return this.connection.requestRemoveEntries(keys);
 	}
+
+	public async updateIf(key: K, value: V, oldValue: V): Promise<boolean> {
+		if (this._standalone) {
+			const existingValue = this.baseMap.get(key);
+
+			if (existingValue === undefined) return false;
+	
+			if (!this.equalValues(existingValue, oldValue)) {
+				return false;
+			}
+	
+			this.baseMap.set(key, value);
+			this.emit('update', key, value);
+	
+			return true;
+		}
+		
+		return (await this.connection.requestUpdateEntries(
+			Collections.mapOf([ key, value ]),
+			undefined,
+			oldValue
+		)).get(key) !== undefined;
+	}
     
 	public [Symbol.iterator](): IterableIterator<[K, V]> {
 		return this.baseMap[Symbol.iterator]();
+	}
+
+	/**
+	 * Exports the storage data
+	 */
+	public export(): HamokStorageSnapshot {
+		const [ keys, values ] = this.connection.codec.encodeEntries(this.baseMap);
+		const result: HamokStorageSnapshot = {
+			storageId: this.id,
+			keys,
+			values
+		};
+
+		return result;
+	}
+
+	public import(data: HamokStorageSnapshot, eventing?: boolean) {
+		if (!this._standalone) {
+			throw new Error(`Cannot import data to a non-standalone storage: ${this.id}`);
+		} else if (data.storageId !== this.id) {
+			throw new Error(`Cannot import data from a different storage: ${data.storageId} !== ${this.id}`);
+		}
+
+		const entries = this.connection.codec.decodeEntries(data.keys, data.values);
+
+		this.baseMap.setAll(entries, ({ inserted, updated }) => {
+			if (eventing) {
+				inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
+				updated.forEach(([ key, value ]) => this.emit('update', key, value));
+			}
+		});
+		
 	}
 
 	private _processRequest<T>(fn: () => Promise<T>, options?: {

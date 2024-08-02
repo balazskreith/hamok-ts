@@ -1,4 +1,4 @@
-import { createHamokCodec, HamokCodec, HamokDecoder, HamokEncoder } from '../common/HamokCodec';
+import { createStrToUint8ArrayCodec, HamokCodec, HamokDecoder, HamokEncoder } from '../common/HamokCodec';
 import { createLogger } from '../common/logger';
 import { StorageSyncRequest, StorageSyncResponse } from './messagetypes/StorageSync';
 import { SubmitMessageRequest, SubmitMessageResponse } from './messagetypes/SubmitMessage';
@@ -17,10 +17,7 @@ SubmitMessageResponse
     ;
 
 const EMPTY_ARRAY: Uint8Array[] = [];
-const strCodec = createHamokCodec<string, Uint8Array>(
-	(input: string) => Buffer.from(input, 'utf-8'),
-	(input: Uint8Array) => Buffer.from(input).toString('utf-8')
-);
+const strCodec = createStrToUint8ArrayCodec();
 
 export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 

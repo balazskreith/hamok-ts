@@ -136,11 +136,16 @@ export class HamokMessage extends Message<HamokMessage> {
   sequence?: number;
 
   /**
-   * optional int64 message_sequence = 28;
-   *
    * @generated from field: optional bool lastMessage = 27;
    */
   lastMessage?: boolean;
+
+  /**
+   * optional int64 message_sequence = 28;
+   *
+   * @generated from field: optional bytes prevValue = 29;
+   */
+  prevValue?: Uint8Array;
 
   constructor(data?: PartialMessage<HamokMessage>) {
     super();
@@ -176,6 +181,7 @@ export class HamokMessage extends Message<HamokMessage> {
     { no: 25, name: "raftCandidateId", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 26, name: "sequence", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 27, name: "lastMessage", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 29, name: "prevValue", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HamokMessage {
@@ -708,207 +714,4 @@ proto2.util.setEnumType(HamokMessage_MessageProtocol, "io.github.hamok.dev.schem
   { no: 3, name: "STORAGE_COMMUNICATION_PROTOCOL" },
   { no: 4, name: "PUBSUB_COMMUNICATION_PROTOCOL" },
 ]);
-
-/**
- * @generated from message io.github.hamok.dev.schema.RaftVoteRequest
- */
-export class RaftVoteRequest extends Message<RaftVoteRequest> {
-  /**
-   * @generated from field: required string candidateId = 1;
-   */
-  candidateId?: string;
-
-  /**
-   * @generated from field: required int32 term = 2;
-   */
-  term?: number;
-
-  /**
-   * @generated from field: required int32 lastLogIndex = 3;
-   */
-  lastLogIndex?: number;
-
-  /**
-   * @generated from field: required int32 lastLogTerm = 4;
-   */
-  lastLogTerm?: number;
-
-  constructor(data?: PartialMessage<RaftVoteRequest>) {
-    super();
-    proto2.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto2 = proto2;
-  static readonly typeName = "io.github.hamok.dev.schema.RaftVoteRequest";
-  static readonly fields: FieldList = proto2.util.newFieldList(() => [
-    { no: 1, name: "candidateId", kind: "scalar", T: 9 /* ScalarType.STRING */, req: true },
-    { no: 2, name: "term", kind: "scalar", T: 5 /* ScalarType.INT32 */, req: true },
-    { no: 3, name: "lastLogIndex", kind: "scalar", T: 5 /* ScalarType.INT32 */, req: true },
-    { no: 4, name: "lastLogTerm", kind: "scalar", T: 5 /* ScalarType.INT32 */, req: true },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RaftVoteRequest {
-    return new RaftVoteRequest().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RaftVoteRequest {
-    return new RaftVoteRequest().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RaftVoteRequest {
-    return new RaftVoteRequest().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: RaftVoteRequest | PlainMessage<RaftVoteRequest> | undefined, b: RaftVoteRequest | PlainMessage<RaftVoteRequest> | undefined): boolean {
-    return proto2.util.equals(RaftVoteRequest, a, b);
-  }
-}
-
-/**
- * @generated from message io.github.hamok.dev.schema.GetSize
- */
-export class GetSize extends Message<GetSize> {
-  constructor(data?: PartialMessage<GetSize>) {
-    super();
-    proto2.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto2 = proto2;
-  static readonly typeName = "io.github.hamok.dev.schema.GetSize";
-  static readonly fields: FieldList = proto2.util.newFieldList(() => [
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSize {
-    return new GetSize().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSize {
-    return new GetSize().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSize {
-    return new GetSize().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: GetSize | PlainMessage<GetSize> | undefined, b: GetSize | PlainMessage<GetSize> | undefined): boolean {
-    return proto2.util.equals(GetSize, a, b);
-  }
-}
-
-/**
- * @generated from message io.github.hamok.dev.schema.StorageMessage
- */
-export class StorageMessage extends Message<StorageMessage> {
-  /**
-   * @generated from field: required string storageId = 1;
-   */
-  storageId?: string;
-
-  /**
-   * @generated from field: optional string requestId = 2;
-   */
-  requestId?: string;
-
-  /**
-   * @generated from oneof io.github.hamok.dev.schema.StorageMessage.operation
-   */
-  operation: {
-    /**
-     * @generated from field: io.github.hamok.dev.schema.GetSize getSize = 3;
-     */
-    value: GetSize;
-    case: "getSize";
-  } | { case: undefined; value?: undefined } = { case: undefined };
-
-  constructor(data?: PartialMessage<StorageMessage>) {
-    super();
-    proto2.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto2 = proto2;
-  static readonly typeName = "io.github.hamok.dev.schema.StorageMessage";
-  static readonly fields: FieldList = proto2.util.newFieldList(() => [
-    { no: 1, name: "storageId", kind: "scalar", T: 9 /* ScalarType.STRING */, req: true },
-    { no: 2, name: "requestId", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 3, name: "getSize", kind: "message", T: GetSize, oneof: "operation" },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StorageMessage {
-    return new StorageMessage().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StorageMessage {
-    return new StorageMessage().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StorageMessage {
-    return new StorageMessage().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: StorageMessage | PlainMessage<StorageMessage> | undefined, b: StorageMessage | PlainMessage<StorageMessage> | undefined): boolean {
-    return proto2.util.equals(StorageMessage, a, b);
-  }
-}
-
-/**
- * @generated from message io.github.hamok.dev.schema.HamokMessage2
- */
-export class HamokMessage2 extends Message<HamokMessage2> {
-  /**
-   * @generated from field: required string sourceId = 1;
-   */
-  sourceId?: string;
-
-  /**
-   * @generated from field: optional string destinationId = 2;
-   */
-  destinationId?: string;
-
-  /**
-   * @generated from oneof io.github.hamok.dev.schema.HamokMessage2.payload
-   */
-  payload: {
-    /**
-     * @generated from field: io.github.hamok.dev.schema.RaftVoteRequest raftVoteRequest = 3;
-     */
-    value: RaftVoteRequest;
-    case: "raftVoteRequest";
-  } | {
-    /**
-     * @generated from field: io.github.hamok.dev.schema.StorageMessage storageMessage = 4;
-     */
-    value: StorageMessage;
-    case: "storageMessage";
-  } | { case: undefined; value?: undefined } = { case: undefined };
-
-  constructor(data?: PartialMessage<HamokMessage2>) {
-    super();
-    proto2.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto2 = proto2;
-  static readonly typeName = "io.github.hamok.dev.schema.HamokMessage2";
-  static readonly fields: FieldList = proto2.util.newFieldList(() => [
-    { no: 1, name: "sourceId", kind: "scalar", T: 9 /* ScalarType.STRING */, req: true },
-    { no: 2, name: "destinationId", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 3, name: "raftVoteRequest", kind: "message", T: RaftVoteRequest, oneof: "payload" },
-    { no: 4, name: "storageMessage", kind: "message", T: StorageMessage, oneof: "payload" },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HamokMessage2 {
-    return new HamokMessage2().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): HamokMessage2 {
-    return new HamokMessage2().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): HamokMessage2 {
-    return new HamokMessage2().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: HamokMessage2 | PlainMessage<HamokMessage2> | undefined, b: HamokMessage2 | PlainMessage<HamokMessage2> | undefined): boolean {
-    return proto2.util.equals(HamokMessage2, a, b);
-  }
-}
 

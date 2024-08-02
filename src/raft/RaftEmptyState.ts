@@ -12,23 +12,23 @@ export type RaftCandidateStateContext = {
 
 export function createRaftEmptyState(context: RaftCandidateStateContext): RaftState {
 	logger.trace('Creating RaftEmptyState');
-
+	
 	const {
 		raftEngine
 	} = context;
 	const messageEmitter = raftEngine.transport;
 	let closed = false;
 	const appendEntriesRequestListener = (request: RaftAppendEntriesRequestChunk) => {
-		logger.warn('%s received an append entries request from %s, but it is in an empty state', raftEngine.localPeerId, request.peerId);
+		logger.trace('%s received an append entries request from %s, but it is in an empty state. request: %o', raftEngine.localPeerId, request.leaderId, request);
 	};
 	const appendEntriesResponseListener = (response: RaftAppendEntriesResponse) => {
-		logger.warn('%s received an append entries response from %s, but it is in an empty state', raftEngine.localPeerId, response.sourcePeerId);
+		logger.warn('%s received an append entries response from %s, but it is in an empty state. response: %o', raftEngine.localPeerId, response.sourcePeerId, response);
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
-		logger.warn('%s received a vote request from %s, but it is in an empty state', raftEngine.localPeerId, request.peerId);
+		logger.warn('%s received a vote request from %s, but it is in an empty state. request: %o', raftEngine.localPeerId, request.candidateId, request);
 	};
 	const voteResponseListener = (response: RaftVoteResponse) => {
-		logger.warn('%s received a vote response from %s, but it is in an empty state', raftEngine.localPeerId, response.sourcePeerId);
+		logger.warn('%s received a vote response from %s, but it is in an empty state. response: %o', raftEngine.localPeerId, response.sourcePeerId, response);
 	};
 	const close = () => {
 		if (closed) return;

@@ -308,5 +308,7 @@ message HamokMessage {
 
   optional int32 sequence = 26;
   optional bool lastMessage = 27;
+
+  optional bytes prevValue = 29;
   // optional int64 message_sequence = 28;
 }

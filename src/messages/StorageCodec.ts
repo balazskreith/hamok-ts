@@ -1,5 +1,4 @@
-import * as Collections from '../common/Collections';
-import { HamokCodec, HamokDecoder, HamokEncoder } from '../common/HamokCodec';
+import { HamokCodec, encodeMap, decodeMap, encodeSet, decodeSet } from '../common/HamokCodec';
 import { UpdateEntriesNotification, UpdateEntriesRequest, UpdateEntriesResponse } from './messagetypes/UpdateEntries';
 import { HamokMessage as Message, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import { ClearEntriesNotification, ClearEntriesRequest, ClearEntriesResponse } from './messagetypes/ClearEntries';
@@ -14,8 +13,6 @@ import { RestoreEntriesNotification, RestoreEntriesRequest, RestoreEntriesRespon
 import { createLogger } from '../common/logger';
 
 const logger = createLogger('StorageCodec');
-
-const EMPTY_ARRAY: Uint8Array[] = [];
 
 type Input<K, V> = 
     ClearEntriesNotification |
@@ -400,7 +397,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeGetEntriesResponse(response: GetEntriesResponse<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(response.foundEntries);
+		const [ keys, values ] = this.encodeEntries(response.foundEntries);
         
 		return new Message({
 			type: MessageType.GET_ENTRIES_RESPONSE,
@@ -415,7 +412,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.GET_ENTRIES_RESPONSE) {
 			throw new Error('decodeGetEntriesResponse(): Message type must be GET_ENTRIES_RESPONSE');
 		}
-		const foundEntries = this._decodeEntries(message.keys, message.values);
+		const foundEntries = this.decodeEntries(message.keys, message.values);
         
 		return new GetEntriesResponse<K, V>(
 			message.requestId!,
@@ -604,7 +601,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeRemoveEntriesResponse(response: RemoveEntriesResponse<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(response.removedEntries);
+		const [ keys, values ] = this.encodeEntries(response.removedEntries);
         
 		return new Message({
 			type: MessageType.REMOVE_ENTRIES_RESPONSE,
@@ -619,7 +616,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.REMOVE_ENTRIES_RESPONSE) {
 			throw new Error('decodeRemoveResponse(): Message type must be REMOVE_ENTRIES_RESPONSE');
 		}
-		const removedEntries = this._decodeEntries(message.keys, message.values);
+		const removedEntries = this.decodeEntries(message.keys, message.values);
         
 		return new RemoveEntriesResponse<K, V>(
 			message.requestId!,
@@ -720,7 +717,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeInsertEntriesRequest(request: InsertEntriesRequest<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(request.entries);
+		const [ keys, values ] = this.encodeEntries(request.entries);
         
 		return new Message({
 			type: MessageType.INSERT_ENTRIES_REQUEST,
@@ -735,7 +732,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.INSERT_ENTRIES_REQUEST) {
 			throw new Error('decodeInsertRequest(): Message type must be INSERT_ENTRIES_REQUEST');
 		}
-		const entries = this._decodeEntries(message.keys, message.values);
+		const entries = this.decodeEntries(message.keys, message.values);
         
 		return new InsertEntriesRequest<K, V>(
 			message.requestId!,
@@ -745,7 +742,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeInsertEntriesResponse(response: InsertEntriesResponse<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(response.existingEntries);
+		const [ keys, values ] = this.encodeEntries(response.existingEntries);
         
 		return new Message({
 			type: MessageType.INSERT_ENTRIES_RESPONSE,
@@ -760,7 +757,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.INSERT_ENTRIES_RESPONSE) {
 			throw new Error('decodeInsertResponse(): Message type must be INSERT_ENTRIES_RESPONSE');
 		}
-		const entries = this._decodeEntries(message.keys, message.values);
+		const entries = this.decodeEntries(message.keys, message.values);
         
 		return new InsertEntriesResponse<K, V>(
 			message.requestId!,
@@ -770,7 +767,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeInsertEntriesNotification(notification: InsertEntriesNotification<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(notification.entries);
+		const [ keys, values ] = this.encodeEntries(notification.entries);
         
 		return new Message({
 			type: MessageType.INSERT_ENTRIES_NOTIFICATION,
@@ -785,7 +782,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.INSERT_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeInsertNotification(): Message type must be INSERT_ENTRIES_NOTIFICATION');
 		}
-		const entries = this._decodeEntries(message.keys, message.values);
+		const entries = this.decodeEntries(message.keys, message.values);
         
 		return new InsertEntriesNotification<K, V>(
 			entries,
@@ -795,7 +792,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeUpdateEntriesRequest(request: UpdateEntriesRequest<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(request.entries);
+		const [ keys, values ] = this.encodeEntries(request.entries);
         
 		return new Message({
 			type: MessageType.UPDATE_ENTRIES_REQUEST,
@@ -803,6 +800,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			requestId: request.requestId,
 			keys,
 			values,
+			prevValue: request.prevValue ? this.valueCodec.encode(request.prevValue) : undefined,
 		});
 	}
 
@@ -810,17 +808,18 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.UPDATE_ENTRIES_REQUEST) {
 			throw new Error('decodeUpdateEntriesRequest(): Message type must be UPDATE_ENTRIES_REQUEST');
 		}
-		const entries = this._decodeEntries(message.keys, message.values);
+		const entries = this.decodeEntries(message.keys, message.values);
         
 		return new UpdateEntriesRequest<K, V>(
 			message.requestId!,
 			entries,
 			message.sourceId,
+			message.prevValue ? this.valueCodec.decode(message.prevValue) : undefined,
 		);
 	}
     
 	public encodeUpdateEntriesResponse(response: UpdateEntriesResponse<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(response.updatedEntries);
+		const [ keys, values ] = this.encodeEntries(response.updatedEntries);
         
 		return new Message({
 			type: MessageType.UPDATE_ENTRIES_RESPONSE,
@@ -835,7 +834,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.UPDATE_ENTRIES_RESPONSE) {
 			throw new Error('decodeUpdateEntriesResponse(): Message type must be UPDATE_ENTRIES_RESPONSE');
 		}
-		const updatedEntries = this._decodeEntries(message.keys, message.values);
+		const updatedEntries = this.decodeEntries(message.keys, message.values);
         
 		return new UpdateEntriesResponse<K, V>(
 			message.requestId!,
@@ -845,7 +844,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeUpdateEntriesNotification(notification: UpdateEntriesNotification<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(notification.updatedEntries);
+		const [ keys, values ] = this.encodeEntries(notification.updatedEntries);
         
 		return new Message({
 			type: MessageType.UPDATE_ENTRIES_NOTIFICATION,
@@ -860,7 +859,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.UPDATE_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeUpdateEntriesResponse(): Message type must be UPDATE_ENTRIES_RESPONSE');
 		}
-		const updatedEntries = this._decodeEntries(message.keys, message.values);
+		const updatedEntries = this.decodeEntries(message.keys, message.values);
         
 		return new UpdateEntriesNotification<K, V>(
 			updatedEntries,
@@ -870,7 +869,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeRestoreEntriesRequest(request: RestoreEntriesRequest<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(request.entries);
+		const [ keys, values ] = this.encodeEntries(request.entries);
         
 		return new Message({
 			type: MessageType.RESTORE_ENTRIES_REQUEST,
@@ -885,7 +884,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.RESTORE_ENTRIES_REQUEST) {
 			throw new Error('decodeRestoreEntriesRequest(): Message type must be RESTORE_ENTRIES_REQUEST');
 		}
-		const entries = this._decodeEntries(message.keys, message.values);
+		const entries = this.decodeEntries(message.keys, message.values);
         
 		return new RestoreEntriesRequest<K, V>(
 			message.requestId!,
@@ -914,7 +913,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeRestoreEntriesNotification(notification: RestoreEntriesNotification<K, V>): Message {
-		const [ keys, values ] = this._encodeEntries(notification.entries);
+		const [ keys, values ] = this.encodeEntries(notification.entries);
         
 		return new Message({
 			type: MessageType.RESTORE_ENTRIES_NOTIFICATION,
@@ -929,7 +928,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.RESTORE_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeRestoreEntriesResponse(): Message type must be RESTORE_ENTRIES_RESPONSE');
 		}
-		const restoredEntries = this._decodeEntries(message.keys, message.values);
+		const restoredEntries = this.decodeEntries(message.keys, message.values);
         
 		return new RestoreEntriesNotification<K, V>(
 			restoredEntries,
@@ -939,79 +938,19 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	private _encodeKeys(keys: ReadonlySet<K>): Uint8Array[] {
-		return StorageCodec._encodeSet<K>(keys, this.keyCodec);
+		return encodeSet<K>(keys, this.keyCodec);
 	}
 
 	private _decodeKeys(keys: Uint8Array[]): ReadonlySet<K> {
-		return StorageCodec._decodeSet<K>(keys, this.keyCodec);
-	}
-    
-	private static _encodeSet<T>(keys: ReadonlySet<T>, encoder: HamokEncoder<T, Uint8Array>): Uint8Array[] {
-		if (keys.size < 1) {
-			return EMPTY_ARRAY;
-		}
-		const result: Uint8Array[] = [];
-
-		for (const key of keys) {
-			const encodedKey = encoder.encode(key);
-
-			result.push(encodedKey);
-		}
-		
-		return result;
+		return decodeSet<K>(keys, this.keyCodec);
 	}
 
-	private static _decodeSet<T>(keys: Uint8Array[], decoder: HamokDecoder<T, Uint8Array>): ReadonlySet<T> {
-		if (keys.length < 1) {
-			return Collections.EMPTY_SET;
-		}
-		const result = new Set<T>();
-
-		for (let i = 0; i < keys.length; ++i) {
-			const key = keys[i];
-			const decodedKey = decoder.decode(key);
-
-			result.add(decodedKey);
-		}
-		
-		return result;
+	public encodeEntries(entries: ReadonlyMap<K, V>): [keys: Uint8Array[], values: Uint8Array[]] {
+		return encodeMap<K, V>(entries, this.keyCodec, this.valueCodec);
 	}
 
-	private _encodeEntries(entries: ReadonlyMap<K, V>): [Uint8Array[], Uint8Array[]] {
-		if (entries.size < 1) {
-			return [ [], [] ];
-		}
-		const encodedKeys: Uint8Array[] = [];
-		const encodedValues: Uint8Array[] = [];
-
-		for (const [ key, value ] of entries) {
-			const encodedKey = this.keyCodec.encode(key);
-			const encodedValue = this.valueCodec.encode(value);
-
-			encodedKeys.push(encodedKey);
-			encodedValues.push(encodedValue);
-		}
-		
-		return [ encodedKeys, encodedValues ];
-	}
-
-	private _decodeEntries(keys: Uint8Array[], values: Uint8Array[]): ReadonlyMap<K, V> {
-		if (keys.length < 1 || values.length < 1) {
-			return Collections.EMPTY_MAP;
-		}
-		const result = new Map<K, V>();
-		const length = Math.min(keys.length, values.length);
-
-		for (let i = 0; i < length; ++i) {
-			const key = keys[i];
-			const value = values[i];
-			const decodedKey = this.keyCodec.decode(key);
-			const decodedValue = this.valueCodec.decode(value);
-
-			result.set(decodedKey, decodedValue);
-		}
-		
-		return result;
+	public decodeEntries(keys: Uint8Array[], values: Uint8Array[]): ReadonlyMap<K, V> {
+		return decodeMap<K, V>(keys, values, this.keyCodec, this.valueCodec);
 	}
     
 }

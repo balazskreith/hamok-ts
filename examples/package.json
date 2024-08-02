@@ -5,7 +5,12 @@
 	"main": "main.js",
 	"scripts": {
 		"format": "prettier --write \"src/**/*.ts\"",
-		"dev": "nodemon -x ts-node src/replicatedStorageExample.ts | pino-pretty",
+		"dev": "nodemon -x ts-node src/storageExample.ts | pino-pretty",
+		"dev:1": "nodemon -x ts-node src/storageExample.ts | pino-pretty",
+		"dev:2": "nodemon -x ts-node src/electionExample.ts | pino-pretty",
+		"dev:3": "nodemon -x ts-node src/queueExample.ts | pino-pretty",
+		"dev:4": "nodemon -x ts-node src/queueExample2.ts | pino-pretty",
+		"dev:5": "nodemon -x ts-node src/emitterExample.ts | pino-pretty",
 		"build": "tsc",
 		"test": "jest --config jest.config.js",
 		"lint": "eslint --ext .ts src"

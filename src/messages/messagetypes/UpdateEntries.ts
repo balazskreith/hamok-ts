@@ -1,15 +1,11 @@
 export class UpdateEntriesRequest<K, V> {
-	public readonly requestId: string;
-	public readonly entries: ReadonlyMap<K, V>;
-	public readonly sourceEndpointId?: string;
 	public constructor(
-		requetId: string,
-		entries: ReadonlyMap<K, V>,
-		sourceEndpointId?: string
+		public readonly requestId: string,
+		public readonly entries: ReadonlyMap<K, V>,
+		public readonly sourceEndpointId?: string,
+		public readonly prevValue?: V,
 	) {
-		this.requestId = requetId;
-		this.entries = entries;
-		this.sourceEndpointId = sourceEndpointId;
+		// empty
 	}
 
 	public createResponse(
@@ -39,16 +35,11 @@ export class UpdateEntriesResponse<K, V> {
 }
 
 export class UpdateEntriesNotification<K, V> {
-	public readonly updatedEntries: ReadonlyMap<K, V>;
-	public readonly sourceEndpointId?: string;
-	public readonly destinationEndpointId?: string;
 	public constructor(
-		updatedEntries: ReadonlyMap<K, V>,
-		sourceEndpointId?: string,
-		destinationEndpointId?: string
+		public readonly updatedEntries: ReadonlyMap<K, V>,
+		public readonly sourceEndpointId?: string,
+		public readonly destinationEndpointId?: string,
 	) {
-		this.updatedEntries = updatedEntries;
-		this.sourceEndpointId = sourceEndpointId;
-		this.destinationEndpointId = destinationEndpointId;
+		// empty
 	}
 }

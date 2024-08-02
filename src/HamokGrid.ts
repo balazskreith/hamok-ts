@@ -2,7 +2,7 @@ import { createLogger } from './common/logger';
 import { HamokMessage } from './messages/HamokMessage';
 import { PendingRequest } from './messages/PendingRequest';
 import { PendingResponse } from './messages/PendingResponse';
-import { OngoingRequestsNotifier } from './OngoingRequestsNotifier';
+import { OngoingRequestsNotifier } from './messages/OngoingRequestsNotifier';
 
 const logger = createLogger('HamokGrid');
 
@@ -15,18 +15,18 @@ export class HamokGrid {
 		public readonly submit: (message: HamokMessage) => Promise<void>,
 		public readonly ongoingRequestsNotifier: OngoingRequestsNotifier,
 		public readonly remotePeerIds: ReadonlySet<string>,
-		public getLocalPeerId: () => string,
-		public getLeaderId: () => string | undefined,
+		private _getLocalPeerId: () => string,
+		private _getLeaderId: () => string | undefined,
 	) {
 		// empty
 	}
 
 	public get localPeerId(): string {
-		return this.getLocalPeerId();
+		return this._getLocalPeerId();
 	}
 
 	public get leaderId(): string | undefined {
-		return this.getLeaderId();
+		return this._getLeaderId();
 	}
 
 	public async request(options: {
@@ -149,6 +149,9 @@ export class HamokGrid {
 			
 			return;
 		}
+		
+		logger.debug('%s Response is received %o', this.localPeerId, message);
+		
 		pendingRequest.accept(message);
 	}
 

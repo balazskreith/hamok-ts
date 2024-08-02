@@ -12,7 +12,7 @@ import { OngoingRequestsNotification } from '../messages/messagetypes/OngoingReq
 import { ClearEntriesRequest, ClearEntriesNotification, ClearEntriesResponse } from '../messages/messagetypes/ClearEntries';
 import { DeleteEntriesRequest, DeleteEntriesNotification, DeleteEntriesResponse } from '../messages/messagetypes/DeleteEntries';
 import { EvictEntriesRequest, EvictEntriesNotification, EvictEntriesResponse } from '../messages/messagetypes/EvictEntries';
-import { GetKeysRequest } from '../messages/messagetypes/GetKeys';
+import { GetKeysRequest, GetKeysResponse } from '../messages/messagetypes/GetKeys';
 import { GetSizeRequest } from '../messages/messagetypes/GetSize';
 import { InsertEntriesRequest, InsertEntriesNotification, InsertEntriesResponse } from '../messages/messagetypes/InsertEntries';
 import { RemoveEntriesRequest, RemoveEntriesNotification, RemoveEntriesResponse } from '../messages/messagetypes/RemoveEntries';
@@ -87,6 +87,7 @@ export type StorageConnectionEventMap<K, V> = {
 
 export type StorageConnectionResponseMap<K, V> = {
 	GetEntriesResponse: GetEntriesResponse<K, V>;
+	GetKeysResponse: GetKeysResponse<K>;
 	ClearEntriesResponse: ClearEntriesResponse;
 	DeleteEntriesResponse: DeleteEntriesResponse<K>;
 	RemoveEntriesResponse: RemoveEntriesResponse<K, V>;
@@ -246,7 +247,9 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 			}))
 		);
 
-		responseMessages.flatMap((responses) => responses)
+		// sort the messages by source ids to make sure the order of the responses
+		// are consistent on all peers
+		sortMessagesBySourceIds(responseMessages.flatMap((responses) => responses))
 			.map((response) => this.codec.decodeDeleteEntriesResponse(response))
 			.forEach((response) => Collections.concatSet(
 				result,
@@ -352,7 +355,8 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 
 	public async requestUpdateEntries(
 		entries: ReadonlyMap<K, V>,
-		targetPeerIds?: ReadonlySet<string> | string[]
+		targetPeerIds?: ReadonlySet<string> | string[],
+		prevValue?: V
 	): Promise<ReadonlyMap<K, V>> {
 		const result = new Map<K, V>();
 
@@ -366,6 +370,8 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 					new UpdateEntriesRequest(
 						uuid(),
 						batchedEntries,
+						undefined,
+						prevValue,
 					)
 				),
 				targetPeerIds
@@ -456,4 +462,23 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 
 		this.grid.sendMessage(message, targetPeerIds);
 	}
+}
+
+function sortMessagesBySourceIds(messages: HamokMessage[]): HamokMessage[] {
+	const result = new Map<string, HamokMessage[]>();
+
+	for (const message of messages) {
+		let sourceId = message.sourceId;
+
+		if (!sourceId) {
+			sourceId = '0';
+		}
+
+		const messagesFromSource = result.get(sourceId) ?? [];
+
+		messagesFromSource.push(message);
+		result.set(sourceId, messagesFromSource);
+	}
+
+	return [ ...result.entries() ].sort(([ a ], [ b ]) => a.localeCompare(b)).flatMap(([ , msgs ]) => msgs);
 }

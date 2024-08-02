@@ -53,10 +53,11 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 
 		if (currentTerm < requestChunk.term) {
-			logger.info(`Term for follower has been changed from ${currentTerm} to ${requestChunk.term}`);
 			currentTerm = requestChunk.term;
 			props.currentTerm = currentTerm;
 			props.votedFor = undefined;
+
+			logger.debug(`Term for follower has been changed from ${currentTerm} to ${requestChunk.term}`);
 		}
 		// let's restart the timer
 		updated = Date.now();
@@ -183,7 +184,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 		const response = request.createResponse(voteGranted);
 
-		logger.info(`${localPeerId} send a vote response %o.`, response);
+		logger.debug(`${localPeerId} send a vote response %o.`, response);
 		messageEmitter.send(response);
 	};
 	const close = () => {
@@ -192,7 +193,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		messageEmitter.off('RaftVoteRequest', voteRequestListener);		
 		messageEmitter.off('RaftAppendEntriesRequestChunk', appendEntriesRequestListener);
 
-		logger.debug('%s is closed', localPeerId);
+		logger.debug('%s FollowerState is closed', localPeerId);
 	};
 
 	messageEmitter.on('RaftVoteRequest', voteRequestListener);
@@ -214,6 +215,13 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 
 		logger.debug(`${localPeerId} is timed out to wait for append logs request (maxIdle: ${config.followerMaxIdleInMs}, elapsed: ${elapsedInMs}) extraWaitingTime: ${context.extraWaitingTime}`);
+
+		if (config.onlyFollower) {
+			updated = now;
+			context.extraWaitingTime = Math.max(config.followerMaxIdleInMs, Math.min((context.extraWaitingTime ?? 0) * 2, 30000));
+			
+			return logger.debug('This peer is configured to be only a follower. It will not start an election.');
+		}
 		
 		raftEngine.state = createRaftCandidateState({
 			electionTerm: props.currentTerm + 1,

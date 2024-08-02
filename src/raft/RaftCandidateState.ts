@@ -32,6 +32,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 	const notifiedRemotePeers = new Set<string>();
 	let closed = false;
 	let started: number | undefined;
+	let elected = false;
 	const appendEntriesRequestListener = (request: RaftAppendEntriesRequestChunk) => {
 		if (!remotePeers.has(request.peerId)) {
 			logger.warn(`%s Received an append entries request from an unknown peer: ${request.peerId}`, localPeerId);
@@ -80,9 +81,10 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 
 		const numberOfPeerIds = remotePeers.size + 1; // +1, because of a local peer!
 
-		logger.debug('%s Received vote for leadership: %d, number of peers: %d.', localPeerId, receivedVotes.size, numberOfPeerIds);
+		elected = numberOfPeerIds < receivedVotes.size * 2;
+		logger.debug('%s Received vote for leadership: %d, number of peers: %d. Won: %d', localPeerId, receivedVotes.size, numberOfPeerIds, elected);
 		
-		if (numberOfPeerIds < receivedVotes.size * 2) {
+		if (elected) {
 			// won the election
 			return lead();
 		}
@@ -105,6 +107,9 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 	messageEmitter.on('RaftAppendEntriesResponse', appendRaftEntriesResponseListener);
 
 	const run = () => {
+		// prevent to send a vote request in case it is already elected
+		if (elected) return;
+
 		for (const remotePeerId of remotePeers) {
 			if (notifiedRemotePeers.has(remotePeerId)) {
 				continue;
@@ -117,7 +122,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 				localPeerId,
 			);
 
-			logger.info('%s Send vote request to %s', localPeerId, request.peerId);
+			logger.debug('%s Send vote request to %s', localPeerId, request.peerId);
 			messageEmitter.send(request);
 			notifiedRemotePeers.add(remotePeerId);
 		}
@@ -157,6 +162,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 			return follow();
 		}
 		// won the election
+		logger.info('%s Won the election for term %d', localPeerId, context.electionTerm);
 		props.currentTerm = context.electionTerm;
 		raftEngine.state = createRaftLeaderState({
 			raftEngine,

@@ -135,7 +135,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			}
 		}
 		if (0 <= maxCommitIndex) {
-			logger.debug('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
+			logger.trace('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
 			// setTimeout(() => {
 			for (const committedLogEnty of logs.commitUntil(maxCommitIndex)) {
 				raftEngine.events.emit('commit', committedLogEnty.entry);
@@ -145,10 +145,10 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 		}
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
-		logger.warn('%s received a vote request from %s, but it is in an empty state', raftEngine.localPeerId, request.peerId);
+		logger.warn('%s received a vote request from %s, but it is in a leader state', raftEngine.localPeerId, request.peerId);
 	};
 	const voteResponseListener = (response: RaftVoteResponse) => {
-		logger.warn('%s received a vote response from %s, but it is in an empty state', raftEngine.localPeerId, response.sourcePeerId);
+		logger.warn('%s received a vote response from %s, but it is in a leader state', raftEngine.localPeerId, response.sourcePeerId);
 	};
 	const close = () => {
 		if (closed) return;

@@ -15,6 +15,11 @@ export type RaftEngineConfig = {
 	electionTimeoutInMs: number;
 	followerMaxIdleInMs: number,
 	heartbeatInMs: number,
+
+	/**
+	 * If true, this peer will only be a follower and will never become a candidate or leader.
+	 */
+	onlyFollower: boolean,
 }
 
 export class RaftEngine {

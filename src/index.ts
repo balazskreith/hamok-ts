@@ -1,2 +1,5 @@
 export { Hamok, HamokConfig, HamokConstructorConfig } from './Hamok';
-export { setLogLevel } from './common/logger';
+export { HamokStorage as ReplicatedStorage } from './collections/HamokStorage';
+export { setLogLevel, LogLevel } from './common/logger';
+export { HamokMessage } from './messages/HamokMessage';
+export { HamokCodec, createHamokJsonBinaryCodec, createNumberToUint8ArrayCodec } from './common/HamokCodec';
