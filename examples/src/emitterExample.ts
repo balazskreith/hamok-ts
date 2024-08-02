@@ -1,4 +1,4 @@
-import { createNumberToUint8ArrayCodec, Hamok, setLogLevel } from '@hamok-dev/hamok-ts';
+import { createNumberToUint8ArrayCodec, Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
@@ -11,7 +11,7 @@ type ExampleEventMap = {
 	'event-2': [number, string],
 }
 
-setLogLevel('info');
+setHamokLogLevel('info');
 
 const server_1 = new Hamok();
 const server_2 = new Hamok();
@@ -39,9 +39,12 @@ server_2.start();
 	const emitter_2 = server_2.createEmitter<ExampleEventMap>({
 		emitterId: 'my-distributed-emitter',
 	});
-
-	await emitter_1.subscribe('event-1', (number, string, boolean) => {
+	const listener = (number: number, string: string, boolean: boolean) => {
 		logger.debug('Event-1 received by server_1: %s, %s, %s', number, string, boolean);
+	};
+	await emitter_1.subscribe('event-1', listener);
+	await emitter_2.subscribe('event-1', (number: number, string: string, boolean: boolean) => {
+		logger.debug('Event-1 received by server_2: %s, %s, %s', number, string, boolean);
 	});
 	await emitter_2.subscribe('event-2', (number, string) => {
 		logger.debug('Event-2 received by server_2: %s, %s', number, string);
@@ -52,6 +55,15 @@ server_2.start();
 
 	logger.debug('Publishing event-2 from server_1');
 	emitter_1.publish('event-2', 2, 'world');
+
+	logger.debug('Unsubscribing from event-1 on server_1');
+	await emitter_1.unsubscribe('event-1', listener);
+
+	logger.debug('Publishing event-1 from server_2');
+	emitter_1.publish('event-1', 3, 'hello', false);
+
+	logger.debug('Publishing event-2 from server_1');
+	emitter_1.publish('event-2', 4, 'world');
 
 })();
 

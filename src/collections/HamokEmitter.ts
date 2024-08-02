@@ -165,15 +165,15 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		this._emitter.on(event as string, listener);
 	}
 
-	public async unsubscribe<K extends keyof T>(event: string, listener: (...args: T[K]) => void): Promise<void> {
+	public async unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._standalone) {
 			return this._waitUntilConnected(60000);
 		}
 
 		await this.connection.requestRemoveEntries(
-			Collections.setOf(event)
+			Collections.setOf(event as string)
 		);
-		this._emitter.off(event, listener);
+		this._emitter.off(event as string, listener);
 	}
 
 	public clear() {
@@ -189,10 +189,14 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		const remotePeerIds = this._subscriptions.get(event);
 		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
 
-		this.connection.notifyUpdateEntries(
-			new Map([ entry ]),
-			remotePeerIds
-		);
+		for (const remotePeerId of remotePeerIds ?? []) {
+			if (remotePeerId === this.connection.grid.localPeerId) continue;
+			
+			this.connection.notifyUpdateEntries(
+				new Map([ entry ]),
+				remotePeerId
+			);
+		}
 
 		if (remotePeerIds?.has(this.connection.grid.localPeerId)) {
 			this._emitter.emit(event as string, ...args);

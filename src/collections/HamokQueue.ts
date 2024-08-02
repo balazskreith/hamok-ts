@@ -155,6 +155,10 @@ export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
 		return this._head === this._tail;
 	}
 
+	public get size() {
+		return this._tail - this._head;
+	}
+
 	public async push(...values: T[]): Promise<void> {
 		if (this._standalone) {
 			await this._waitUntilConnected(60000);

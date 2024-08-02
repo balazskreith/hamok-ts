@@ -1,4 +1,4 @@
-import { Hamok, setLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
@@ -7,7 +7,7 @@ const logger = pino.pino({
 });
 
 
-setLogLevel('info');
+setHamokLogLevel('info');
 
 const server_1 = new Hamok();
 const server_2 = new Hamok();

@@ -1,4 +1,4 @@
-import { createNumberToUint8ArrayCodec, Hamok, setLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
@@ -7,7 +7,7 @@ const logger = pino.pino({
 });
 
 
-setLogLevel('info');
+setHamokLogLevel('info');
 
 const server_1 = new Hamok();
 const server_2 = new Hamok();
@@ -20,8 +20,6 @@ server_2.addRemotePeerId(server_1.localPeerId);
 
 server_1.start();
 server_2.start();
-
-const timers: ReturnType<typeof setInterval>[] = [];
 
 (async () => {
 	await Promise.all([

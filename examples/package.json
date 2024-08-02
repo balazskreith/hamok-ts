@@ -5,7 +5,8 @@
 	"main": "main.js",
 	"scripts": {
 		"format": "prettier --write \"src/**/*.ts\"",
-		"dev": "nodemon -x ts-node src/storageExample.ts | pino-pretty",
+		"dev:storage:1": "nodemon -x ts-node src/storageExample.ts | pino-pretty",
+		"dev:storage:2": "nodemon -x ts-node src/storageExample2.ts | pino-pretty",
 		"dev:1": "nodemon -x ts-node src/storageExample.ts | pino-pretty",
 		"dev:2": "nodemon -x ts-node src/electionExample.ts | pino-pretty",
 		"dev:3": "nodemon -x ts-node src/queueExample.ts | pino-pretty",

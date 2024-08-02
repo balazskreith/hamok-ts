@@ -221,7 +221,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		}).then(() => void 0);
 	}
 
-	public notifyClearEntries(targetPeerIds?: ReadonlySet<string>) {
+	public notifyClearEntries(targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		this._sendMessage(this.codec.encodeClearEntriesNotification(new ClearEntriesNotification()), targetPeerIds);
 	}
 
@@ -259,7 +259,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		return result;
 	}
 
-	public notifyDeleteEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string>) {
+	public notifyDeleteEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		Collections.splitSet<K>(
 			keys,
 			this.config.maxOutboundKeys ?? 0,
@@ -301,7 +301,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		return result;
 	}
 
-	public notifyRemoveEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string>) {
+	public notifyRemoveEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		Collections.splitSet<K>(
 			keys,
 			this.config.maxOutboundKeys ?? 0,
@@ -343,7 +343,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		return result;
 	}
 
-	public notifyInsertEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string>) {
+	public notifyInsertEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -388,7 +388,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		return result;
 	}
 
-	public notifyUpdateEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string>) {
+	public notifyUpdateEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -456,7 +456,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		});
 	}
 
-	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[]) {
+	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		message.storageId = this.config.storageId;
 		message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 

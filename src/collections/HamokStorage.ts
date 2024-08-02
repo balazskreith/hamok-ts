@@ -27,8 +27,8 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	public constructor(
 		public readonly connection: StorageConnection<K, V>,
 		public readonly baseMap: BaseMap<K, V>,
-		public equalValues: (a: V, b: V) => boolean = (a, b) => a === b,
-		public equalKeys: (a: K, b: K) => boolean = (a, b) => a === b
+		public equalValues: (a: V, b: V) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b),
+		public equalKeys: (a: K, b: K) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 	) {
 		super();
 		this._standalone = this.connection.grid.leaderId === undefined;
@@ -133,19 +133,21 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 			.on('UpdateEntriesRequest', (request) => {
 				this._processRequest(async () => {
 
-					logger.debug('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
+					logger.trace('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
 					const updatedEntries: [K, V][] = [];
 					const insertedEntries: [K, V][] = [];
 
-					if (request.prevValue) {
+					if (request.prevValue !== undefined) {
 						// this is a conditional update
 						if (request.entries.size !== 1) {
 							// we let the request to timeout
-							return logger.warn('Conditional update request must have only one entry: %o', request);
+							return logger.trace('Conditional update request must have only one entry: %o', request);
 						}
 						const [ key, value ] = [ ...request.entries ][0];
 
 						const existingEntries = this.baseMap.get(key);
+
+						logger.trace('Conditional update request: %s, %s, %s, %s', key, value, existingEntries, request.prevValue);
 
 						if (existingEntries && this.equalValues(existingEntries, request.prevValue)) {
 							this.baseMap.set(key, value);
@@ -388,6 +390,8 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	
 			return true;
 		}
+		
+		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
 		
 		return (await this.connection.requestUpdateEntries(
 			Collections.mapOf([ key, value ]),

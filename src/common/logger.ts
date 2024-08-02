@@ -12,7 +12,7 @@ const onChileListener = (child: pino.Logger) => {
 
 logger.onChild = onChileListener;
 
-export type LogLevel = 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+export type HamokLogLevel = 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
 export function createLogger(moduleName: string) {
 	const child = logger.child({ moduleName });
@@ -21,7 +21,7 @@ export function createLogger(moduleName: string) {
 	// return console;
 }
 
-export function setLogLevel(level: LogLevel) {
+export function setHamokLogLevel(level: HamokLogLevel) {
 	logger.level = level;
 	logger.info(`Log level set to ${level}`);
 	childs.forEach((childLogger) => (childLogger.level = logger.level));
