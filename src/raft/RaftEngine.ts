@@ -57,7 +57,7 @@ export class RaftEngine {
 
 		logger.info(`%s Leader changed from ${prevLeaderId} to ${newLeaderId}`, this.localPeerId);
 		
-		this.events.emit('leader-changed', newLeaderId);
+		this.events.emit('leader-changed', newLeaderId, prevLeaderId);
 	}
 
 	public get state(): RaftState {
@@ -71,11 +71,18 @@ export class RaftEngine {
 		prevState.close();
 		this._state = newState;
 		
-		logger.info(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
+		logger.debug(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
 		
 		newState.init?.();
 
 		this.events.emit('state-changed', newState.stateName);
+
+		switch (newState.stateName) {
+			case 'leader':
+			case 'follower':
+				this.events.emit(newState.stateName);
+				break;
+		}
 	}
 
 	public submit(message: HamokMessage): boolean {

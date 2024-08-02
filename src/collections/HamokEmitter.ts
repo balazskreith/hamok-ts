@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { StorageConnection } from './StorageConnection';
+import { HamokConnection } from './HamokConnection';
 import { createLogger } from '../common/logger';
 import * as Collections from '../common/Collections';
 import { HamokEmitterSnapshot } from '../HamokSnapshot';
@@ -11,13 +11,12 @@ export interface HamokEmitterEventMap extends Record<string, unknown[]> {
 }
 
 export class HamokEmitter<T extends HamokEmitterEventMap> {
-	private _standalone: boolean;
 	private readonly _subscriptions = new Map<keyof T, Set<string>>();
 	private readonly _emitter = new EventEmitter();
 	private _closed = false;
     
 	public constructor(
-		public readonly connection: StorageConnection<string, string>,
+		public readonly connection: HamokConnection<string, string>,
 		public readonly payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>
 	) {
 		this.connection
@@ -131,13 +130,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 					);
 				}
 			})
-			.on('leader-changed', (leaderId) => {
-				this._standalone = leaderId === undefined;
-			})
 			.once('close', () => this.close())
 		;
-
-		this._standalone = this.connection.grid.leaderId === undefined;
 	}
 
 	public get id(): string {
@@ -157,18 +151,14 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public async subscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
-		if (this._standalone) {
-			return this._waitUntilConnected(60000);
-		}
-
+		if (this._closed) throw new Error('Cannot subscribe on a closed emitter');
+		
 		await this.connection.requestInsertEntries(new Map([ [ event as string, 'empty' ] ]));
 		this._emitter.on(event as string, listener);
 	}
 
 	public async unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
-		if (this._standalone) {
-			return this._waitUntilConnected(60000);
-		}
+		if (this._closed) throw new Error('Cannot unsubscribe on a closed emitter');
 
 		await this.connection.requestRemoveEntries(
 			Collections.setOf(event as string)
@@ -177,15 +167,13 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public clear() {
-		if (this._standalone) {
-			return this._waitUntilConnected(60000);
-		}
-
 		this.connection.notifyClearEntries();
 		this._emitter.removeAllListeners();
 	}
 
 	public publish<K extends keyof T>(event: K, ...args: T[K]): void {
+		if (this._closed) throw new Error('Cannot publish on a closed emitter');
+
 		const remotePeerIds = this._subscriptions.get(event);
 		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
 
@@ -204,6 +192,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public export(): HamokEmitterSnapshot {
+		if (this._closed) throw new Error('Cannot export a closed emitter');
+
 		const events: string[] = [];
 		const subscribers: string[][] = [];
         
@@ -220,10 +210,10 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public import(snapshot: HamokEmitterSnapshot): void {
-		if (!this._standalone) {
-			throw new Error(`Cannot import data to a non-standalone queue: ${this.id}`);
-		} else if (snapshot.emitterId !== this.id) {
+		if (snapshot.emitterId !== this.id) {
 			throw new Error(`Cannot import data from a different queue: ${snapshot.emitterId} !== ${this.id}`);
+		} else if (this.connection.connected) {
+			throw new Error('Cannot import data while connected');
 		}
 
 		for (let i = 0; i < snapshot.events.length; i++) {
@@ -232,20 +222,5 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 			this._subscriptions.set(event, new Set(peerIds));
 		}
-	}
-
-	private _waitUntilConnected(timeoutInMs: number, intervalInMs = 200): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			const started = Date.now();
-
-			const timer = setInterval(() => {
-				const now = Date.now();
-
-				if (timeoutInMs < now - started) reject(`Cannot pop from ${this.id}, becasue it is not connected to the grid`);
-				if (this._standalone) return;
-				clearInterval(timer);
-				resolve();
-			}, intervalInMs);
-		});
 	}
 }

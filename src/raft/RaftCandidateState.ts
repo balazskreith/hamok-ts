@@ -162,7 +162,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 			return follow();
 		}
 		// won the election
-		logger.info('%s Won the election for term %d', localPeerId, context.electionTerm);
+		logger.debug('%s Won the election for term %d', localPeerId, context.electionTerm);
 		props.currentTerm = context.electionTerm;
 		raftEngine.state = createRaftLeaderState({
 			raftEngine,

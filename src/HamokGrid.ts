@@ -29,6 +29,10 @@ export class HamokGrid {
 		return this._getLeaderId();
 	}
 
+	public get connected() {
+		return this.leaderId !== undefined;
+	}
+
 	public async request(options: {
 		message: HamokMessage,
 		timeoutInMs?: number,

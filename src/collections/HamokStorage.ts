@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { createLogger } from '../common/logger';
-import { StorageConnection } from './StorageConnection';
+import { HamokConnection } from './HamokConnection';
 import { ConcurrentExecutor } from '../common/ConcurrentExecutor';
 import { BaseMap } from './BaseMap';
 import * as Collections from '../common/Collections';
@@ -10,7 +10,7 @@ const logger = createLogger('ReplicatedStorage');
 
 export type HamokStorageEventMap<K, V> = {
 	'insert': [key: K, value: V],
-	'update': [key: K, value: V],
+	'update': [key: K, oldValue: V, newValue: V],
 	'remove': [key: K, value: V],
 	'clear': [],
 	'close': [],
@@ -20,199 +20,126 @@ export type HamokStorageEventMap<K, V> = {
  * Replicated storage replicates all entries on all distributed storages
  */
 export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>> {
-	private _standalone: boolean;
 	private readonly _executor = new ConcurrentExecutor(1);
 	private _closed = false;
 
 	public constructor(
-		public readonly connection: StorageConnection<K, V>,
+		public readonly connection: HamokConnection<K, V>,
 		public readonly baseMap: BaseMap<K, V>,
 		public equalValues: (a: V, b: V) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b),
 		public equalKeys: (a: K, b: K) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 	) {
 		super();
-		this._standalone = this.connection.grid.leaderId === undefined;
-
 		this.connection
 			.on('ClearEntriesRequest', (request) => {
-				this._processRequest(async () => {
-					this.baseMap.clear();
+				this.baseMap.clear();
 					
-					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
-						this.connection.respond(
-							'ClearEntriesResponse', 
-							request.createResponse(), 
-							request.sourceEndpointId
-						);
-					}
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'ClearEntriesResponse', 
+						request.createResponse(), 
+						request.sourceEndpointId
+					);
+				}
 					
-					return Promise.resolve(this.emit('clear'));
-				}, {
-					requestId: request.requestId,
-					remotePeerId: request.sourceEndpointId,
-				}).catch((err) => logger.error('Error while clearing entries: in storage %s. Error: %s', this.id, `${err}`));
+				this.emit('clear');
 			})
 			.on('DeleteEntriesRequest', (request) => {
-				this._processRequest(async () => {
-					const removedEntries = this.baseMap.removeAll(request.keys.values());
+				const removedEntries = this.baseMap.removeAll(request.keys.values());
 
-					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
 
-						this.connection.respond(
-							'DeleteEntriesResponse', 
-							request.createResponse(
-								new Set(removedEntries.keys())
-							), 
-							request.sourceEndpointId
-						);
-					}
-					
-					return Promise.resolve(
-						removedEntries.forEach((v, k) => this.emit('remove', k, v))
+					this.connection.respond(
+						'DeleteEntriesResponse', 
+						request.createResponse(
+							new Set(removedEntries.keys())
+						), 
+						request.sourceEndpointId
 					);
-				}, {
-					requestId: request.requestId,
-					remotePeerId: request.sourceEndpointId,
-				}).catch((err) => logger.error('Error while deleting entries: in storage %s. Error: %s', this.id, `${err}`));
+				}
+					
+				removedEntries.forEach((v, k) => this.emit('remove', k, v));
 			})
 			.on('GetEntriesRequest', (request) => {
 				// only requested by the sync process when the storage enters to the grid
 				const foundEntries = this.baseMap.getAll(request.keys.values());
 
-				return Promise.resolve(this.connection.respond(
+				this.connection.respond(
 					'GetEntriesResponse',
 					request.createResponse(foundEntries),
 					request.sourceEndpointId
-				));
+				);
 			})
 			.on('InsertEntriesRequest', (request) => {
-				this._processRequest(async () => {
-					logger.debug('%s InsertEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
-					const existingEntries = this.baseMap.insertAll(request.entries);
+				logger.debug('%s InsertEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
+				const existingEntries = this.baseMap.insertAll(request.entries);
 
-					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
 
-						this.connection.respond(
-							'InsertEntriesResponse',
-							request.createResponse(existingEntries),
-							request.sourceEndpointId
-						);
-					}
-
-					return Promise.resolve(
-						request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', k, v))
+					this.connection.respond(
+						'InsertEntriesResponse',
+						request.createResponse(existingEntries),
+						request.sourceEndpointId
 					);
-				}, {
-					requestId: request.requestId,
-					remotePeerId: request.sourceEndpointId,
-				}).catch((err) => logger.error('Error while inserting entries: in storage %s. Error: %s', this.id, `${err}`));
+				}
+
+				request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', k, v));
 			})
 			.on('RemoveEntriesRequest', (request) => {
-				this._processRequest(async () => {
-					const removedEntries = this.baseMap.removeAll(request.keys.values());
+				const removedEntries = this.baseMap.removeAll(request.keys.values());
 
-					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
 
-						this.connection.respond(
-							'RemoveEntriesResponse',
-							request.createResponse(
-								removedEntries
-							),
-							request.sourceEndpointId
-						);
-					}
-
-					return Promise.resolve(
-						removedEntries.forEach((v, k) => this.emit('remove', k, v))
+					this.connection.respond(
+						'RemoveEntriesResponse',
+						request.createResponse(
+							removedEntries
+						),
+						request.sourceEndpointId
 					);
-				}, {
-					requestId: request.requestId,
-					remotePeerId: request.sourceEndpointId,
-				}).catch((err) => logger.error('Error while removing entries: in storage %s. Error: %s', this.id, `${err}`));
+				}
+
+				removedEntries.forEach((v, k) => this.emit('remove', k, v));
 			})
 			.on('UpdateEntriesRequest', (request) => {
-				this._processRequest(async () => {
 
-					logger.trace('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
-					const updatedEntries: [K, V][] = [];
-					const insertedEntries: [K, V][] = [];
+				logger.trace('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
 
-					if (request.prevValue !== undefined) {
-						// this is a conditional update
-						if (request.entries.size !== 1) {
-							// we let the request to timeout
-							return logger.trace('Conditional update request must have only one entry: %o', request);
-						}
-						const [ key, value ] = [ ...request.entries ][0];
+				const updatedEntries: [K, V, V][] = [];
+				const insertedEntries: [K, V][] = [];
 
-						const existingEntries = this.baseMap.get(key);
-
-						logger.trace('Conditional update request: %s, %s, %s, %s', key, value, existingEntries, request.prevValue);
-
-						if (existingEntries && this.equalValues(existingEntries, request.prevValue)) {
-							this.baseMap.set(key, value);
-							updatedEntries.push([ key, value ]);
-						}
-					} else {
-						this.baseMap.setAll(request.entries, ({ inserted, updated }) => {
-							insertedEntries.push(...inserted);
-							updatedEntries.push(...updated);
-						});
+				if (request.prevValue !== undefined) {
+					// this is a conditional update
+					if (request.entries.size !== 1) {
+						// we let the request to timeout
+						return logger.trace('Conditional update request must have only one entry: %o', request);
 					}
+					const [ key, value ] = [ ...request.entries ][0];
 
-					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
-						this.connection.respond(
-							'UpdateEntriesResponse',
-							request.createResponse(new Map<K, V>(updatedEntries)),
-							request.sourceEndpointId
-						);
+					const existingValue = this.baseMap.get(key);
+
+					logger.trace('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
+
+					if (existingValue && this.equalValues(existingValue, request.prevValue)) {
+						this.baseMap.set(key, value);
+						updatedEntries.push([ key, existingValue, value ]);
 					}
-					insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
+				} else {
+					this.baseMap.setAll(request.entries, ({ inserted, updated }) => {
+						insertedEntries.push(...inserted);
+						updatedEntries.push(...updated);
+					});
+				}
 
-					return Promise.resolve(updatedEntries.forEach(([ key, value ]) => this.emit('update', key, value)));
-				}, {
-					requestId: request.requestId,
-					remotePeerId: request.sourceEndpointId,
-				}).catch((err) => logger.error('Error while updating entries: in storage %s. Error: %s', this.id, `${err}`));
-			})
-			.on('leader-changed', (leaderId) => {
-				this._processRequest(async () => {
-					const wasAlone = this._standalone;
-
-					this._standalone = leaderId === undefined;
-    
-					if (wasAlone && !this._standalone) {
-						// become member of the grid
-                        
-						logger.info(`Storage ${this.id} is joining to the grid, clearing and setting all entries in the baseMap.`);
-						const targetPeerIds = leaderId ? [ leaderId ] : undefined;
-						const remoteEntries = await this.connection.requestGetEntries(Collections.setOf(...this.baseMap.keys()), targetPeerIds);
-						const inserted: [K, V][] = [];
-						const updated: [K, V][] = [];
-
-						for (const [ key, value ] of remoteEntries) {
-							const existingValue = this.baseMap.get(key);
-
-							if (existingValue === undefined) {
-								this.baseMap.set(key, value);
-								inserted.push([ key, value ]);
-
-								continue;
-							}
-
-							if (this.equalValues(existingValue, value)) continue;
-
-							this.baseMap.set(key, value);
-							updated.push([ key, value ]);
-						}
-
-						inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
-						updated.forEach(([ key, value ]) => this.emit('update', key, value));
-
-					} else if (!wasAlone && this._standalone) {
-						// going away from the grid, we don't have to do anything, only when we come back
-					}
-				}).catch((err) => logger.error('Error while joining to the grid: %s', `${err}`));
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'UpdateEntriesResponse',
+						request.createResponse(new Map<K, V>(updatedEntries.map(([ key, oldValue ]) => [ key, oldValue ]))),
+						request.sourceEndpointId
+					);
+				}
+				insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
+				updatedEntries.forEach(([ key, oldValue, newValue ]) => this.emit('update', key, oldValue, newValue));
 			})
 			.once('close', () => this.close())
 		;
@@ -220,10 +147,6 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 
 	public get id(): string {
 		return this.connection.config.storageId;
-	}
-
-	public get shared(): boolean {
-		return !this._standalone;
 	}
 
 	public get closed() {
@@ -253,9 +176,7 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
 
 	public async clear(): Promise<void> {
-		if (this._standalone) {
-			return this.baseMap.clear();
-		}
+		if (this._closed) throw new Error(`Cannot clear a closed storage (${this.id})`);
 		
 		return this.connection.requestClearEntries();
 	}
@@ -265,11 +186,15 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
 
 	public getAll(keys: IterableIterator<K> | K[]): ReadonlyMap<K, V> {
+		if (this._closed) throw new Error(`Cannot get entries from a closed storage (${this.id})`);
+
 		if (Array.isArray(keys)) return this.baseMap.getAll(keys.values());
 		else return this.baseMap.getAll(keys);
 	}
     
 	public async set(key: K, value: V): Promise<V | undefined> {
+		if (this._closed) throw new Error(`Cannot set an entry on a closed storage (${this.id})`);
+
 		const result = await this.setAll(
 			Collections.mapOf([ key, value ])
 		);
@@ -278,14 +203,10 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
     
 	public async setAll(entries: ReadonlyMap<K, V>): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`Cannot set entries on a closed storage (${this.id})`);
+
 		if (entries.size < 1) {
 			return Collections.emptyMap<K, V>();
-		}
-		if (this._standalone) {
-			return this.baseMap.setAll(entries, ({ inserted, updated }) => {
-				inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
-				updated.forEach(([ key, value ]) => this.emit('update', key, value));
-			});
 		}
 
 		return this.connection.requestUpdateEntries(entries);
@@ -300,6 +221,8 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
     
 	public async insertAll(entries: ReadonlyMap<K, V> | [K, V][]): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`Cannot insert entries on a closed storage (${this.id})`);
+
 		if (Array.isArray(entries)) {
 			if (entries.length < 1) return Collections.emptyMap<K, V>();
 			entries = Collections.mapOf(...entries);
@@ -307,13 +230,6 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 
 		if (entries.size < 1) {
 			return Collections.emptyMap<K, V>();
-		}
-		if (this._standalone) {
-			const existingEntries = this.baseMap.insertAll(entries);
-
-			entries.forEach((value, key) => existingEntries.has(key) || this.emit('insert', key, value));
-			
-			return existingEntries;
 		}
 
 		return this.connection.requestInsertEntries(entries);
@@ -328,21 +244,14 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
     
 	public async deleteAll(keys: ReadonlySet<K> | K[]): Promise<ReadonlySet<K>> {
+		if (this._closed) throw new Error(`Cannot delete entries on a closed storage (${this.id})`);
+
 		if (Array.isArray(keys)) {
 			if (keys.length < 1) return Collections.emptySet<K>();
 			keys = Collections.setOf(...keys);
 		}
 		if (keys.size < 1) {
 			return Collections.emptySet<K>();
-		}
-		if (this._standalone) {
-			const removedEntries = this.baseMap.removeAll(keys.values());	
-
-			removedEntries.forEach((v, k) => this.emit('remove', k, v));
-			
-			return Collections.setOf(
-				...removedEntries.keys()
-			);
 		}
 		
 		return this.connection.requestDeleteEntries(keys);
@@ -357,6 +266,8 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
 
 	public async removeAll(keys: ReadonlySet<K> | K[]): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`Cannot remove entries on a closed storage (${this.id})`);
+
 		if (Array.isArray(keys)) {
 			if (keys.length < 1) return Collections.emptyMap<K, V>();
 			keys = Collections.setOf(...keys);
@@ -364,33 +275,13 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 		if (keys.size < 1) {
 			return Collections.emptyMap<K, V>();
 		}
-		if (this._standalone) {
-			const existingEntries = this.baseMap.removeAll(keys.values());
-
-			existingEntries.forEach((v, k) => this.emit('remove', k, v));
-
-			return existingEntries;
-		}
         
 		return this.connection.requestRemoveEntries(keys);
 	}
 
 	public async updateIf(key: K, value: V, oldValue: V): Promise<boolean> {
-		if (this._standalone) {
-			const existingValue = this.baseMap.get(key);
+		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
 
-			if (existingValue === undefined) return false;
-	
-			if (!this.equalValues(existingValue, oldValue)) {
-				return false;
-			}
-	
-			this.baseMap.set(key, value);
-			this.emit('update', key, value);
-	
-			return true;
-		}
-		
 		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
 		
 		return (await this.connection.requestUpdateEntries(
@@ -419,10 +310,12 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	}
 
 	public import(data: HamokStorageSnapshot, eventing?: boolean) {
-		if (!this._standalone) {
-			throw new Error(`Cannot import data to a non-standalone storage: ${this.id}`);
-		} else if (data.storageId !== this.id) {
+		if (data.storageId !== this.id) {
 			throw new Error(`Cannot import data from a different storage: ${data.storageId} !== ${this.id}`);
+		} else if (this.connection.connected) {
+			throw new Error('Cannot import data while connected');
+		} else if (this._closed) {
+			throw new Error(`Cannot import data on a closed storage (${this.id})`);
 		}
 
 		const entries = this.connection.codec.decodeEntries(data.keys, data.values);
@@ -430,39 +323,9 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 		this.baseMap.setAll(entries, ({ inserted, updated }) => {
 			if (eventing) {
 				inserted.forEach(([ key, value ]) => this.emit('insert', key, value));
-				updated.forEach(([ key, value ]) => this.emit('update', key, value));
+				updated.forEach(([ key, oldValue, newValue ]) => this.emit('update', key, oldValue, newValue));
 			}
 		});
 		
-	}
-
-	private _processRequest<T>(fn: () => Promise<T>, options?: {
-		requestId?: string,
-		remotePeerId?: string,
-		removeOngoingAfterDone?: boolean,
-	}): Promise<T> {
-
-		if (options?.remotePeerId && options?.requestId) {
-			this.connection.grid.ongoingRequestsNotifier.add({
-				requestId: options.requestId,
-				remotePeerId: options.remotePeerId,
-				storageId: this.id,
-			});
-		}
-		
-		return this._executor.execute(async () => {
-			if (options?.requestId && !options.removeOngoingAfterDone) {
-				this.connection.grid.ongoingRequestsNotifier.remove(options.requestId);
-			}
-			
-			try {
-				return await fn();
-			} finally {
-				if (options?.requestId && options.removeOngoingAfterDone) {
-					this.connection.grid.ongoingRequestsNotifier.remove(options.requestId);
-				}
-			}
-			
-		});
 	}
 }

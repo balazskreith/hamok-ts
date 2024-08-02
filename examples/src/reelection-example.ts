@@ -2,36 +2,34 @@ import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
-	name: 'election-example',
+	name: 'reelection-example',
 	level: 'debug',
 });
 
 
-setHamokLogLevel('debug');
+export async function run() {
+	const server_1 = new Hamok();
+	const server_2 = new Hamok();
+	const server_3 = new Hamok();
+	
+	server_1.on('message', server_2.accept.bind(server_2));
+	server_1.on('message', server_3.accept.bind(server_3));
+	server_2.on('message', server_1.accept.bind(server_1));
+	server_2.on('message', server_3.accept.bind(server_3));
+	server_3.on('message', server_1.accept.bind(server_1));
+	server_3.on('message', server_2.accept.bind(server_2));
+	
+	server_1.addRemotePeerId(server_2.localPeerId);
+	server_1.addRemotePeerId(server_3.localPeerId);
+	server_2.addRemotePeerId(server_1.localPeerId);
+	server_2.addRemotePeerId(server_3.localPeerId);
+	server_3.addRemotePeerId(server_1.localPeerId);
+	server_3.addRemotePeerId(server_2.localPeerId);
+	
+	server_1.start();
+	server_2.start();
+	server_3.start();
 
-const server_1 = new Hamok();
-const server_2 = new Hamok();
-const server_3 = new Hamok();
-
-server_1.on('message', server_2.accept.bind(server_2));
-server_1.on('message', server_3.accept.bind(server_3));
-server_2.on('message', server_1.accept.bind(server_1));
-server_2.on('message', server_3.accept.bind(server_3));
-server_3.on('message', server_1.accept.bind(server_1));
-server_3.on('message', server_2.accept.bind(server_2));
-
-server_1.addRemotePeerId(server_2.localPeerId);
-server_1.addRemotePeerId(server_3.localPeerId);
-server_2.addRemotePeerId(server_1.localPeerId);
-server_2.addRemotePeerId(server_3.localPeerId);
-server_3.addRemotePeerId(server_1.localPeerId);
-server_3.addRemotePeerId(server_2.localPeerId);
-
-server_1.start();
-server_2.start();
-server_3.start();
-
-(async () => {
 	await Promise.all([
 		new Promise(resolve => server_1.once('leader-changed', resolve)),
 		new Promise(resolve => server_2.once('leader-changed', resolve)),
@@ -69,11 +67,13 @@ server_3.start();
 
 	logger.info('Raft States server1: %s, server2: %s, server3: %s', server_1.state, server_2.state, server_3.state);
 
-})();
-
-
-setTimeout(() => {
 	server_1.stop();
 	server_2.stop();
 	server_3.stop();
-}, 30000)
+}
+
+if (require.main === module) {
+	logger.info('Running eample from module file');
+	setHamokLogLevel('warn');
+	run();
+}

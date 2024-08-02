@@ -2,7 +2,7 @@ import * as Collections from '../common/Collections';
 
 export type BaseMapUpdateResult<K, V> = {
 	inserted: [K, V][],
-	updated: [K, oldvalue: V][],
+	updated: [K, oldvalue: V, newValue: V][],
 }
 
 export interface BaseMap<K, V> extends Map<K, V> {
@@ -49,14 +49,14 @@ export class MemoryBaseMap<K, V> extends Map<K, V> implements BaseMap<K, V> {
 
 	public setAll(entries: ReadonlyMap<K, V>, callback?: (result: BaseMapUpdateResult<K, V>) => void): this {
 		const inserted: [K, V][] = [];
-		const updated: [K, V][] = [];
+		const updated: [K, V, V][] = [];
 
 		for (const [ key, value ] of entries) {
 			this.set(
 				key, 
 				value, 
 				(oldValue) => {
-					if (oldValue) updated.push([ key, oldValue ]);
+					if (oldValue !== undefined) updated.push([ key, oldValue, value ]);
 					else inserted.push([ key, value ]);
 				}
 			);

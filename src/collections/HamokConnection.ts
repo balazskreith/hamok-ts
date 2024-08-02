@@ -21,10 +21,11 @@ import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse 
 import { createResponseChunker, ResponseChunker } from '../messages/ResponseChunker';
 import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
+import { WaitingQueue } from './WaitingQueue';
 
-const logger = createLogger('StorageConnection');
+const logger = createLogger('HamokConnection');
 
-export type StorageConnectionConfig = {
+export type HamokConnectionConfig = {
 
 	/**
      * The identifier of the storage the comlink belongs to.
@@ -58,11 +59,19 @@ export type StorageConnectionConfig = {
      */
 	maxOutboundValues?: number,
 
+	/**
+	 * The maximum time in milliseconds to wait for a message to be sent 
+	 * if the connection is not connected.
+	 */
+	maxMessageWaitingTimeInMs?: number,
+
 }
 
-export type StorageConnectionEventMap<K, V> = {
+export type HamokConnectionEventMap<K, V> = {
 	'message': [message: HamokMessage, submit: boolean],
 	'leader-changed': [newLeaderId: string | undefined],
+	connected: [],
+	disconnected: [],
 	close: [],
 
 	OngoingRequestsNotification: [OngoingRequestsNotification];
@@ -85,7 +94,7 @@ export type StorageConnectionEventMap<K, V> = {
 	RestoreEntriesNotification: [RestoreEntriesNotification<K, V>];
 }
 
-export type StorageConnectionResponseMap<K, V> = {
+export type HamokConnectionResponseMap<K, V> = {
 	GetEntriesResponse: GetEntriesResponse<K, V>;
 	GetKeysResponse: GetKeysResponse<K>;
 	ClearEntriesResponse: ClearEntriesResponse;
@@ -97,13 +106,15 @@ export type StorageConnectionResponseMap<K, V> = {
 	RestoreEntriesResponse: RestoreEntriesResponse;
 }
 
-export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEventMap<K, V>> {
+export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<K, V>> {
 	private readonly _responseChunker: ResponseChunker;
 
+	private _waitingQueue?: WaitingQueue;
 	private _closed = false;
+	private _connected: boolean;
 
 	public constructor(
-		public readonly config: StorageConnectionConfig,
+		public readonly config: HamokConnectionConfig,
 		public readonly codec: StorageCodec<K, V>,
 		public readonly grid: HamokGrid,
 	) {
@@ -113,10 +124,21 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 			config.maxOutboundKeys ?? 0,
 			config.maxOutboundValues ?? 0,
 		);
+
+		this._connected = this.grid.leaderId !== undefined;
+		this.on('leader-changed', this._leaderChangedListener.bind(this));
 	}
 
 	public get closed() {
 		return this._closed;
+	}
+
+	public get localPeerId() {
+		return this.grid.localPeerId;
+	}
+
+	public get connected() {
+		return this._connected;
 	}
 
 	public close() {
@@ -398,7 +420,7 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
 	}
 
-	public respond<U extends keyof StorageConnectionResponseMap<K, V>>(type: U, response: StorageConnectionResponseMap<K, V>[U], targetPeerIds?: string | string[]): void {
+	public respond<U extends keyof HamokConnectionResponseMap<K, V>>(type: U, response: HamokConnectionResponseMap<K, V>[U], targetPeerIds?: string | string[]): void {
 		let message: HamokMessage | undefined;
 
 		switch (type) {
@@ -446,6 +468,20 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 	}): Promise<HamokMessage[]> {
 		options.message.storageId = this.config.storageId;
 		options.message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
+
+		if (!this.grid.connected) {
+			if (!this._waitingQueue) {
+				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
+
+				this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
+					this._waitingQueue = undefined;
+				});
+			}
+			
+			return this._waitingQueue.wait(() => this._request(options));
+		} else if (this._waitingQueue) {
+			this._waitingQueue.flush();
+		}
 		
 		return this.grid.request({
 			message: options.message,
@@ -460,7 +496,35 @@ export class StorageConnection<K, V> extends EventEmitter<StorageConnectionEvent
 		message.storageId = this.config.storageId;
 		message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 
+		if (!this.grid.connected) {
+			if (!this._waitingQueue) {
+				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
+
+				this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
+					this._waitingQueue = undefined;
+				});
+			}
+
+			return this._waitingQueue.add(() => this._sendMessage(message, targetPeerIds));
+		} else if (this._waitingQueue) {
+			this._waitingQueue.flush();
+		}
+
 		this.grid.sendMessage(message, targetPeerIds);
+	}
+
+	private _leaderChangedListener(leaderId?: string) {
+		if (this._connected && leaderId === undefined) {
+			this._connected = false;
+			
+			return this.emit('disconnected');
+		} 
+		if (!this._connected && leaderId !== undefined) {
+			this._connected = true;
+			this._waitingQueue?.flush();
+			
+			return this.emit('connected');
+		}
 	}
 }
 

@@ -2,26 +2,23 @@ import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
-	name: 'distributed-storage-example',
+	name: 'storage-insert-get-example',
 	level: 'debug',
 });
 
+export async function run() {
+	const server_1 = new Hamok();
+	const server_2 = new Hamok();
+	
+	server_1.on('message', server_2.accept.bind(server_2));
+	server_2.on('message', server_1.accept.bind(server_1));
+	
+	server_1.addRemotePeerId(server_2.localPeerId);
+	server_2.addRemotePeerId(server_1.localPeerId);
+	
+	server_1.start();
+	server_2.start();
 
-setHamokLogLevel('info');
-
-const server_1 = new Hamok();
-const server_2 = new Hamok();
-
-server_1.on('message', server_2.accept.bind(server_2));
-server_2.on('message', server_1.accept.bind(server_1));
-
-server_1.addRemotePeerId(server_2.localPeerId);
-server_2.addRemotePeerId(server_1.localPeerId);
-
-server_1.start();
-server_2.start();
-
-(async () => {
 	await Promise.all([
 		new Promise(resolve => server_1.once('leader-changed', resolve)),
 		new Promise(resolve => server_2.once('leader-changed', resolve)),
@@ -79,10 +76,13 @@ server_2.start();
 	logger.debug(`After deleted getting value from server1: ${storage_1.get('key')}`);
 	logger.debug(`After deleted getting value from server2: ${storage_2.get('key')}`);
 
-})();
-
-
-setTimeout(() => {
 	server_1.stop();
 	server_2.stop();
-}, 30000)
+}
+
+if (require.main === module) {
+	logger.info('Running from module file');
+	setHamokLogLevel('info');
+	run();
+}
+

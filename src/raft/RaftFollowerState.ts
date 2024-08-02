@@ -27,7 +27,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	let updated = Date.now();
 	let closed = false;
 	let currentTerm = props.currentTerm;
-	let syncRequested = false;
+	const syncRequested = false;
 	const updateCommitIndex = (leaderCommitIndex: number) => {
 		logger.trace('%s updateCommitIndex leaderCommitIndex: %d, logsCommitIndex: %d', localPeerId, leaderCommitIndex, logs.commitIndex);
 		if (leaderCommitIndex <= logs.commitIndex) {
@@ -111,20 +111,12 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 				${request.leaderNextIndex}, the provided entries are: 
 				${request.entries?.length}. It is insufficient to close the gap for this node. Execute sync request is necessary from the leader to request and the timeout of the raft logs should be large enough to close the gap after the sync.`,
 			);
-			if (raftEngine.events.emit('unresolvable-commit-gap', {
-				localPeerCommitIndex: logs.commitIndex,
-				leaderLowestCommitIndex: request.leaderNextIndex - (request.entries?.length ?? 0),
-				callback: () => (syncRequested = false),
-			})) {
-				syncRequested = true;
-			} else {
-				throw new Error('The gap between the leader and the follower is not resolvable');
-			}
-			// we send success and processed response as the problem is not with the request,
-			// but we do not change our next index because we cannot process it momentary due to not synced endpoint
-			const response = requestChunk.createResponse(true, logs.nextIndex, true);
+			throw new Error('The gap between the leader and the follower is not resolvable');
+			// // we send success and processed response as the problem is not with the request,
+			// // but we do not change our next index because we cannot process it momentary due to not synced endpoint
+			// const response = requestChunk.createResponse(true, logs.nextIndex, true);
 
-			return messageEmitter.send(response);
+			// return messageEmitter.send(response);
 		}
 
 		// if we arrived in this point we know that the sync is possible.

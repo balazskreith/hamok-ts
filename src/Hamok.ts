@@ -7,7 +7,7 @@ import { createRaftFollowerState } from './raft/RaftFollowerState';
 import { LogEntry } from './raft/LogEntry';
 import { RaftStateName } from './raft/RaftState';
 import { HamokStorage } from './collections/HamokStorage';
-import { StorageConnection } from './collections/StorageConnection';
+import { HamokConnection } from './collections/HamokConnection';
 import { OngoingRequestsNotifier } from './messages/OngoingRequestsNotifier';
 import { createHamokJsonBinaryCodec, createNumberToUint8ArrayCodec, createStrToUint8ArrayCodec, HamokCodec } from './common/HamokCodec';
 import { StorageCodec } from './messages/StorageCodec';
@@ -45,6 +45,7 @@ export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
 export type HamokStorageBuilderConfig<K, V> = {
 	storageId: string,
 	requestTimeoutInMs?: number,
+	maxMessageWaitingTimeInMs?: number,
 	keyCodec?: HamokCodec<K, Uint8Array>,
 	valueCodec?: HamokCodec<V, Uint8Array>,
 	maxOutboundMessageKeys?: number,
@@ -58,26 +59,33 @@ export type HamokQueueBuilderConfig<T> = {
 	queueId: string,
 	codec?: HamokCodec<T, Uint8Array>,
 	requestTimeoutInMs?: number,
+	maxMessageWaitingTimeInMs?: number,
 	maxOutboundMessageKeys?: number,
 	maxOutboundMessageValues?: number,
 	baseMap?: BaseMap<number, T>,
 	lengthOfBytesQueueKeys?: 2 | 4 | 8,
 }
 
+export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = {
+	emitterId: string,
+	requestTimeoutInMs?: number,
+	maxMessageWaitingTimeInMs?: number,
+	maxOutboundMessageKeys?: number,
+	maxOutboundMessageValues?: number,
+	payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
+}
+
 export type HamokEventMap = {
 	started: [],
 	stopped: [],
+	follower: [],
+	leader: [],
 	message: [message: HamokMessage]
 	'remote-peer-joined': [peerId: string],
 	'remote-peer-left': [peerId: string],
-	'leader-changed': [leaderId: string | undefined],
+	'leader-changed': [leaderId: string | undefined, prevLeader: string | undefined],
 	'state-changed': [state: RaftStateName],
 	commit: [message: HamokMessage],
-	'unresolvable-commit-gap': [{
-		localPeerCommitIndex: number,
-		leaderLowestCommitIndex: number,
-		callback: () => void,
-	}],
 	heartbeat: [],
 }
 
@@ -205,7 +213,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	public addRemotePeerId(remoteEndpointId: string): void {
 		this.raft.remotePeers.add(remoteEndpointId);
 
-		logger.info('%s added remote peer %s', this.localPeerId, remoteEndpointId);
+		logger.debug('%s added remote peer %s', this.localPeerId, remoteEndpointId);
 
 		this.emit('remote-peer-joined', remoteEndpointId);
 	}
@@ -213,7 +221,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	public removeRemotePeerId(remoteEndpointId: string): void {
 		this.raft.remotePeers.delete(remoteEndpointId);
 
-		logger.info('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
+		logger.debug('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
 
 		this.emit('remote-peer-left', remoteEndpointId);
 	}
@@ -277,13 +285,14 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
 			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
 		);
-		const connection = new StorageConnection<K, V>(
+		const connection = new HamokConnection<K, V>(
 			{
 				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
 				storageId: options.storageId,
 				neededResponse: 0,
 				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
 				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
+				maxMessageWaitingTimeInMs: options.maxMessageWaitingTimeInMs,
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
@@ -328,13 +337,14 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			createNumberToUint8ArrayCodec(options.lengthOfBytesQueueKeys ?? 4),
 			options.codec ?? createHamokJsonBinaryCodec<T>(),
 		);
-		const connection = new StorageConnection<number, T>(
+		const connection = new HamokConnection<number, T>(
 			{
 				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
 				storageId: options.queueId,
 				neededResponse: 0,
 				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
 				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
+				maxMessageWaitingTimeInMs: options.maxMessageWaitingTimeInMs,
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
@@ -363,13 +373,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		return queue;
 	}
 
-	public createEmitter<T extends HamokEmitterEventMap>(options: {
-		emitterId: string,
-		requestTimeoutInMs?: number,
-		maxOutboundMessageKeys?: number,
-		maxOutboundMessageValues?: number,
-		payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
-	}): HamokEmitter<T> {
+	public createEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T> {
 		if (this.emitters.has(options.emitterId)) {
 			throw new Error(`Emitter with id ${options.emitterId} already exists`);
 		}
@@ -378,13 +382,14 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			createStrToUint8ArrayCodec(),
 			createStrToUint8ArrayCodec(),
 		);
-		const connection = new StorageConnection<string, string>(
+		const connection = new HamokConnection<string, string>(
 			{
 				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
 				storageId: options.emitterId,
 				neededResponse: 0,
 				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
 				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
+				maxMessageWaitingTimeInMs: options.maxMessageWaitingTimeInMs,
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
@@ -571,14 +576,14 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	}
 
 	private _emitLeaderChanged(leaderId: string | undefined): void {
-		for (const collection of this.storages.values()) {
-			collection.connection.emit('leader-changed', leaderId);
-		}
-		for (const collection of this.queues.values()) {
-			collection.connection.emit('leader-changed', leaderId);
-		}
-		for (const collection of this.emitters.values()) {
-			collection.connection.emit('leader-changed', leaderId);
+		for (const iterator of [ 
+			this.storages.values(), 
+			this.queues.values(), 
+			this.emitters.values(),
+		]) {
+			for (const collection of iterator) {
+				collection.connection.emit('leader-changed', leaderId);
+			}
 		}
 	}
 
