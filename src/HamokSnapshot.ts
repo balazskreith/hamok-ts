@@ -24,4 +24,6 @@ export type HamokSnapshot = {
 	commitIndex: number;
 	term: number;
 	storages: HamokStorageSnapshot[];
+	queues: HamokQueueSnapshot[];
+	emitters: HamokEmitterSnapshot[];
 }

@@ -14,6 +14,7 @@
 		"dev:queue:1": "nodemon -x ts-node src/queue-events-example.ts | pino-pretty",
 		"dev:queue:2": "nodemon -x ts-node src/queue-push-pop-example.ts | pino-pretty",
 		"dev:common:1": "nodemon -x ts-node src/common-waiting-example.ts | pino-pretty",
+		"dev:common:2": "nodemon -x ts-node src/import-export-example.ts | pino-pretty",
 		"build": "tsc",
 		"test": "jest --config jest.config.js",
 		"lint": "eslint --ext .ts src"

@@ -34,12 +34,16 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			return;
 		}
 		const expectedCommitIndex = Math.min(logs.nextIndex - 1, leaderCommitIndex);
+
+		if (expectedCommitIndex <= logs.commitIndex) {
+			return;
+		}
 		const committedLogEntries = logs.commitUntil(expectedCommitIndex);
 
 		logger.trace('%s updateCommitIndex committedLogEntries: %d', localPeerId, committedLogEntries.length);
 
 		for (const logEntry of committedLogEntries) {
-			raftEngine.events.emit('commit', logEntry.entry);
+			raftEngine.events.emit('commit', logEntry.index, logEntry.entry);
 		}
 	};
 	const appendEntriesRequestListener = (requestChunk: RaftAppendEntriesRequestChunk) => {

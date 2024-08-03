@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { v4 as uuid } from 'uuid';
 import { RaftEngine, RaftEngineConfig } from './raft/RaftEngine';
 import { HamokMessage, HamokMessage_MessageType as HamokMessageType, HamokMessage_MessageProtocol as HamokMessageProtocol } from './messages/HamokMessage';
-import { RaftLogs } from './raft/RaftLogs';
+import { MemoryStoredRaftLogs } from './raft/MemoryStoredRaftLogs';
 import { createRaftFollowerState } from './raft/RaftFollowerState';
 import { LogEntry } from './raft/LogEntry';
 import { RaftStateName } from './raft/RaftState';
@@ -20,11 +20,13 @@ import { createRaftEmptyState } from './raft/RaftEmptyState';
 import { HamokSnapshot } from './HamokSnapshot';
 import { HamokQueue } from './collections/HamokQueue';
 import { HamokEmitter, HamokEmitterEventMap } from './collections/HamokEmitter';
+import { RaftLogs } from './raft/RaftLogs';
 
 const logger = createLogger('Hamok');
 
 export type HamokConfig = {
 	// empty
+	raftLogs?: RaftLogs,
 }
 
 export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
@@ -85,7 +87,7 @@ export type HamokEventMap = {
 	'remote-peer-left': [peerId: string],
 	'leader-changed': [leaderId: string | undefined, prevLeader: string | undefined],
 	'state-changed': [state: RaftStateName],
-	commit: [message: HamokMessage],
+	commit: [commitIndex: number, message: HamokMessage],
 	heartbeat: [],
 }
 
@@ -105,16 +107,22 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	public constructor(providedConfig?: Partial<HamokConstructorConfig>) {
 		super();
-		this.raft = new RaftEngine({
-			peerId: providedConfig?.peerId ?? uuid(),
-			electionTimeoutInMs: providedConfig?.electionTimeoutInMs ?? 3000,
-			followerMaxIdleInMs: providedConfig?.followerMaxIdleInMs ?? 1000,
-			heartbeatInMs: providedConfig?.heartbeatInMs ?? 100,
-			onlyFollower: providedConfig?.onlyFollower ?? false,
-		}, new RaftLogs(
-			providedConfig?.initialLogEntries ?? new Map(), 
-			providedConfig?.logEntriesExpirationTimeInMs ?? 0
-		), this);
+		const raftLogs = providedConfig?.raftLogs ?? new MemoryStoredRaftLogs({
+			expirationTimeInMs: 0,
+			memorySizeHighWaterMark: 0,
+		});
+
+		this.raft = new RaftEngine(
+			{
+				peerId: providedConfig?.peerId ?? uuid(),
+				electionTimeoutInMs: providedConfig?.electionTimeoutInMs ?? 3000,
+				followerMaxIdleInMs: providedConfig?.followerMaxIdleInMs ?? 1000,
+				heartbeatInMs: providedConfig?.heartbeatInMs ?? 100,
+				onlyFollower: providedConfig?.onlyFollower ?? false,
+			}, 
+			raftLogs, 
+			this
+		);
 
 		this.config = {
 		};
@@ -197,7 +205,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		this.emit('stopped');
 	}
 
-	private _acceptCommit(message: HamokMessage): void {
+	private _acceptCommit(commitIndex: number, message: HamokMessage): void {
 		logger.debug('%s accepted committed message %o', this.localPeerId, message);
 		
 		// if we put this request to hold when we accepted the submit request we remove the ongoing request notification
@@ -234,7 +242,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			},
 			commitIndex: this.raft.logs.commitIndex,
 			term: this.raft.props.currentTerm,
-			storages: [],
+			storages: [ ...this.storages.values() ].map((storage) => storage.export()),
+			queues: [ ...this.queues.values() ].map((queue) => queue.export()),
+			emitters: [ ...this.emitters.values() ].map((emitter) => emitter.export()),
 		};
 
 		for (const storage of this.storages.values()) {
@@ -260,13 +270,35 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			storage.import(storageSnapshot);
 		}
 
+		for (const queueSnapshot of snapshot.queues) {
+			const queue = this.queues.get(queueSnapshot.queueId);
+
+			if (!queue) {
+				logger.warn('Cannot import queue snapshot, becasuee queue %s is not found. snapshot: %o', queueSnapshot.queueId, queueSnapshot);
+				continue;
+			}
+
+			queue.import(queueSnapshot);
+		}
+
+		for (const emitterSnapshot of snapshot.emitters) {
+			const emitter = this.emitters.get(emitterSnapshot.emitterId);
+
+			if (!emitter) {
+				logger.warn('Cannot import emitter snapshot, becasuee emitter %s is not found. snapshot: %o', emitterSnapshot.emitterId, emitterSnapshot);
+				continue;
+			}
+
+			emitter.import(emitterSnapshot);
+		}
+
 		const oldTerm = this.raft.props.currentTerm;
 		const oldCommitIndex = this.raft.logs.commitIndex;
 
 		this.raft.props.currentTerm = snapshot.term;
 		this.raft.logs.reset(snapshot.commitIndex);
 
-		logger.debug('Snapshot created by peer %s at %s is imported. oldCommitIndex: %s, newCommitIndex: %s, oldTerm: %s, newTerm: %s', 
+		logger.info('Snapshot created by peer %s at %s is imported. oldCommitIndex: %s, newCommitIndex: %s, oldTerm: %s, newTerm: %s', 
 			snapshot.meta.peerId, 
 			snapshot.meta.created, 
 			oldCommitIndex, 
@@ -304,8 +336,6 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			storageCodec, 
 			this.grid,         
 		);
-		const equalKeys = options.equalKeys ?? ((a, b) => a === b);
-		const equalValues = options.equalValues ?? ((a, b) => a === b);
 		const messageListener = (message: HamokMessage, submitting: boolean) => {
 			if (submitting) return this.submit(message);
 			else this.emit('message', message);
@@ -313,8 +343,8 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		const storage = new HamokStorage<K, V>(
 			connection,
 			options.baseMap ?? new MemoryBaseMap<K, V>(),
-			equalValues,
-			equalKeys,
+			options.equalValues,
+			options.equalKeys,
 		);
 
 		connection.once('close', () => {
@@ -519,7 +549,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				);
 
 				if (!storage) {
-					return logger.warn('Received message for unknown storage %s', message.storageId);
+					return logger.trace('Received message for unknown collection %s', message.storageId);
 				}
 				
 				return storage.connection.accept(message);

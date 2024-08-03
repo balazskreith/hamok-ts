@@ -22,14 +22,22 @@ export type HamokStorageEventMap<K, V> = {
 export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>> {
 	private readonly _executor = new ConcurrentExecutor(1);
 	private _closed = false;
+	public equalValues: (a: V, b: V) => boolean;
+	public equalKeys: (a: K, b: K) => boolean;
 
 	public constructor(
 		public readonly connection: HamokConnection<K, V>,
 		public readonly baseMap: BaseMap<K, V>,
-		public equalValues: (a: V, b: V) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b),
-		public equalKeys: (a: K, b: K) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+		equalValues?: (a: V, b: V) => boolean,
+		equalKeys?: (a: K, b: K) => boolean
 	) {
 		super();
+		this.equalKeys = equalKeys ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
+		this.equalValues = equalValues ?? ((a, b) => {
+			// logger.info('Comparing values: %o (%s), %o (%s)', a, b, JSON.stringify(a), JSON.stringify(b));
+			return JSON.stringify(a) === JSON.stringify(b);
+		});
+
 		this.connection
 			.on('ClearEntriesRequest', (request) => {
 				this.baseMap.clear();

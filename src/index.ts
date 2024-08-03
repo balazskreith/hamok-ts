@@ -18,6 +18,12 @@ export {
 export {
 	HamokConnection
 } from './collections/HamokConnection';
+export {
+	HamokSnapshot,
+	HamokEmitterSnapshot,
+	HamokQueueSnapshot,
+	HamokStorageSnapshot,
+} from './HamokSnapshot';
 export { 
 	setHamokLogLevel, 
 	HamokLogLevel 

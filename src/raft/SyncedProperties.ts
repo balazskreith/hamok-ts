@@ -5,16 +5,6 @@ export class SyncedProperties {
      * on first boot, increases monotonically)
      */
 	public currentTerm = 0;
-	// public get currentTerm(): number {
-	// 	return this._currentTerm;
-	// }
-
-	// public set currentTerm(value: number) {
-	// 	if (value < this._currentTerm) {
-	// 		logger.warn('Set current term smaller than the term stored before');
-	// 	}
-	// 	this._currentTerm = value;
-	// }
 
 	/* Volatile state on all servers: */
 	/**

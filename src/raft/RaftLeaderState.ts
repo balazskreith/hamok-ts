@@ -75,7 +75,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			return follow();
 		}
 		// now we are talking in my term...
-		logger.trace('Received RaftAppendEntriesResponse', response);
+		logger.debug('Received RaftAppendEntriesResponse %o', response);
 		// if (localPeerId !== response.sourcePeerId) {
 		// remotePeers.touch(response.sourcePeerId);
 		// }
@@ -124,12 +124,13 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 					++matchCount;
 				}
 			}
-			logger.trace(`
-                logIndex: ${logEntry.index}, 
-                matchCount: ${matchCount}, 
-                remotePeerIds: ${remotePeers.size} 
-                commit: ${remotePeers.size + 1 < matchCount * 2}`
+			logger.trace('logIndex: %d, matchCount: %d, remotePeerIds: %d, commit: %s', 
+				logEntry.index, 
+				matchCount, 
+				remotePeers.size, 
+				remotePeers.size + 1 < matchCount * 2
 			);
+
 			if (remotePeers.size + 1 < matchCount * 2) {
 				maxCommitIndex = Math.max(maxCommitIndex, logEntry.index);
 			}
@@ -138,7 +139,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			logger.trace('%s Committing index until %d at leader state', localPeerId, maxCommitIndex);
 			// setTimeout(() => {
 			for (const committedLogEnty of logs.commitUntil(maxCommitIndex)) {
-				raftEngine.events.emit('commit', committedLogEnty.entry);
+				raftEngine.events.emit('commit', committedLogEnty.index, committedLogEnty.entry);
 			}
 			// }, 10000);
 			
@@ -193,12 +194,24 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 
 			logger.trace('%s Collected %d entries for peer %s', localPeerId, entries.length, peerId);
 
-			if (peerNextIndex < logs.lastAppliedIndex) {
+			if (peerNextIndex < logs.firstIndex) {
 				if (unsyncedRemotePeers.add(peerId)) {
-					logger.warn(`Collected ${entries.length} entries, but peer ${peerId} should need ${logs.nextIndex - peerNextIndex}. The peer should request a commit sync`);
+					logger.warn('%s Peer %s is unsynced, logs.nextIndex: %d, peerNextIndex: %d', 
+						localPeerId, 
+						peerId, 
+						logs.nextIndex, 
+						peerNextIndex
+					);
+					// logger.warn(`Collected ${entries.length} entries, but peer ${peerId} should need ${logs.nextIndex - peerNextIndex}. logs.nextIndex: ${logs.nextIndex}, peerNextIndex: ${peerNextIndex}`);
 				}
 			} else if (0 < unsyncedRemotePeers.size) {
 				unsyncedRemotePeers.delete(peerId);
+				logger.info('%s Peer %s is synced, logs.nextIndex: %d, peerNextIndex: %d', 
+					localPeerId, 
+					peerId, 
+					logs.nextIndex, 
+					peerNextIndex
+				);
 			}
 			let sentRequest = sentRequests.get(peerId);
 

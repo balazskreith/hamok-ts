@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
 import { RaftMessageEmitter } from '../messages/RaftMessageEmitter';
 import { SyncedProperties } from './SyncedProperties';
-import { RaftLogs } from './RaftLogs';
 import { createRaftEmptyState } from './RaftEmptyState';
 import { createLogger } from '../common/logger';
 import { HamokMessage } from '../messages/HamokMessage';
 import { RaftState } from './RaftState';
 import type { HamokEventMap } from '../Hamok';
+import { RaftLogs } from './RaftLogs';
 
 const logger = createLogger('RaftEngine');
 

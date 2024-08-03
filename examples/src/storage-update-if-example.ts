@@ -6,6 +6,12 @@ const logger = pino.pino({
 	level: 'debug',
 });
 
+type Job = {
+	id: string;
+	state: 'pending' | 'running' | 'completed';
+	executedBy?: string;
+};
+
 export async function run() {
 
 	const server_1 = new Hamok();
@@ -26,32 +32,37 @@ export async function run() {
 	]);
 
 	logger.info('Leader changed');
-
-	const storage_1 = server_1.createStorage<string, number>({
+	
+	const jobId = 'myJob';
+	const storage_1 = server_1.createStorage<string, Job>({
 		storageId: 'my-replicated-storage',
+		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
-	const storage_2 = server_2.createStorage<string, number>({
+	const storage_2 = server_2.createStorage<string, Job>({
 		storageId: 'my-replicated-storage',
+		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
 	// const storage_3 = server_3.createReplicatedStorage<string, number>({
 	// 	storageId: 'my-replicated-storage',
 	// });
-
+	
 	logger.debug('Setting value in storage for key to 0');	
-	await storage_1.set('key', 0);
+	await storage_1.set(jobId, { id: jobId, state: 'pending' });
 	// await storage_1.set('key', 2);
 
-	logger.info('Getting value from replicated storage: %d', storage_1.get('key'));
+	logger.info('Getting value from replicated storage: %o', storage_1.get(jobId));
 
 	logger.debug('Updating value in storage for key to 1 if previous value is 0, or to 3 if previous value is 2');
-	await Promise.all([
-		storage_1.updateIf('key', 1, 0),
-		storage_2.updateIf('key', 3, 2),
+	const [changedByServer_1, changedByServer_2] = await Promise.all([
+		storage_1.updateIf(jobId, { id: jobId, state: 'running', executedBy: server_1.localPeerId }, { id: jobId, state: 'pending' }),
+		storage_2.updateIf(jobId, { id: jobId, state: 'running', executedBy: server_2.localPeerId }, { id: jobId, state: 'pending' }),
 	])
 	
-	await storage_1.set('not-important-key', 9);
+	await storage_1.set('not-important-key', { id: 'another-job', state: 'pending' });
+	logger.debug('%s job entry is updated by server_1: %o', jobId, changedByServer_1);
+	logger.debug('%s job entry is updated by server_2: %o', jobId, changedByServer_2);
 
-	logger.debug('Getting value from replicated storage: %d', storage_1.get('key'));
+	logger.debug('Getting value for %s from storage: %o', jobId, storage_1.get(jobId));
 }
 
 if (require.main === module) {

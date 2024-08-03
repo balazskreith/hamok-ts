@@ -373,7 +373,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeGetEntriesRequest(request: GetEntriesRequest<K>): Message {
-		const keys = this._encodeKeys(request.keys);
+		const keys = this.encodeKeys(request.keys);
         
 		return new Message({
 			type: MessageType.GET_ENTRIES_REQUEST,
@@ -387,7 +387,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.GET_ENTRIES_REQUEST) {
 			throw new Error('decodeGetEntriesRequest(): Message type must be GET_ENTRIES_REQUEST');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new GetEntriesRequest<K>(
 			keys,
@@ -481,7 +481,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeGetKeysResponse(response: GetKeysResponse<K>): Message {
-		const keys = this._encodeKeys(response.keys);
+		const keys = this.encodeKeys(response.keys);
         
 		return new Message({
 			type: MessageType.GET_KEYS_RESPONSE,
@@ -495,7 +495,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.GET_KEYS_RESPONSE) {
 			throw new Error('decodeGetKeysResponse(): Message type must be GET_ENTRIES_RESPONSE');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new GetKeysResponse<K>(
 			message.requestId!,
@@ -505,7 +505,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeDeleteEntriesRequest(request: DeleteEntriesRequest<K>): Message {
-		const keys = this._encodeKeys(request.keys);
+		const keys = this.encodeKeys(request.keys);
         
 		return new Message({
 			type: MessageType.DELETE_ENTRIES_REQUEST,
@@ -519,7 +519,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.DELETE_ENTRIES_REQUEST) {
 			throw new Error('decodeDeleteEntriesRequest(): Message type must be DELETE_ENTRIES_REQUEST');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new DeleteEntriesRequest<K>(
 			message.requestId!,
@@ -529,7 +529,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeDeleteEntriesResponse(response: DeleteEntriesResponse<K>): Message {
-		const keys = this._encodeKeys(response.deletedKeys);
+		const keys = this.encodeKeys(response.deletedKeys);
         
 		return new Message({
 			type: MessageType.DELETE_ENTRIES_RESPONSE,
@@ -543,7 +543,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.DELETE_ENTRIES_RESPONSE) {
 			throw new Error('decodeDeleteEntriesResponse(): Message type must be DELETE_ENTRIES_RESPONSE');
 		}
-		const deletedKeys = this._decodeKeys(message.keys);
+		const deletedKeys = this.decodeKeys(message.keys);
         
 		return new DeleteEntriesResponse<K>(
 			message.requestId!,
@@ -553,7 +553,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeDeleteEntriesNotification(notification: DeleteEntriesNotification<K>): Message {
-		const keys = this._encodeKeys(notification.keys);
+		const keys = this.encodeKeys(notification.keys);
         
 		return new Message({
 			type: MessageType.DELETE_ENTRIES_NOTIFICATION,
@@ -567,7 +567,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.DELETE_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeDeleteNotification(): Message type must be DELETE_ENTRIES_NOTIFICATION');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new DeleteEntriesNotification<K>(
 			keys,
@@ -577,7 +577,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeRemoveEntriesRequest(request: RemoveEntriesRequest<K>): Message {
-		const keys = this._encodeKeys(request.keys);
+		const keys = this.encodeKeys(request.keys);
         
 		return new Message({
 			type: MessageType.REMOVE_ENTRIES_REQUEST,
@@ -591,7 +591,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.REMOVE_ENTRIES_REQUEST) {
 			throw new Error('decodeRemoveRequest(): Message type must be REMOVE_ENTRIES_REQUEST');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new RemoveEntriesRequest<K>(
 			message.requestId!,
@@ -626,7 +626,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeRemoveEntriesNotification(notification: RemoveEntriesNotification<K>): Message {
-		const keys = this._encodeKeys(notification.keys);
+		const keys = this.encodeKeys(notification.keys);
         
 		return new Message({
 			type: MessageType.REMOVE_ENTRIES_NOTIFICATION,
@@ -640,7 +640,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.REMOVE_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeRemoveNotification(): Message type must be REMOVE_ENTRIES_NOTIFICATION');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new RemoveEntriesNotification<K>(
 			keys,
@@ -650,7 +650,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
     
 	public encodeEvictEntriesRequest(request: EvictEntriesRequest<K>): Message {
-		const keys = this._encodeKeys(request.keys);
+		const keys = this.encodeKeys(request.keys);
         
 		return new Message({
 			type: MessageType.EVICT_ENTRIES_REQUEST,
@@ -664,7 +664,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.EVICT_ENTRIES_REQUEST) {
 			throw new Error('decodeEvictRequest(): Message type must be EVICT_ENTRIES_REQUEST');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new EvictEntriesRequest<K>(
 			message.requestId!,
@@ -693,7 +693,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 	}
 
 	public encodeEvictEntriesNotification(notification: EvictEntriesNotification<K>): Message {
-		const keys = this._encodeKeys(notification.keys);
+		const keys = this.encodeKeys(notification.keys);
         
 		return new Message({
 			type: MessageType.EVICT_ENTRIES_NOTIFICATION,
@@ -707,7 +707,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		if (message.type !== MessageType.EVICT_ENTRIES_NOTIFICATION) {
 			throw new Error('decodeEvictNotification(): Message type must be EVICT_ENTRIES_NOTIFICATION');
 		}
-		const keys = this._decodeKeys(message.keys);
+		const keys = this.decodeKeys(message.keys);
         
 		return new EvictEntriesNotification<K>(
 			keys,
@@ -937,11 +937,11 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		);
 	}
 
-	private _encodeKeys(keys: ReadonlySet<K>): Uint8Array[] {
+	public encodeKeys(keys: ReadonlySet<K>): Uint8Array[] {
 		return encodeSet<K>(keys, this.keyCodec);
 	}
 
-	private _decodeKeys(keys: Uint8Array[]): ReadonlySet<K> {
+	public decodeKeys(keys: Uint8Array[]): ReadonlySet<K> {
 		return decodeSet<K>(keys, this.keyCodec);
 	}
 
