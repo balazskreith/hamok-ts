@@ -22,6 +22,10 @@ export type RaftEngineConfig = {
 	onlyFollower: boolean,
 }
 
+interface HamokController extends EventEmitter<HamokEventMap> {
+	stop(): void;
+}
+
 export class RaftEngine {
 	private _state: RaftState;
     
@@ -33,7 +37,7 @@ export class RaftEngine {
 	public constructor(
 		public readonly config: RaftEngineConfig,
 		public readonly logs: RaftLogs,
-		public readonly events: EventEmitter<HamokEventMap>
+		public readonly events: HamokController
 	) {
 		if (this.config.heartbeatInMs < 1) throw new Error('Config error: heartbeatInMs must be greater than 0');
 		this._state = createRaftEmptyState({

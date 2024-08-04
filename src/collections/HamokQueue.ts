@@ -2,7 +2,6 @@ import { HamokConnection } from './HamokConnection';
 import { BaseMap } from './BaseMap';
 import { HamokQueueSnapshot } from '../HamokSnapshot';
 import { EventEmitter } from 'events';
-import { ConcurrentExecutor } from '../common/ConcurrentExecutor';
 import { createLogger } from '../common/logger';
 import * as Collections from '../common/Collections';
 
@@ -35,7 +34,6 @@ function *iterator<T>(first: number, last: number, baseMap: BaseMap<number, T>):
 }
 
 export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
-	private readonly _executor = new ConcurrentExecutor(1);
 	private _head = 0;
 	private _tail = 0;
 	private _closed = false;

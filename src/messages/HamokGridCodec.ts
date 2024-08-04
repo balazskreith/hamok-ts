@@ -2,13 +2,17 @@ import { createStrToUint8ArrayCodec, HamokCodec, HamokDecoder, HamokEncoder } fr
 import { createLogger } from '../common/logger';
 import { StorageSyncRequest, StorageSyncResponse } from './messagetypes/StorageSync';
 import { SubmitMessageRequest, SubmitMessageResponse } from './messagetypes/SubmitMessage';
-import { HamokMessage, HamokMessage_MessageType as MessageType } from './HamokMessage';
+import { HamokMessage, HamokMessage_MessageProtocol as HamokMessageProtocol, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import { OngoingRequestsNotification } from './messagetypes/OngoingRequests';
 import * as Collections from '../common/Collections';
+import { EndpointStatesNotification } from './messagetypes/EndpointNotification';
+import { HelloNotification } from './messagetypes/HelloNotification';
 
 const logger = createLogger('GridCodec');
 
 type Input = 
+HelloNotification |
+EndpointStatesNotification |
 OngoingRequestsNotification |
 StorageSyncRequest | 
 StorageSyncResponse | 
@@ -19,16 +23,28 @@ SubmitMessageResponse
 const EMPTY_ARRAY: Uint8Array[] = [];
 const strCodec = createStrToUint8ArrayCodec();
 
+function setToArray<T>(set?: ReadonlySet<T>): T[] | undefined {
+	if (!set) return;
+	
+	return Array.from(set);
+}
+
+function arrayToSet<T>(array?: T[]): Set<T> | undefined {
+	if (!array) return;
+	
+	return new Set<T>(array);
+}
+
 export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 
 	public encode(input: Input): HamokMessage {
 		switch (input.constructor) {
+			case HelloNotification:
+				return this.encodeHelloNotification(input as HelloNotification);
+			case EndpointStatesNotification:
+				return this.encodeEndpointStateNotification(input as EndpointStatesNotification);
 			case OngoingRequestsNotification:
 				return this.encodeOngoingRequestsNotification(input as OngoingRequestsNotification);
-			case StorageSyncRequest:
-				return this.encodeStorageSyncRequest(input as StorageSyncRequest);
-			case StorageSyncResponse:
-				return this.encodeStorageSyncResponse(input as StorageSyncResponse);
 			case SubmitMessageRequest:
 				return this.encodeSubmitMessageRequest(input as SubmitMessageRequest);
 			case SubmitMessageResponse:
@@ -40,12 +56,12 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 
 	public decode(message: HamokMessage): Input {
 		switch (message.type) {
+			case MessageType.HELLO_NOTIFICATION:
+				return this.decodeHelloNotification(message);
+			case MessageType.ENDPOINT_STATES_NOTIFICATION:
+				return this.decodeEndpointStateNotification(message);      
 			case MessageType.ONGOING_REQUESTS_NOTIFICATION:
 				return this.decodeOngoingRequestsNotification(message);
-			case MessageType.STORAGE_SYNC_REQUEST:
-				return this.decodeStorageSyncRequest(message);
-			case MessageType.STORAGE_SYNC_RESPONSE:
-				return this.decodeStorageSyncResponse(message);
 			case MessageType.SUBMIT_MESSAGE_REQUEST:
 				return this.decodeSubmitMessageRequest(message);
 			case MessageType.SUBMIT_MESSAGE_RESPONSE:
@@ -53,6 +69,69 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 			default:
 				throw new Error(`Cannot decode message${ message}`);
 		}
+	}
+
+	public encodeHelloNotification(notification: HelloNotification): HamokMessage {
+		return new HamokMessage({
+			// eslint-disable-next-line camelcase
+			protocol: HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL,
+			type: MessageType.HELLO_NOTIFICATION,
+			sourceId: notification.sourcePeerId,
+			destinationId: notification.destinationPeerId,
+			raftLeaderId: notification.raftLeaderId,
+			keys: notification.customData ? [ strCodec.encode(notification.customData) ] : [],
+		});
+	}
+
+	public decodeHelloNotification(message: HamokMessage): HelloNotification {
+		if (message.type !== MessageType.HELLO_NOTIFICATION) {
+			throw new Error('decodeHelloNotification(): Message type must be HELLO_NOTIFICATION');
+		}
+		const customData = message.values.length === 1 ? strCodec.decode(message.values[0]) : undefined;
+
+		return new HelloNotification(
+			message.sourceId!,
+			message.destinationId,
+			message.raftLeaderId,
+			customData
+		);
+	}
+
+	public encodeEndpointStateNotification(notification: EndpointStatesNotification): HamokMessage {
+		const activeEndpointIds = setToArray<string>(notification.activeEndpointIds);
+        
+		return new HamokMessage({
+			// eslint-disable-next-line camelcase
+			protocol: HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL,
+			type: MessageType.ENDPOINT_STATES_NOTIFICATION,
+			sourceId: notification.sourceEndpointId,
+			destinationId: notification.destinationEndpointId,
+			raftTerm: notification.term,
+			raftCommitIndex: notification.commitIndex,
+			raftLeaderNextIndex: notification.leaderNextIndex,
+			raftNumberOfLogs: notification.numberOfLogs,
+			activeEndpointIds,
+			values: notification.customData ? [ strCodec.encode(notification.customData) ] : [],
+		});
+	}
+
+	public decodeEndpointStateNotification(message: HamokMessage): EndpointStatesNotification {
+		if (message.type !== MessageType.ENDPOINT_STATES_NOTIFICATION) {
+			throw new Error('decodeEndpointStateNotification(): Message type must be ENDPOINT_STATES_NOTIFICATION');
+		}
+		const activeEndpointIds = arrayToSet<string>(message.activeEndpointIds);
+		const customData = message.values.length === 1 ? strCodec.decode(message.values[0]) : undefined;
+		
+		return new EndpointStatesNotification(
+			message.sourceId!,
+			message.destinationId!,
+			message.raftTerm!,
+			message.raftCommitIndex!,
+			message.raftLeaderNextIndex!,
+			message.raftNumberOfLogs!,
+			activeEndpointIds,
+			customData
+		);
 	}
 
 	public encodeOngoingRequestsNotification(notification: OngoingRequestsNotification): HamokMessage {
@@ -74,54 +153,6 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		return new OngoingRequestsNotification(
 			requestIds,
 			message.destinationId,
-		);
-	}
-
-	public encodeStorageSyncRequest(request: StorageSyncRequest): HamokMessage {
-		return new HamokMessage({
-			type: MessageType.STORAGE_SYNC_REQUEST,
-			requestId: request.requestId,
-			destinationId: request.leaderId,
-			sourceId: request.sourceEndpointId,
-		});
-	}
-
-	public decodeStorageSyncRequest(message: HamokMessage): StorageSyncRequest {
-		if (message.type !== MessageType.STORAGE_SYNC_REQUEST) {
-			throw new Error('decodeStorageSyncRequest(): Message type must be STORAGE_SYNC_REQUEST');
-		}
-		
-		return new StorageSyncRequest(
-			message.requestId!,
-			message.destinationId!,
-			message.sourceId,
-		);
-	}
-
-	public encodeStorageSyncResponse(response: StorageSyncResponse): HamokMessage {
-		return new HamokMessage({
-			type: MessageType.STORAGE_SYNC_RESPONSE,
-			requestId: response.requestId,
-			destinationId: response.destinationId,
-			raftLeaderId: response.leaderId,
-			raftNumberOfLogs: response.numberOfLogs,
-			raftLastAppliedIndex: response.lastApplied,
-			raftCommitIndex: response.commitIndex,
-		});
-	}
-
-	public decodeStorageSyncResponse(message: HamokMessage): StorageSyncResponse {
-		if (message.type !== MessageType.STORAGE_SYNC_RESPONSE) {
-			throw new Error('decodeStorageSyncResponse(): Message type must be STORAGE_SYNC_RESPONSE');
-		}
-		
-		return new StorageSyncResponse(
-			message.requestId!,
-			message.destinationId!,
-			message.raftLeaderId!,
-			message.raftNumberOfLogs,
-			message.raftLastAppliedIndex,
-			message.raftCommitIndex
 		);
 	}
 

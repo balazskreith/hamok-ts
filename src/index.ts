@@ -4,11 +4,14 @@ export {
 	HamokConstructorConfig,
 	HamokEmitterBuilderConfig,
 	HamokQueueBuilderConfig,
-	HamokStorageBuilderConfig,
+	HamokRecordBuilderConfig,
+	HamokFetchRemotePeersResponse,
+	HamokEventMap,
+	HamokMapBuilderConfig,
 } from './Hamok';
 export { 
-	HamokStorage
-} from './collections/HamokStorage';
+	HamokMap as HamokStorage
+} from './collections/HamokMap';
 export {
 	HamokQueue
 } from './collections/HamokQueue';
@@ -22,7 +25,7 @@ export {
 	HamokSnapshot,
 	HamokEmitterSnapshot,
 	HamokQueueSnapshot,
-	HamokStorageSnapshot,
+	HamokMapSnapshot as HamokStorageSnapshot,
 } from './HamokSnapshot';
 export { 
 	setHamokLogLevel, 

@@ -6,10 +6,8 @@ import { GetEntriesRequest, GetEntriesResponse } from './messagetypes/GetEntries
 import { GetKeysRequest, GetKeysResponse } from './messagetypes/GetKeys';
 import { DeleteEntriesNotification, DeleteEntriesRequest, DeleteEntriesResponse } from './messagetypes/DeleteEntries';
 import { RemoveEntriesNotification, RemoveEntriesRequest, RemoveEntriesResponse } from './messagetypes/RemoveEntries';
-import { EvictEntriesNotification, EvictEntriesRequest, EvictEntriesResponse } from './messagetypes/EvictEntries';
 import { InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
-import { RestoreEntriesNotification, RestoreEntriesRequest, RestoreEntriesResponse } from './messagetypes/RestoreEntries';
 import { createLogger } from '../common/logger';
 
 const logger = createLogger('StorageCodec');
@@ -30,9 +28,6 @@ type Input<K, V> =
     RemoveEntriesNotification<K> |
     RemoveEntriesRequest<K> |
     RemoveEntriesResponse<K, V> |
-    EvictEntriesNotification<K> |
-    EvictEntriesRequest<K> |
-    EvictEntriesResponse |
     InsertEntriesNotification<K, V> |
     InsertEntriesRequest<K, V> |
     InsertEntriesResponse<K, V> |
@@ -57,18 +52,12 @@ export type StorageCodecMessageMap<K, V> = {
 	RemoveEntriesRequest: RemoveEntriesRequest<K>;
 	RemoveEntriesResponse: RemoveEntriesResponse<K, V>;
 	RemoveEntriesNotification: RemoveEntriesNotification<K>;
-	EvictEntriesRequest: EvictEntriesRequest<K>;
-	EvictEntriesResponse: EvictEntriesResponse;
-	EvictEntriesNotification: EvictEntriesNotification<K>;
 	InsertEntriesRequest: InsertEntriesRequest<K, V>;
 	InsertEntriesResponse: InsertEntriesResponse<K, V>;
 	InsertEntriesNotification: InsertEntriesNotification<K, V>;
 	UpdateEntriesRequest: UpdateEntriesRequest<K, V>;
 	UpdateEntriesResponse: UpdateEntriesResponse<K, V>;
 	UpdateEntriesNotification: UpdateEntriesNotification<K, V>;
-	RestoreEntriesRequest: RestoreEntriesRequest<K, V>;
-	RestoreEntriesResponse: RestoreEntriesResponse;
-	RestoreEntriesNotification: RestoreEntriesNotification<K, V>;
 }
 
 export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
@@ -135,16 +124,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				result = this.encodeDeleteEntriesNotification(input as RemoveEntriesNotification<K>);
 				break;
 
-			case EvictEntriesRequest:
-				result = this.encodeEvictEntriesRequest(input as EvictEntriesRequest<K>);
-				break;
-			case EvictEntriesResponse:
-				result = this.encodeEvictEntriesResponse(input as EvictEntriesResponse);
-				break;
-			case EvictEntriesNotification:
-				result = this.encodeRemoveEntriesNotification(input as EvictEntriesNotification<K>);
-				break;
-                
 			case InsertEntriesRequest:
 				result = this.encodeInsertEntriesRequest(input as InsertEntriesRequest<K, V>);
 				break;
@@ -165,15 +144,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				result = this.encodeUpdateEntriesNotification(input as UpdateEntriesNotification<K, V>);
 				break;
 
-			case RestoreEntriesRequest:
-				result = this.encodeRestoreEntriesRequest(input as RestoreEntriesRequest<K, V>);
-				break;
-			case RestoreEntriesResponse:
-				result = this.encodeRestoreEntriesResponse(input as RestoreEntriesResponse);
-				break;
-			case RestoreEntriesNotification:
-				result = this.encodeRestoreEntriesNotification(input as RestoreEntriesNotification<K, V>);
-				break;
 			default:
 				throw new Error(`Cannot encode input${ input}`);
 
@@ -253,18 +223,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				type = callback ? 'RemoveEntriesNotification' : undefined;
 				result = this.decodeRemoveEntriesNotification(message);
 				break;
-			case MessageType.EVICT_ENTRIES_REQUEST:
-				type = callback ? 'EvictEntriesRequest' : undefined;
-				result = this.decodeEvictEntriesRequest(message);
-				break;
-			case MessageType.EVICT_ENTRIES_RESPONSE:
-				type = callback ? 'EvictEntriesResponse' : undefined;
-				result = this.decodeEvictEntriesResponse(message);
-				break;
-			case MessageType.EVICT_ENTRIES_NOTIFICATION:
-				type = callback ? 'EvictEntriesNotification' : undefined;
-				result = this.decodeEvictEntriesNotification(message);
-				break;
 			case MessageType.INSERT_ENTRIES_REQUEST:
 				type = callback ? 'InsertEntriesRequest' : undefined;
 				result = this.decodeInsertEntriesRequest(message);
@@ -288,18 +246,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			case MessageType.UPDATE_ENTRIES_NOTIFICATION:
 				type = callback ? 'UpdateEntriesNotification' : undefined;
 				result = this.decodeUpdateEntriesNotification(message);
-				break;
-			case MessageType.RESTORE_ENTRIES_REQUEST:
-				type = callback ? 'RestoreEntriesRequest' : undefined;
-				result = this.decodeRestoreEntriesRequest(message);
-				break;
-			case MessageType.RESTORE_ENTRIES_RESPONSE:
-				type = callback ? 'RestoreEntriesResponse' : undefined;
-				result = this.decodeRestoreEntriesResponse(message);
-				break;
-			case MessageType.RESTORE_ENTRIES_NOTIFICATION:
-				type = callback ? 'RestoreEntriesNotification' : undefined;
-				result = this.decodeRestoreEntriesNotification(message);
 				break;
 		}
 
@@ -648,73 +594,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			message.destinationId,
 		);
 	}
-    
-	public encodeEvictEntriesRequest(request: EvictEntriesRequest<K>): Message {
-		const keys = this.encodeKeys(request.keys);
-        
-		return new Message({
-			type: MessageType.EVICT_ENTRIES_REQUEST,
-			requestId: request.requestId,
-			sourceId: request.sourceEndpointId,
-			keys,
-		});
-	}
-
-	public decodeEvictEntriesRequest(message: Message): EvictEntriesRequest<K> {
-		if (message.type !== MessageType.EVICT_ENTRIES_REQUEST) {
-			throw new Error('decodeEvictRequest(): Message type must be EVICT_ENTRIES_REQUEST');
-		}
-		const keys = this.decodeKeys(message.keys);
-        
-		return new EvictEntriesRequest<K>(
-			message.requestId!,
-			keys,
-			message.sourceId,
-		);
-	}
-    
-	public encodeEvictEntriesResponse(response: EvictEntriesResponse): Message {
-		return new Message({
-			type: MessageType.EVICT_ENTRIES_RESPONSE,
-			requestId: response.requestId,
-			destinationId: response.destinationEndpointId,
-		});
-	}
-
-	public decodeEvictEntriesResponse(message: Message): EvictEntriesResponse {
-		if (message.type !== MessageType.EVICT_ENTRIES_RESPONSE) {
-			throw new Error('decodeEvictResponse(): Message type must be EVICT_ENTRIES_RESPONSE');
-		}
-		
-		return new EvictEntriesResponse(
-			message.requestId!,
-			message.destinationId,
-		);
-	}
-
-	public encodeEvictEntriesNotification(notification: EvictEntriesNotification<K>): Message {
-		const keys = this.encodeKeys(notification.keys);
-        
-		return new Message({
-			type: MessageType.EVICT_ENTRIES_NOTIFICATION,
-			sourceId: notification.sourceEndpointId,
-			destinationId: notification.destinationEndpointId,
-			keys,
-		});
-	}
-
-	public decodeEvictEntriesNotification(message: Message): EvictEntriesNotification<K> {
-		if (message.type !== MessageType.EVICT_ENTRIES_NOTIFICATION) {
-			throw new Error('decodeEvictNotification(): Message type must be EVICT_ENTRIES_NOTIFICATION');
-		}
-		const keys = this.decodeKeys(message.keys);
-        
-		return new EvictEntriesNotification<K>(
-			keys,
-			message.sourceId,
-			message.destinationId
-		);
-	}
 
 	public encodeInsertEntriesRequest(request: InsertEntriesRequest<K, V>): Message {
 		const [ keys, values ] = this.encodeEntries(request.entries);
@@ -863,75 +742,6 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
         
 		return new UpdateEntriesNotification<K, V>(
 			updatedEntries,
-			message.sourceId,
-			message.destinationId,
-		);
-	}
-
-	public encodeRestoreEntriesRequest(request: RestoreEntriesRequest<K, V>): Message {
-		const [ keys, values ] = this.encodeEntries(request.entries);
-        
-		return new Message({
-			type: MessageType.RESTORE_ENTRIES_REQUEST,
-			sourceId: request.sourceEndpointId,
-			requestId: request.requestId,
-			keys,
-			values,
-		});
-	}
-
-	public decodeRestoreEntriesRequest(message: Message): RestoreEntriesRequest<K, V> {
-		if (message.type !== MessageType.RESTORE_ENTRIES_REQUEST) {
-			throw new Error('decodeRestoreEntriesRequest(): Message type must be RESTORE_ENTRIES_REQUEST');
-		}
-		const entries = this.decodeEntries(message.keys, message.values);
-        
-		return new RestoreEntriesRequest<K, V>(
-			message.requestId!,
-			entries,
-			message.sourceId,
-		);
-	}
-    
-	public encodeRestoreEntriesResponse(response: RestoreEntriesResponse): Message {
-		return new Message({
-			type: MessageType.RESTORE_ENTRIES_RESPONSE,
-			requestId: response.requestId,
-			destinationId: response.destinationEndpointId,
-		});
-	}
-
-	public decodeRestoreEntriesResponse(message: Message): RestoreEntriesResponse {
-		if (message.type !== MessageType.RESTORE_ENTRIES_RESPONSE) {
-			throw new Error('decodeRestoreEntriesResponse(): Message type must be RESTORE_ENTRIES_RESPONSE');
-		}
-		
-		return new RestoreEntriesResponse(
-			message.requestId!,
-			message.destinationId,
-		);
-	}
-
-	public encodeRestoreEntriesNotification(notification: RestoreEntriesNotification<K, V>): Message {
-		const [ keys, values ] = this.encodeEntries(notification.entries);
-        
-		return new Message({
-			type: MessageType.RESTORE_ENTRIES_NOTIFICATION,
-			keys,
-			values,
-			sourceId: notification.sourceEndpointId,
-			destinationId: notification.destinationEndpointId,
-		});
-	}
-
-	public decodeRestoreEntriesNotification(message: Message): RestoreEntriesNotification<K, V> {
-		if (message.type !== MessageType.RESTORE_ENTRIES_NOTIFICATION) {
-			throw new Error('decodeRestoreEntriesResponse(): Message type must be RESTORE_ENTRIES_RESPONSE');
-		}
-		const restoredEntries = this.decodeEntries(message.keys, message.values);
-        
-		return new RestoreEntriesNotification<K, V>(
-			restoredEntries,
 			message.sourceId,
 			message.destinationId,
 		);

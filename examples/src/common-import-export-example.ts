@@ -2,7 +2,7 @@ import { Hamok, HamokSnapshot, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
-	name: 'import-export-example',
+	name: 'common-import-export-example',
 	level: 'debug',
 });
 
@@ -22,6 +22,9 @@ export async function run() {
 	server_1.addRemotePeerId(server_2.localPeerId);
 	server_2.addRemotePeerId(server_1.localPeerId);
 	
+	// if you don't want the app to throw an exception you can subscribe to the error event
+	// server_3.on('error', err => logger.error('Server 3 error: %s', err));
+
 	server_1.start();
 	server_2.start();
 
@@ -41,7 +44,10 @@ export async function run() {
 	// before we start we apply the snapshot
 	logger.info('Importing snapshot for server_3 %o', latestSnapshot);
 	if (latestSnapshot) {
-		// server_3.import(latestSnapshot);
+		// if you want to see how Hamok behaves if a peer does not have 
+		// enaough log entry to catch up with the leader
+		// comment the next line out
+		server_3.import(latestSnapshot);
 	}
 
 

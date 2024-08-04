@@ -1,5 +1,11 @@
-export type HamokStorageSnapshot = {
-	storageId: string;
+export type HamokRecordSnapshot = {
+	recordId: string;
+	keys: Uint8Array[];
+	values: Uint8Array[];
+}
+
+export type HamokMapSnapshot = {
+	mapId: string;
 	keys: Uint8Array[];
 	values: Uint8Array[];
 }
@@ -23,7 +29,8 @@ export type HamokSnapshot = {
 	},
 	commitIndex: number;
 	term: number;
-	storages: HamokStorageSnapshot[];
+	records: HamokRecordSnapshot[];
+	maps: HamokMapSnapshot[];
 	queues: HamokQueueSnapshot[];
 	emitters: HamokEmitterSnapshot[];
 }

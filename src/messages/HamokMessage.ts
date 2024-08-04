@@ -141,9 +141,7 @@ export class HamokMessage extends Message<HamokMessage> {
   lastMessage?: boolean;
 
   /**
-   * optional int64 message_sequence = 28;
-   *
-   * @generated from field: optional bytes prevValue = 29;
+   * @generated from field: optional bytes prevValue = 28;
    */
   prevValue?: Uint8Array;
 
@@ -181,7 +179,7 @@ export class HamokMessage extends Message<HamokMessage> {
     { no: 25, name: "raftCandidateId", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 26, name: "sequence", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 27, name: "lastMessage", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 29, name: "prevValue", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 28, name: "prevValue", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HamokMessage {
@@ -232,24 +230,6 @@ export enum HamokMessage_MessageType {
    * @generated from enum value: ONGOING_REQUESTS_NOTIFICATION = 3;
    */
   ONGOING_REQUESTS_NOTIFICATION = 3,
-
-  /**
-   * *
-   * Storage sync is requested by a follower endpoint because it cannot follow the leader. In this case
-   * leader should dump every entry from storages synchronized by the endpoint (e.g.: replicated storage) and send it to the follower
-   *
-   * @generated from enum value: STORAGE_SYNC_REQUEST = 8;
-   */
-  STORAGE_SYNC_REQUEST = 8,
-
-  /**
-   * *
-   * A sync response sent by the leader to the follower contains all entries plus the commit index of the raft
-   * the state is corresponded to, so the follower can refresh its raft and commit index.
-   *
-   * @generated from enum value: STORAGE_SYNC_RESPONSE = 9;
-   */
-  STORAGE_SYNC_RESPONSE = 9,
 
   /**
    * *
@@ -430,30 +410,6 @@ export enum HamokMessage_MessageType {
 
   /**
    * *
-   * Request to evict entries on a remote endpoint
-   *
-   * @generated from enum value: EVICT_ENTRIES_REQUEST = 48;
-   */
-  EVICT_ENTRIES_REQUEST = 48,
-
-  /**
-   * *
-   * Response for the evict request
-   *
-   * @generated from enum value: EVICT_ENTRIES_RESPONSE = 49;
-   */
-  EVICT_ENTRIES_RESPONSE = 49,
-
-  /**
-   * *
-   * Notification to evict entries
-   *
-   * @generated from enum value: EVICT_ENTRIES_NOTIFICATION = 50;
-   */
-  EVICT_ENTRIES_NOTIFICATION = 50,
-
-  /**
-   * *
    * Insert item(s) only if they don't exist. if they
    * exist then it returns with the value associated
    *
@@ -505,126 +461,12 @@ export enum HamokMessage_MessageType {
    * @generated from enum value: UPDATE_ENTRIES_NOTIFICATION = 58;
    */
   UPDATE_ENTRIES_NOTIFICATION = 58,
-
-  /**
-   * *
-   * Restore entries request
-   *
-   * @generated from enum value: RESTORE_ENTRIES_REQUEST = 60;
-   */
-  RESTORE_ENTRIES_REQUEST = 60,
-
-  /**
-   * *
-   * Response to a restore request
-   *
-   * @generated from enum value: RESTORE_ENTRIES_RESPONSE = 61;
-   */
-  RESTORE_ENTRIES_RESPONSE = 61,
-
-  /**
-   * *
-   * Notification about a restore
-   *
-   * @generated from enum value: RESTORE_ENTRIES_NOTIFICATION = 62;
-   */
-  RESTORE_ENTRIES_NOTIFICATION = 62,
-
-  /**
-   * *
-   * Request to add subscription
-   *
-   * @generated from enum value: ADD_SUBSCRIPTION_REQUEST = 128;
-   */
-  ADD_SUBSCRIPTION_REQUEST = 128,
-
-  /**
-   * *
-   * Response to the request
-   *
-   * @generated from enum value: ADD_SUBSCRIPTION_RESPONSE = 129;
-   */
-  ADD_SUBSCRIPTION_RESPONSE = 129,
-
-  /**
-   * *
-   * Notification about an added subscription
-   *
-   * @generated from enum value: ADD_SUBSCRIPTION_NOTIFICATION = 130;
-   */
-  ADD_SUBSCRIPTION_NOTIFICATION = 130,
-
-  /**
-   * *
-   * Request to remove subscription
-   *
-   * @generated from enum value: REMOVE_SUBSCRIPTION_REQUEST = 132;
-   */
-  REMOVE_SUBSCRIPTION_REQUEST = 132,
-
-  /**
-   * *
-   * Response to the request
-   *
-   * @generated from enum value: REMOVE_SUBSCRIPTION_RESPONSE = 133;
-   */
-  REMOVE_SUBSCRIPTION_RESPONSE = 133,
-
-  /**
-   * *
-   * Notification about a removed subscription
-   *
-   * @generated from enum value: REMOVE_SUBSCRIPTION_NOTIFICATION = 134;
-   */
-  REMOVE_SUBSCRIPTION_NOTIFICATION = 134,
-
-  /**
-   * *
-   * Request to publish data
-   *
-   * @generated from enum value: PUBLISH_CUSTOM_DATA_REQUEST = 136;
-   */
-  PUBLISH_CUSTOM_DATA_REQUEST = 136,
-
-  /**
-   * *
-   * Response to a publish data request
-   *
-   * @generated from enum value: PUBLISH_CUSTOM_DATA_RESPONSE = 137;
-   */
-  PUBLISH_CUSTOM_DATA_RESPONSE = 137,
-
-  /**
-   * *
-   * Notification about an added subscription
-   *
-   * @generated from enum value: PUBLISH_CUSTOM_DATA_NOTIFICATION = 138;
-   */
-  PUBLISH_CUSTOM_DATA_NOTIFICATION = 138,
-
-  /**
-   * *
-   * Request to provide all subscriptions a remote endpoint currently has
-   *
-   * @generated from enum value: GET_SUBSCRIPTIONS_REQUEST = 140;
-   */
-  GET_SUBSCRIPTIONS_REQUEST = 140,
-
-  /**
-   * *
-   * Response to a publish data request
-   *
-   * @generated from enum value: GET_SUBSCRIPTIONS_RESPONSE = 141;
-   */
-  GET_SUBSCRIPTIONS_RESPONSE = 141,
 }
 // Retrieve enum metadata with: proto2.getEnumType(HamokMessage_MessageType)
 proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.HamokMessage.MessageType", [
   { no: 1, name: "HELLO_NOTIFICATION" },
   { no: 2, name: "ENDPOINT_STATES_NOTIFICATION" },
   { no: 3, name: "ONGOING_REQUESTS_NOTIFICATION" },
-  { no: 8, name: "STORAGE_SYNC_REQUEST" },
-  { no: 9, name: "STORAGE_SYNC_RESPONSE" },
   { no: 12, name: "RAFT_VOTE_REQUEST" },
   { no: 13, name: "RAFT_VOTE_RESPONSE" },
   { no: 16, name: "RAFT_APPEND_ENTRIES_REQUEST_CHUNK" },
@@ -646,29 +488,12 @@ proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.Ha
   { no: 44, name: "REMOVE_ENTRIES_REQUEST" },
   { no: 45, name: "REMOVE_ENTRIES_RESPONSE" },
   { no: 46, name: "REMOVE_ENTRIES_NOTIFICATION" },
-  { no: 48, name: "EVICT_ENTRIES_REQUEST" },
-  { no: 49, name: "EVICT_ENTRIES_RESPONSE" },
-  { no: 50, name: "EVICT_ENTRIES_NOTIFICATION" },
   { no: 52, name: "INSERT_ENTRIES_REQUEST" },
   { no: 53, name: "INSERT_ENTRIES_RESPONSE" },
   { no: 54, name: "INSERT_ENTRIES_NOTIFICATION" },
   { no: 56, name: "UPDATE_ENTRIES_REQUEST" },
   { no: 57, name: "UPDATE_ENTRIES_RESPONSE" },
   { no: 58, name: "UPDATE_ENTRIES_NOTIFICATION" },
-  { no: 60, name: "RESTORE_ENTRIES_REQUEST" },
-  { no: 61, name: "RESTORE_ENTRIES_RESPONSE" },
-  { no: 62, name: "RESTORE_ENTRIES_NOTIFICATION" },
-  { no: 128, name: "ADD_SUBSCRIPTION_REQUEST" },
-  { no: 129, name: "ADD_SUBSCRIPTION_RESPONSE" },
-  { no: 130, name: "ADD_SUBSCRIPTION_NOTIFICATION" },
-  { no: 132, name: "REMOVE_SUBSCRIPTION_REQUEST" },
-  { no: 133, name: "REMOVE_SUBSCRIPTION_RESPONSE" },
-  { no: 134, name: "REMOVE_SUBSCRIPTION_NOTIFICATION" },
-  { no: 136, name: "PUBLISH_CUSTOM_DATA_REQUEST" },
-  { no: 137, name: "PUBLISH_CUSTOM_DATA_RESPONSE" },
-  { no: 138, name: "PUBLISH_CUSTOM_DATA_NOTIFICATION" },
-  { no: 140, name: "GET_SUBSCRIPTIONS_REQUEST" },
-  { no: 141, name: "GET_SUBSCRIPTIONS_RESPONSE" },
 ]);
 
 /**
@@ -698,20 +523,11 @@ export enum HamokMessage_MessageProtocol {
    * @generated from enum value: STORAGE_COMMUNICATION_PROTOCOL = 3;
    */
   STORAGE_COMMUNICATION_PROTOCOL = 3,
-
-  /**
-   * *
-   * Messages should be interpreted by a publish / subscribe component
-   *
-   * @generated from enum value: PUBSUB_COMMUNICATION_PROTOCOL = 4;
-   */
-  PUBSUB_COMMUNICATION_PROTOCOL = 4,
 }
 // Retrieve enum metadata with: proto2.getEnumType(HamokMessage_MessageProtocol)
 proto2.util.setEnumType(HamokMessage_MessageProtocol, "io.github.hamok.dev.schema.HamokMessage.MessageProtocol", [
   { no: 1, name: "GRID_COMMUNICATION_PROTOCOL" },
   { no: 2, name: "RAFT_COMMUNICATION_PROTOCOL" },
   { no: 3, name: "STORAGE_COMMUNICATION_PROTOCOL" },
-  { no: 4, name: "PUBSUB_COMMUNICATION_PROTOCOL" },
 ]);
 

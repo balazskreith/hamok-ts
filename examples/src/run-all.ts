@@ -1,12 +1,15 @@
 import { setHamokLogLevel } from '@hamok-dev/hamok-ts';
-import { run as reelection } from './reelection-example';
-import { run as storageUpdateIf } from './storage-update-if-example';
-import { run as storageInsert } from './storage-insert-get-example'
+import { run as reelection } from './common-reelection-example';
+import { run as discovery } from './common-discovery-example';
+import { run as mapUpdateIf } from './map-update-if-example';
+import { run as mapInsert } from './map-insert-get-example'
 import { run as queuePushPop } from './queue-push-pop-example';
 import { run as queueEvents } from './queue-events-example';
-import { run as importExport } from './import-export-example';
+import { run as importExport } from './common-import-export-example';
 import { run as commonWaiting } from './common-waiting-example';
-import { run as storageEvents } from './storage-events-example';
+import { run as mapEvents } from './map-events-example';
+import { run as recordInsertGet } from './record-insert-get-example';
+import { run as recordEvents } from './record-events-example';
 import * as pino from 'pino';
 
 const logger = pino.pino({
@@ -16,14 +19,20 @@ const logger = pino.pino({
 
 async function run() {
     const map = new Map<string, () => Promise<void>>([
-        ['reelection', reelection],
-        ['storageUpdateIf', storageUpdateIf],
-        ['storageInsert', storageInsert],
+        ['mapInsert', mapInsert],
+        ['mapUpdateIf', mapUpdateIf],
+        ['mapEvents', mapEvents],
+        
         ['queuePushPop', queuePushPop],
         ['queueEvents', queueEvents],
+
+        ['recordInsertGet', recordInsertGet],
+        ['recordEvents', recordEvents],
+        
         ['importExport', importExport],
         ['commonWaiting', commonWaiting],
-        ['storageEvents', storageEvents],
+        ['reelection', reelection],
+        ['discovery', discovery],
 
     ]);
 

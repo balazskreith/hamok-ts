@@ -41,7 +41,7 @@ export function createRaftCandidateState(context: RaftCandidateStateContext): Ra
 			return logger.debug('%s Received an append entries request from a peer with a smaller term than the current election term. Request: %o', localPeerId, request);
 		}
 		
-		logger.debug('%s Received an append entries request from a peer with a higher term than the current election term. Request: %o', localPeerId, request);
+		logger.info('%s Received an append entries request from a peer with a higher term than the current election term. Request: %o', localPeerId, request);
 		
 		// a leader has been elected, let's go back to the follower state
 		return follow();

@@ -1,4 +1,4 @@
-import { createLogger } from '../common/logger';
+import { createLogger } from './logger';
 
 const logger = createLogger('WaitingQueue');
 

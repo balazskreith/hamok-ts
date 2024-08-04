@@ -1,5 +1,3 @@
-import { EndpointStatesNotification } from './messagetypes/EndpointNotification';
-import { HelloNotification } from './messagetypes/HelloNotification';
 import { RaftAppendEntriesRequestChunk, RaftAppendEntriesResponse } from './messagetypes/RaftAppendEntries';
 import { RaftVoteRequest, RaftVoteResponse } from './messagetypes/RaftVote';
 import { HamokMessage, HamokMessage_MessageProtocol as MessageProtocol, HamokMessage_MessageType as MessageType } from './HamokMessage';
@@ -9,8 +7,6 @@ import { createLogger } from '../common/logger';
 const logger = createLogger('RaftMessageEmitter');
 
 type Input = 
-    HelloNotification |
-    EndpointStatesNotification |
     RaftVoteRequest |
     RaftVoteResponse |
     RaftAppendEntriesRequestChunk | 
@@ -19,25 +15,11 @@ type Input =
 
 type EventMap = {
 	message: [message: HamokMessage]
-	HelloNotification: [notification: HelloNotification]
-	EndpointStatesNotification: [notification: EndpointStatesNotification]
 	RaftVoteRequest: [request: RaftVoteRequest]
 	RaftVoteResponse: [response: RaftVoteResponse]
 	RaftAppendEntriesRequestChunk: [request: RaftAppendEntriesRequestChunk]
 	RaftAppendEntriesResponse: [response: RaftAppendEntriesResponse]
 };
-
-function setToArray<T>(set?: ReadonlySet<T>): T[] | undefined {
-	if (!set) return;
-	
-	return Array.from(set);
-}
-
-function arrayToSet<T>(array?: T[]): Set<T> | undefined {
-	if (!array) return;
-	
-	return new Set<T>(array);
-}
 
 export class RaftMessageEmitter extends EventEmitter<EventMap> {
 	public constructor() {
@@ -49,12 +31,6 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 	public send(input: Input) {
 		
 		switch (input.constructor) {
-			case HelloNotification:
-				this.emit('message', this.encodeHelloNotification(input as HelloNotification));
-				break;
-			case EndpointStatesNotification:
-				this.emit('message', this.encodeEndpointStateNotification(input as EndpointStatesNotification));
-				break;
 			case RaftVoteRequest:
 				this.emit('message', this.encodeRaftVoteRequest(input as RaftVoteRequest));
 				break;
@@ -74,12 +50,6 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 
 	public receive(message: HamokMessage) {
 		switch (message.type) {
-			case MessageType.HELLO_NOTIFICATION:
-				this.emit('HelloNotification', this.decodeHelloNotification(message));
-				break;                
-			case MessageType.ENDPOINT_STATES_NOTIFICATION:
-				this.emit('EndpointStatesNotification', this.decodeEndpointStateNotification(message));
-				break;
 			case MessageType.RAFT_VOTE_REQUEST:
 				// logger.debug('Received RaftVoteRequest %o, request: %o', message, this.decodeRaftVoteRequest(message));
 				this.emit('RaftVoteRequest', this.decodeRaftVoteRequest(message));
@@ -96,61 +66,6 @@ export class RaftMessageEmitter extends EventEmitter<EventMap> {
 			default:
 				throw new Error(`Cannot decode message ${message.type}`);
 		}
-	}
-
-	public encodeHelloNotification(notification: HelloNotification): HamokMessage {
-		return new HamokMessage({
-			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
-			type: MessageType.HELLO_NOTIFICATION,
-			sourceId: notification.sourcePeerId,
-			destinationId: notification.destinationPeerId,
-			raftLeaderId: notification.raftLeaderId,
-		});
-	}
-
-	public decodeHelloNotification(message: HamokMessage): HelloNotification {
-		if (message.type !== MessageType.HELLO_NOTIFICATION) {
-			throw new Error('decodeHelloNotification(): Message type must be HELLO_NOTIFICATION');
-		}
-		
-		return new HelloNotification(
-			message.sourceId!,
-			message.destinationId,
-			message.raftLeaderId
-		);
-	}
-
-	public encodeEndpointStateNotification(notification: EndpointStatesNotification): HamokMessage {
-		const activeEndpointIds = setToArray<string>(notification.activeEndpointIds);
-        
-		return new HamokMessage({
-			protocol: MessageProtocol.RAFT_COMMUNICATION_PROTOCOL,
-			type: MessageType.ENDPOINT_STATES_NOTIFICATION,
-			sourceId: notification.sourceEndpointId,
-			destinationId: notification.destinationEndpointId,
-			raftTerm: notification.term,
-			raftCommitIndex: notification.commitIndex,
-			raftLeaderNextIndex: notification.leaderNextIndex,
-			raftNumberOfLogs: notification.numberOfLogs,
-			activeEndpointIds,
-		});
-	}
-
-	public decodeEndpointStateNotification(message: HamokMessage): EndpointStatesNotification {
-		if (message.type !== MessageType.ENDPOINT_STATES_NOTIFICATION) {
-			throw new Error('decodeEndpointStateNotification(): Message type must be ENDPOINT_STATES_NOTIFICATION');
-		}
-		const activeEndpointIds = arrayToSet<string>(message.activeEndpointIds);
-        
-		return new EndpointStatesNotification(
-			message.sourceId!,
-			message.destinationId!,
-			message.raftTerm!,
-			message.raftCommitIndex!,
-			message.raftLeaderNextIndex!,
-			message.raftNumberOfLogs!,
-			activeEndpointIds,
-		);
 	}
 
 	public encodeRaftVoteRequest(request: RaftVoteRequest): HamokMessage {

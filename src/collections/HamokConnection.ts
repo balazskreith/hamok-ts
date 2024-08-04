@@ -11,17 +11,15 @@ import { createLogger } from '../common/logger';
 import { OngoingRequestsNotification } from '../messages/messagetypes/OngoingRequests';
 import { ClearEntriesRequest, ClearEntriesNotification, ClearEntriesResponse } from '../messages/messagetypes/ClearEntries';
 import { DeleteEntriesRequest, DeleteEntriesNotification, DeleteEntriesResponse } from '../messages/messagetypes/DeleteEntries';
-import { EvictEntriesRequest, EvictEntriesNotification, EvictEntriesResponse } from '../messages/messagetypes/EvictEntries';
 import { GetKeysRequest, GetKeysResponse } from '../messages/messagetypes/GetKeys';
 import { GetSizeRequest } from '../messages/messagetypes/GetSize';
 import { InsertEntriesRequest, InsertEntriesNotification, InsertEntriesResponse } from '../messages/messagetypes/InsertEntries';
 import { RemoveEntriesRequest, RemoveEntriesNotification, RemoveEntriesResponse } from '../messages/messagetypes/RemoveEntries';
-import { RestoreEntriesRequest, RestoreEntriesNotification, RestoreEntriesResponse } from '../messages/messagetypes/RestoreEntries';
 import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse } from '../messages/messagetypes/UpdateEntries';
 import { createResponseChunker, ResponseChunker } from '../messages/ResponseChunker';
 import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
-import { WaitingQueue } from './WaitingQueue';
+import { WaitingQueue } from '../common/WaitingQueue';
 
 const logger = createLogger('HamokConnection');
 
@@ -84,14 +82,10 @@ export type HamokConnectionEventMap<K, V> = {
 	DeleteEntriesNotification: [DeleteEntriesNotification<K>];
 	RemoveEntriesRequest: [RemoveEntriesRequest<K>];
 	RemoveEntriesNotification: [RemoveEntriesNotification<K>];
-	EvictEntriesRequest: [EvictEntriesRequest<K>];
-	EvictEntriesNotification: [EvictEntriesNotification<K>];
 	InsertEntriesRequest: [InsertEntriesRequest<K, V>];
 	InsertEntriesNotification: [InsertEntriesNotification<K, V>];
 	UpdateEntriesRequest: [UpdateEntriesRequest<K, V>];
 	UpdateEntriesNotification: [UpdateEntriesNotification<K, V>];
-	RestoreEntriesRequest: [RestoreEntriesRequest<K, V>];
-	RestoreEntriesNotification: [RestoreEntriesNotification<K, V>];
 }
 
 export type HamokConnectionResponseMap<K, V> = {
@@ -100,10 +94,8 @@ export type HamokConnectionResponseMap<K, V> = {
 	ClearEntriesResponse: ClearEntriesResponse;
 	DeleteEntriesResponse: DeleteEntriesResponse<K>;
 	RemoveEntriesResponse: RemoveEntriesResponse<K, V>;
-	EvictEntriesResponse: EvictEntriesResponse;
 	InsertEntriesResponse: InsertEntriesResponse<K, V>;
 	UpdateEntriesResponse: UpdateEntriesResponse<K, V>;
-	RestoreEntriesResponse: RestoreEntriesResponse;
 }
 
 export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<K, V>> {
@@ -436,17 +428,11 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 			case 'RemoveEntriesResponse':
 				message = this.codec.encodeRemoveEntriesResponse(response as RemoveEntriesResponse<K, V>);
 				break;
-			case 'EvictEntriesResponse':
-				message = this.codec.encodeEvictEntriesResponse(response as EvictEntriesResponse);
-				break;
 			case 'InsertEntriesResponse':
 				message = this.codec.encodeInsertEntriesResponse(response as InsertEntriesResponse<K, V>);
 				break;
 			case 'UpdateEntriesResponse':
 				message = this.codec.encodeUpdateEntriesResponse(response as UpdateEntriesResponse<K, V>);
-				break;
-			case 'RestoreEntriesResponse':
-				message = this.codec.encodeRestoreEntriesResponse(response as RestoreEntriesResponse);
 				break;
 		}
 		if (!message) {
@@ -492,7 +478,7 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 		});
 	}
 
-	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+	private _sendMessage(message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[] | string): void {
 		message.storageId = this.config.storageId;
 		message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 

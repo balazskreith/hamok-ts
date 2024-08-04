@@ -99,6 +99,8 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 			const nextCommitIndex = this._commitIndex + 1;
 			const logEntry = this._entries.get(nextCommitIndex);
 
+			logger.trace('Committing log entry for index %d, %o', nextCommitIndex, logEntry);
+
 			if (logEntry == undefined) {
 				logger.warn(`LogEntry for nextCommitIndex ${nextCommitIndex} is null. it supposed not to be null.`);
 				break;
@@ -156,7 +158,9 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 
 			this._entries.set(newLogEntry.index, newLogEntry);
 
-			return (this._memoryEstimateBytesLength += entry.values.length + entry.keys.length, undefined);
+			this._memoryEstimateBytesLength += entry.values.length + entry.keys.length;
+
+			return;
 		}
 		if (expectedTerm == oldLogEntry.term) {
 			// theoretically identical
@@ -219,7 +223,7 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 		}
 		if (0 < missingEntries) {
 			if (!this._mssingEntriesLogged) {
-				logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but missing {} entries probably in the beginning. The other peer should request a commit sync', startIndex, this.nextIndex, missingEntries);
+				logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but missing {} entries.', startIndex, this.nextIndex, missingEntries);
 				this._mssingEntriesLogged = true;
 			}
 		} else if (this._mssingEntriesLogged) {
@@ -265,12 +269,13 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 		for (let index = this._firstIndex; index < this.commitIndex; ++index) {
 			const logEntry = this._entries.get(index);
 
-			if (logEntry == undefined) {
+			if (logEntry == undefined || !this._entries.delete(index)) {
 				// already purged?
-				logger.info(`LastApplied is set to ${index + 1}, because for index ${index} logEntry does not exists`);
+				logger.trace(`LastApplied is set to ${index + 1}, because for index ${index} logEntry does not exists`);
 				this._firstIndex = index + 1;
 				continue;
 			}
+
 			this._memoryEstimateBytesLength -= logEntry.entry.values.length + logEntry.entry.keys.length;
 			++removed;
 			this.emit('removed', index, logEntry.entry);
@@ -293,7 +298,7 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 
 			if (logEntry == undefined) {
 				// already purged?
-				logger.info(`LastApplied is set to 
+				logger.trace(`LastApplied is set to 
                     ${index + 1}, because for index 
                     ${index} logEntry does not exists`
 				);

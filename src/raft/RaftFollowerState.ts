@@ -27,7 +27,6 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	let updated = Date.now();
 	let closed = false;
 	let currentTerm = props.currentTerm;
-	const syncRequested = false;
 	const updateCommitIndex = (leaderCommitIndex: number) => {
 		logger.trace('%s updateCommitIndex leaderCommitIndex: %d, logsCommitIndex: %d', localPeerId, leaderCommitIndex, logs.commitIndex);
 		if (leaderCommitIndex <= logs.commitIndex) {
@@ -80,9 +79,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 				return messageEmitter.send(response);
 			}
 			// that was a keep alive message
-			if (!syncRequested) {
-				updateCommitIndex(requestChunk.leaderCommit);
-			}
+			updateCommitIndex(requestChunk.leaderCommit);
 			const response = requestChunk.createResponse(true, logs.nextIndex, true);
 
 			return messageEmitter.send(response);
@@ -103,19 +100,16 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 		pendingRequests.delete(requestChunk.requestId);
 
-		logger.trace('%s Received RaftAppendEntriesRequest %o Entries: %d', localPeerId, requestChunk, request.entries?.length);
+		logger.trace('%s Received RaftAppendEntriesRequest %o Entries: %d', localPeerId, request, request.entries?.length);
 
 		if (logs.nextIndex < request.leaderNextIndex - (request.entries?.length ?? 0)) {
-			if (syncRequested) {
-				// we already requested a sync
-				return;
+			const message = `The next index is ${logs.nextIndex}, and the leader index is ${request.leaderNextIndex}, the provided entries are: ${request.entries?.length}. It is insufficient to close the gap in log entries. Import a snapshot or increase the expiration for the logs.`;
+			const error = new Error(message);
+
+			raftEngine.events.stop();
+			if (!raftEngine.events.emit('error', error)) {
+				throw error;
 			}
-			logger.warn(`The next index is 
-				${logs.nextIndex}, and the leader index is: 
-				${request.leaderNextIndex}, the provided entries are: 
-				${request.entries?.length}. It is insufficient to close the gap for this node. Execute sync request is necessary from the leader to request and the timeout of the raft logs should be large enough to close the gap after the sync.`,
-			);
-			throw new Error('The gap between the leader and the follower is not resolvable');
 			// // we send success and processed response as the problem is not with the request,
 			// // but we do not change our next index because we cannot process it momentary due to not synced endpoint
 			// const response = requestChunk.createResponse(true, logs.nextIndex, true);

@@ -2,7 +2,7 @@ import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
 import * as pino from 'pino';
 
 const logger = pino.pino({
-	name: 'storage-update-if-example',
+	name: 'map-update-if-example',
 	level: 'debug',
 });
 
@@ -34,12 +34,12 @@ export async function run() {
 	logger.info('Leader changed');
 	
 	const jobId = 'myJob';
-	const storage_1 = server_1.createStorage<string, Job>({
-		storageId: 'my-replicated-storage',
+	const storage_1 = server_1.createMap<string, Job>({
+		mapId: 'my-replicated-storage',
 		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
-	const storage_2 = server_2.createStorage<string, Job>({
-		storageId: 'my-replicated-storage',
+	const storage_2 = server_2.createMap<string, Job>({
+		mapId: 'my-replicated-storage',
 		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
 	// const storage_3 = server_3.createReplicatedStorage<string, number>({

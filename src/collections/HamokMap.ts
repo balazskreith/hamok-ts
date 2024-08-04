@@ -1,14 +1,13 @@
 import { EventEmitter } from 'events';
 import { createLogger } from '../common/logger';
 import { HamokConnection } from './HamokConnection';
-import { ConcurrentExecutor } from '../common/ConcurrentExecutor';
 import { BaseMap } from './BaseMap';
 import * as Collections from '../common/Collections';
-import { HamokStorageSnapshot } from '../HamokSnapshot';
+import { HamokMapSnapshot } from '../HamokSnapshot';
 
-const logger = createLogger('ReplicatedStorage');
+const logger = createLogger('HamokMap');
 
-export type HamokStorageEventMap<K, V> = {
+export type HamokMapEventMap<K, V> = {
 	'insert': [key: K, value: V],
 	'update': [key: K, oldValue: V, newValue: V],
 	'remove': [key: K, value: V],
@@ -19,8 +18,7 @@ export type HamokStorageEventMap<K, V> = {
 /**
  * Replicated storage replicates all entries on all distributed storages
  */
-export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>> {
-	private readonly _executor = new ConcurrentExecutor(1);
+export class HamokMap<K, V> extends EventEmitter<HamokMapEventMap<K, V>> {
 	private _closed = false;
 	public equalValues: (a: V, b: V) => boolean;
 	public equalKeys: (a: K, b: K) => boolean;
@@ -306,10 +304,10 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 	/**
 	 * Exports the storage data
 	 */
-	public export(): HamokStorageSnapshot {
+	public export(): HamokMapSnapshot {
 		const [ keys, values ] = this.connection.codec.encodeEntries(this.baseMap);
-		const result: HamokStorageSnapshot = {
-			storageId: this.id,
+		const result: HamokMapSnapshot = {
+			mapId: this.id,
 			keys,
 			values
 		};
@@ -317,9 +315,9 @@ export class HamokStorage<K, V> extends EventEmitter<HamokStorageEventMap<K, V>>
 		return result;
 	}
 
-	public import(data: HamokStorageSnapshot, eventing?: boolean) {
-		if (data.storageId !== this.id) {
-			throw new Error(`Cannot import data from a different storage: ${data.storageId} !== ${this.id}`);
+	public import(data: HamokMapSnapshot, eventing?: boolean) {
+		if (data.mapId !== this.id) {
+			throw new Error(`Cannot import data from a different storage: ${data.mapId} !== ${this.id}`);
 		} else if (this.connection.connected) {
 			throw new Error('Cannot import data while connected');
 		} else if (this._closed) {
