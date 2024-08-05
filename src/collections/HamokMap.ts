@@ -30,6 +30,8 @@ export class HamokMap<K, V> extends EventEmitter<HamokMapEventMap<K, V>> {
 		equalKeys?: (a: K, b: K) => boolean
 	) {
 		super();
+		this.setMaxListeners(Infinity);
+		
 		this.equalKeys = equalKeys ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
 		this.equalValues = equalValues ?? ((a, b) => {
 			// logger.info('Comparing values: %o (%s), %o (%s)', a, b, JSON.stringify(a), JSON.stringify(b));

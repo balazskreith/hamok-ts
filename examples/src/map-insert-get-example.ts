@@ -10,6 +10,13 @@ export async function run() {
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
 	
+	const storage_1 = server_1.createMap<string, number>({
+		mapId: 'my-replicated-storage',
+	});
+	const storage_2 = server_2.createMap<string, number>({
+		mapId: 'my-replicated-storage',
+	});
+
 	server_1.on('message', server_2.accept.bind(server_2));
 	server_2.on('message', server_1.accept.bind(server_1));
 	
@@ -26,12 +33,6 @@ export async function run() {
 
 	logger.info('Leader changed');
 
-	const storage_1 = server_1.createMap<string, number>({
-		mapId: 'my-replicated-storage',
-	});
-	const storage_2 = server_2.createMap<string, number>({
-		mapId: 'my-replicated-storage',
-	});
 	// const storage_3 = server_3.createReplicatedStorage<string, number>({
 	// 	storageId: 'my-replicated-storage',
 	// });

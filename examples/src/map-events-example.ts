@@ -9,7 +9,7 @@ const logger = pino.pino({
 export async function run() {
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
-	
+
 	server_1.on('message', server_2.accept.bind(server_2));
 	server_2.on('message', server_1.accept.bind(server_1));
 	

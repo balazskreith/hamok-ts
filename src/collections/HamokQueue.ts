@@ -43,7 +43,8 @@ export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
 		public readonly baseMap: BaseMap<number, T>,
 	) {
 		super();
-
+		this.setMaxListeners(Infinity);
+		
 		this.connection
 			.on('ClearEntriesRequest', (request) => {
 				this.baseMap.clear();

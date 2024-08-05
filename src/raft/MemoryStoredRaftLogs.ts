@@ -47,6 +47,7 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 		entries?: Map<number, LogEntry>,
 	) {
 		super();
+		this.setMaxListeners(Infinity);
 		this._entries = entries ?? new Map();
 	}
 

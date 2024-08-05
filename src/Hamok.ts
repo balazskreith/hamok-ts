@@ -136,6 +136,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	public constructor(providedConfig?: Partial<HamokConstructorConfig>) {
 		super();
+		this.setMaxListeners(Infinity);
 		const raftLogs = providedConfig?.raftLogs ?? new MemoryStoredRaftLogs({
 			expirationTimeInMs: 0,
 			memorySizeHighWaterMark: 0,

@@ -6,7 +6,7 @@ const logger = pino.pino({
 	level: 'debug',
 });
 
-type MyRecord = {
+type MySharedConfig = {
 	foo: string;
 	bar: number;
 }
@@ -31,10 +31,10 @@ export async function run() {
 
 	logger.info('Leader changed');
 
-	const storage_1 = server_1.createRecord<MyRecord>({
+	const storage_1 = server_1.createRecord<MySharedConfig>({
 		recordId: 'my-replicated-record',
 	});
-	const storage_2 = server_2.createRecord<MyRecord>({
+	const storage_2 = server_2.createRecord<MySharedConfig>({
 		recordId: 'my-replicated-record',
 	});
 

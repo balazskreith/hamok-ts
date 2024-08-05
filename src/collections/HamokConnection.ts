@@ -112,7 +112,8 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 		public readonly grid: HamokGrid,
 	) {
 		super();
-
+		this.setMaxListeners(Infinity);
+		
 		this._responseChunker = createResponseChunker(
 			config.maxOutboundKeys ?? 0,
 			config.maxOutboundValues ?? 0,

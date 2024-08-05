@@ -24,7 +24,8 @@ type EventMap = {
 export class RaftMessageEmitter extends EventEmitter<EventMap> {
 	public constructor() {
 		super();
-
+		this.setMaxListeners(Infinity);
+		
 		logger.trace('RaftMessageEmitter created');
 	}
 

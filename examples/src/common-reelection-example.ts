@@ -8,7 +8,8 @@ const logger = pino.pino({
 
 
 export async function run() {
-	const server_1 = new Hamok();
+	const server_1 = new Hamok({
+	});
 	const server_2 = new Hamok();
 	const server_3 = new Hamok();
 	

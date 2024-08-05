@@ -47,6 +47,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter<Hamok
 		
 	) {
 		super();
+		this.setMaxListeners(Infinity);
+		
 		this.equalValues = setup?.equalValues ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
 		this._object = setup?.initalObject ?? {} as T;
 		this._payloadsCodec = setup?.payloadsCodec;
