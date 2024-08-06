@@ -1,7 +1,7 @@
 {
-	"name": "@hamok-dev/hamok-ts",
+	"name": "hamok",
 	"version": "2.0.0",
-	"description": "Distributed Object Storage",
+	"description": "Lightweight Distributed Object Storage",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"scripts": {
@@ -13,23 +13,23 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/hamok-dev/hamok-ts.git"
+		"url": "git+https://github.com/balazskreith/hamok-ts.git"
 	},
 	"keywords": [
-		"signal",
-		"server",
-		"webrtc"
+		"raft",
+		"distributed",
+		"storage"
 	],
 	"author": "Balazs Kreith",
 	"license": "ISC",
 	"bugs": {
-		"url": "https://github.com/hamok-dev/hamok-ts/issues"
+		"url": "https://github.com/balazskreith/hamok-ts/issues"
 	},
 	"resolutions": {
 		"wrap-ansi": "7.0.0",
 		"string-width": "4.1.0"
 	},
-	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
+	"homepage": "https://github.com/balazskreith/hamok-ts#readme",
 	"dependencies": {
 		"@bufbuild/protobuf": "^1.10.0",
 		"pino": "^9.3.2",
