@@ -8,3 +8,4 @@ scripts/
 sfu-local-files/
 yarn-error.log
 /.vscode
+npm-token
