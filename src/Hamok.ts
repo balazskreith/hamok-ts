@@ -201,6 +201,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		raftEngine.transport.on('message', this._emitMessage.bind(this));
 		this.on('leader-changed', this._emitLeaderChanged.bind(this));
 		this.on('commit', this._acceptCommit.bind(this));
+		this.on('remote-peer-left', this._emitRemotePeerRemoved.bind(this));
 
 		raftEngine.state = createRaftFollowerState({
 			raftEngine,
@@ -230,6 +231,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		raftEngine.transport.off('message', this._emitMessage.bind(this));
 		this.off('commit', this._acceptCommit.bind(this));
 		this.off('leader-changed', this._emitLeaderChanged.bind(this));
+		this.off('remote-peer-left', this._emitRemotePeerRemoved.bind(this));
 
 		this._remoteHeartbeats.forEach((timer) => clearTimeout(timer));
 		this._remoteHeartbeats.clear();
@@ -668,7 +670,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			const timer = setTimeout(() => {
 				for (const notification of this._remoteStateRequest?.responses ?? []) {
 					notification.activeEndpointIds?.forEach((remotePeerId) => (remotePeerId !== this.localPeerId ? remotePeerIds.add(remotePeerId) : void 0));
-					remotePeerIds.add(notification.sourceEndpointId);
+					if (notification.sourceEndpointId !== this.localPeerId) {
+						remotePeerIds.add(notification.sourceEndpointId);
+					}
 
 					if (notification.customData) {
 						customResponses.push(notification.customData);
@@ -780,12 +784,26 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	private _emitLeaderChanged(leaderId: string | undefined): void {
 		for (const iterator of [ 
+			this.records.values(),
 			this.maps.values(), 
 			this.queues.values(), 
 			this.emitters.values(),
 		]) {
 			for (const collection of iterator) {
 				collection.connection.emit('leader-changed', leaderId);
+			}
+		}
+	}
+
+	private _emitRemotePeerRemoved(remotePeerId: string): void {
+		for (const iterator of [ 
+			this.records.values(),
+			this.maps.values(), 
+			this.queues.values(), 
+			this.emitters.values(),
+		]) {
+			for (const collection of iterator) {
+				collection.connection.emit('remote-peer-removed', remotePeerId);
 			}
 		}
 	}

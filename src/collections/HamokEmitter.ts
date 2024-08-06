@@ -130,6 +130,12 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 					);
 				}
 			})
+			.on('remote-peer-removed', (remotePeerId) => {
+				for (const subscribedPeerIds of this._subscriptions.values()) {
+					subscribedPeerIds.delete(remotePeerId);
+				}
+				logger.debug('%s remote-peer-removed is received, %s is removed from the subscription list for all events in emitter %s', this.connection.localPeerId, remotePeerId, this.id);
+			})
 			.once('close', () => this.close())
 		;
 	}

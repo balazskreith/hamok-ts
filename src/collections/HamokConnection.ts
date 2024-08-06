@@ -68,6 +68,7 @@ export type HamokConnectionConfig = {
 export type HamokConnectionEventMap<K, V> = {
 	'message': [message: HamokMessage, submit: boolean],
 	'leader-changed': [newLeaderId: string | undefined],
+	'remote-peer-removed': [remotePeerId: string],
 	connected: [],
 	disconnected: [],
 	close: [],
