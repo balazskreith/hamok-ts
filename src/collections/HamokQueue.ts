@@ -7,11 +7,12 @@ import * as Collections from '../common/Collections';
 
 const logger = createLogger('HamokQueue');
 
-export type HamokQueueEventMap = {
+export type HamokQueueEventMap<T> = {
 	'empty': [];
 	'not-empty': [];
 	'close': [];
-	'remove': [unknown];
+	'add': [T];
+	'remove': [T];
 }
 
 export type HamokQueueConfig = {
@@ -33,7 +34,7 @@ function *iterator<T>(first: number, last: number, baseMap: BaseMap<number, T>):
 	}
 }
 
-export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
+export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap<T>> {
 	private _head = 0;
 	private _tail = 0;
 	private _closed = false;
@@ -68,6 +69,8 @@ export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
 				for (const value of request.entries.values()) {
 					this.baseMap.set(this._tail, value);
 					++this._tail;
+
+					this.emit('add', value);
 				}
 
 				if (wasEmpty) {
@@ -177,7 +180,6 @@ export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap> {
 		this._closed = true;
 
 		this.connection.close();
-
 		this.baseMap.clear();
 
 		this.emit('close');

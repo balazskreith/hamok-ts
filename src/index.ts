@@ -27,6 +27,9 @@ export {
 	HamokQueueSnapshot,
 	HamokMapSnapshot as HamokStorageSnapshot,
 } from './HamokSnapshot';
+export {
+	LogEntry
+} from './raft/LogEntry';
 export { 
 	setHamokLogLevel, 
 	HamokLogLevel 
@@ -34,6 +37,9 @@ export {
 export { 
 	HamokMessage 
 } from './messages/HamokMessage';
+export {
+	BaseMap
+} from './collections/BaseMap';
 export { 
 	HamokCodec, 
 	createHamokJsonBinaryCodec, 

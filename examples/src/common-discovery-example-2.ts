@@ -1,4 +1,4 @@
-import { Hamok, HamokEventMap, HamokFetchRemotePeersResponse, HamokMessage, setHamokLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, HamokEventMap, HamokFetchRemotePeersResponse, HamokMessage, setHamokLogLevel } from 'hamok';
 import EventEmitter from 'events';
 import * as pino from 'pino';
 

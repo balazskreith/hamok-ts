@@ -32,62 +32,218 @@ export type HamokConfig = {
 	raftLogs?: RaftLogs,
 }
 
+/**
+ * Configuration settings for the Hamok constructor, extending RaftEngineConfig and HamokConfig.
+ */
 export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
+
+	/**
+	 * Optional. The expiration time in milliseconds for log entries.
+	 * Log entries older than this duration may be purged.
+	 */
 	logEntriesExpirationTimeInMs?: number,
+
+	/**
+	 * Optional. A map of initial log entries to be used by the system.
+	 * The key is the log index, and the value is the LogEntry.
+	 */
 	initialLogEntries?: Map<number, LogEntry>,
 
 	/**
-     * In case a requestId is added explicitly to the ongoing requests set
-     * by calling the addOngoingRequestId() this setting determines the period 
-     * to send notification to the source(s) about an ongoing requests to prevent timeout there
-     * The notification stopped sent if removeOngoingRequestId is called, and it is very important 
-     * to call it explicitly in any case. In another word comlink is not responsible to handle 
-     * automatically an explicitly postponed request to stop sending notification about.
-     */
+	 * The period in milliseconds to send notifications to the source(s) about ongoing requests
+	 * to prevent timeouts. This is applicable when a requestId is explicitly added to the ongoing 
+	 * requests set by calling addOngoingRequestId(). Notifications stop when removeOngoingRequestId 
+	 * is called. It is crucial to call this explicitly in any case as comlink does not handle 
+	 * automatically stopping notifications for explicitly postponed requests.
+	 */
 	ongoingRequestsSendingPeriodInMs: number;
 }
 
+/**
+ * Configuration settings for building a Hamok record.
+ */
 export type HamokRecordBuilderConfig<T extends HamokRecordObject> = {
+
+	/**
+	 * The unique identifier for the record.
+	 */
 	recordId: string,
+
+	/**
+	 * Optional. The timeout duration in milliseconds for requests.
+	 */
 	requestTimeoutInMs?: number,
+
+	/**
+	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
+	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 */
 	maxMessageWaitingTimeInMs?: number,
+
+	/**
+	 * Optional. A map of payload codecs for encoding and decoding record properties.
+	 * The key is a property of the record, and the value is a codec for that property.
+	 */
 	payloadCodecs?: Map<keyof T, HamokCodec<T[keyof T], string>>,
+
+	/**
+	 * Optional. The maximum number of keys allowed in request or response messages.
+	 */
 	maxOutboundMessageKeys?: number,
+
+	/**
+	 * Optional. The maximum number of values allowed in request or response messages.
+	 */
 	maxOutboundMessageValues?: number,
+
+	/**
+	 * Optional. An initial object to be used as the base state of the record.
+	 */
 	initialObject?: Partial<T>,
+
+	/**
+	 * Optional. A function to determine equality between two values.
+	 * Used for custom equality checking.
+	 */
 	equalValues?: (a: T[keyof T], b: T[keyof T]) => boolean,
 }
 
+/**
+ * Configuration settings for building a Hamok map.
+ */
 export type HamokMapBuilderConfig<K, V> = {
+
+	/**
+	 * The unique identifier for the map.
+	 */
 	mapId: string,
+
+	/**
+	 * Optional. The timeout duration in milliseconds for requests.
+	 */
 	requestTimeoutInMs?: number,
+
+	/**
+	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
+	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 */
 	maxMessageWaitingTimeInMs?: number,
+
+	/**
+	 * Optional. A codec for encoding and decoding keys in the map.
+	 */
 	keyCodec?: HamokCodec<K, Uint8Array>,
+
+	/**
+	 * Optional. A codec for encoding and decoding values in the map.
+	 */
 	valueCodec?: HamokCodec<V, Uint8Array>,
+
+	/**
+	 * Optional. The maximum number of keys allowed in request or response messages.
+	 */
 	maxOutboundMessageKeys?: number,
+
+	/**
+	 * Optional. The maximum number of values allowed in request or response messages.
+	 */
 	maxOutboundMessageValues?: number,
+
+	/**
+	 * Optional. A base map to be used as the initial state of the map.
+	 */
 	baseMap?: BaseMap<K, V>,
-	equalKeys?: (a: K, b: K) => boolean,
+
+	/**
+	 * Optional. A function to determine equality between two values.
+	 * Used for custom equality checking.
+	 */
 	equalValues?: (a: V, b: V) => boolean,
 }
 
+/**
+ * Configuration settings for building a Hamok queue.
+ */
 export type HamokQueueBuilderConfig<T> = {
+
+	/**
+	 * The unique identifier for the queue.
+	 */
 	queueId: string,
+
+	/**
+	 * Optional. A codec for encoding and decoding items in the queue.
+	 */
 	codec?: HamokCodec<T, Uint8Array>,
+
+	/**
+	 * Optional. The timeout duration in milliseconds for requests.
+	 */
 	requestTimeoutInMs?: number,
+
+	/**
+	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
+	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 */
 	maxMessageWaitingTimeInMs?: number,
+
+	/**
+	 * Optional. The maximum number of keys allowed in request or response messages.
+	 */
 	maxOutboundMessageKeys?: number,
+
+	/**
+	 * Optional. The maximum number of values allowed in request or response messages.
+	 */
 	maxOutboundMessageValues?: number,
+
+	/**
+	 * Optional. A base map to be used as the initial state of the queue.
+	 */
 	baseMap?: BaseMap<number, T>,
+
+	/**
+	 * Optional. The length of byte array used for queue keys.
+	 * Can be 2, 4, or 8 bytes.
+	 */
 	lengthOfBytesQueueKeys?: 2 | 4 | 8,
 }
 
+/**
+ * Configuration settings for building a Hamok emitter.
+ */
 export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = {
+
+	/**
+	 * The unique identifier for the emitter.
+	 */
 	emitterId: string,
+
+	/**
+	 * Optional. The timeout duration in milliseconds for requests.
+	 */
 	requestTimeoutInMs?: number,
+
+	/**
+	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
+	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 */
 	maxMessageWaitingTimeInMs?: number,
+
+	/**
+	 * Optional. The maximum number of keys allowed in request or response messages.
+	 */
 	maxOutboundMessageKeys?: number,
+
+	/**
+	 * Optional. The maximum number of values allowed in request or response messages.
+	 */
 	maxOutboundMessageValues?: number,
+
+	/**
+	 * Optional. A map of payload codecs for encoding and decoding event payloads.
+	 * The key is an event type, and the value is a codec for that event type.
+	 */
 	payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
 }
 
@@ -355,6 +511,26 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		);
 	}
 
+	/**
+	 * Wait until the commit head (the most recent spread commit by the leader) is reached
+	 * @returns 
+	 */
+	public async waitUntilCommitHead(): Promise<void> {
+		const actualCommitHead = this.raft.logs.nextIndex - 1;
+
+		if (actualCommitHead <= this.raft.logs.commitIndex) return;
+		
+		return new Promise((resolve) => {
+			const listener = (commitIndex: number) => {
+				if (commitIndex < actualCommitHead) return;
+				this.off('commit', listener);
+				resolve();
+			};
+
+			this.on('commit', listener);
+		});
+	}
+
 	public createMap<K, V>(options: HamokMapBuilderConfig<K, V>): HamokMap<K, V> {
 		if (this.maps.has(options.mapId)) {
 			throw new Error(`Map with id ${options.mapId} already exists`);
@@ -391,7 +567,6 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			connection,
 			options.baseMap ?? new MemoryBaseMap<K, V>(),
 			options.equalValues,
-			options.equalKeys,
 		);
 
 		connection.once('close', () => {
@@ -608,8 +783,8 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			return logger.trace('%s Received message address is not matching with the local peer %o', this.localPeerId, message);
 		}
 
-		if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
-			logger.debug('%s received message %o', this.localPeerId, message);
+		// if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
+		logger.trace('%s received message %o', this.localPeerId, message);
 
 		switch (message.type) {
 			case HamokMessageType.GET_ENTRIES_RESPONSE:
@@ -820,8 +995,8 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			message.protocol = protocol;
 		}
 
-		if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
-			logger.debug('%s sending message %o', this.localPeerId, message);
+		// if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
+		logger.trace('%s sending message %o', this.localPeerId, message);
 
 		if (!destinationPeerIds) {
 			return this.emit('message', message);
@@ -866,13 +1041,12 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	private _acceptAppendRequestResponse(message: HamokMessage) {
 		if (!message.sourceId || message.sourceId === this.localPeerId) return;
 		const remotePeerId = message.sourceId;
-		const prevTimer = this._remoteHeartbeats.get(message.sourceId);
 		
+		clearTimeout(this._remoteHeartbeats.get(message.sourceId));
+
 		this._remoteHeartbeats.set(remotePeerId, setTimeout(() => {
 			this._remoteHeartbeats.delete(remotePeerId);
 			this.emit('no-heartbeat-from', remotePeerId);
-		}, 5 * this.raft.config.heartbeatInMs));
-
-		clearTimeout(prevTimer);
+		}, this.raft.config.followerMaxIdleInMs));
 	}
 }

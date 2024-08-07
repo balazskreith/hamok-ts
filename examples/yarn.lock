@@ -312,13 +312,6 @@
   resolved "https://registry.npmjs.org/@eslint/js/-/js-8.57.0.tgz"
   integrity sha512-Ys+3g2TaW7gADOJzPt83SJtCDhMjndcDMFVQ/Tj9iA1BfJzFKD9mAUXT3OenpuPHbI6P/myECxRJrofUsDx/5g==
 
-"@hamok-dev/hamok-ts@file:..":
-  version "2.0.0"
-  dependencies:
-    "@bufbuild/protobuf" "^1.10.0"
-    pino "^9.3.2"
-    uuid "^9.0.0"
-
 "@humanwhocodes/config-array@^0.11.14":
   version "0.11.14"
   resolved "https://registry.npmjs.org/@humanwhocodes/config-array/-/config-array-0.11.14.tgz"
@@ -1704,6 +1697,13 @@ graphemer@^1.4.0:
   version "1.4.0"
   resolved "https://registry.npmjs.org/graphemer/-/graphemer-1.4.0.tgz"
   integrity sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==
+
+"hamok@file:..":
+  version "2.1.0"
+  dependencies:
+    "@bufbuild/protobuf" "^1.10.0"
+    pino "^9.3.2"
+    uuid "^9.0.0"
 
 has-flag@^3.0.0:
   version "3.0.0"
