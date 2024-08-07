@@ -1,4 +1,16 @@
-# HamokQueue Documentation
+## User Manual
+ [Hamok](./index.md) | [HamokEmitter](./emitter.md) | [HamokMap](./map.md) | HamokQueue | [HamokRecord](./record.md)
+
+## Table of Contents
+* [Overview](#overview)
+* [API Reference](#api-reference)
+	* [Create a HamokQueue instance](#create-a-hamokqueue-instance)
+	* [Configuration](#configuration)
+	* [Events](#events)
+	* [Properties](#properties)
+	* [Methods](#methods)
+* [Examples](#examples)
+* [FAQ](#faq)
 
 ## Overview
 
@@ -9,7 +21,7 @@ It supports typical queue operations like push, pop, and peek.
 
 ### Create a HamokQueue instance
 
-You need a `HamokConnection` and a `BaseMap` to create a `HamokQueue` instance. Here is how you can create a `HamokQueue` instance:
+You need a `Hamok` to create a `HamokQueue` instance. Here is how you can create a `HamokQueue` instance:
 
 ```typescript
 const queue = hamok.createQueue<string>({
@@ -93,7 +105,8 @@ The `HamokQueue` class extends `EventEmitter` and emits the following events:
 queue.on('empty', () => console.log('Queue is empty'));
 queue.on('not-empty', () => console.log('Queue is not empty'));
 queue.on('close', () => console.log('Queue is closed'));
-queue.on('remove', (item) => console.log(`Removed: ${item}`));
+queue.on('remove', (item) => console.log(`Removed from queue ${item}`));
+queue.on('add', (item) => console.log(`Added to the queue ${item}`));
 ```
 
 ### Properties
@@ -179,5 +192,60 @@ console.log('Queue data imported');
 
 ## Examples
 
- - [push() and pop()]()
- - [events from the queue]()
+ - [push() and pop()](../examples/src/queue-push-pop-example.ts)
+ - [events from the queue](../examples/src/queue-events-example.ts)
+
+## FAQ
+
+### What is the difference between the `add` event and the `push` method?
+
+The `push` method is used to add one or more items to the end of the queue programmatically. When items are added to the queue using the `push` method, the `add` event is emitted. The `add` event acts as a notification to let listeners know that an item has been added to the queue.
+
+```typescript
+// Listening to the add event means any instance anywhere added an item to the queue
+queue.on('add', (item) => console.log(`Added to the queue: ${item}`));
+
+// Using push method to add items to the queue
+await queue.push('item1', 'item2');
+
+```
+
+### What is the difference between the `remove` event and the `pop` method?
+
+The `pop` method is used to remove and return the item at the front of the queue programmatically. When an item is removed from the queue using the `pop` method, the `remove` event is emitted. The `remove` event acts as a notification to let listeners know that an item has been removed from the queue.
+
+```typescript
+// Listening to the remove event so means that any instance anywhere removed an item from the queue
+queue.on('remove', (item) => console.log(`Removed from the queue: ${item}`))
+
+// Using pop method to remove an item from the queue
+const item = await queue.pop();
+console.log('Popped item:', item);
+;
+```
+
+### Can I use HamokQueue for real-time messaging?
+
+HamokQueue is designed for replicated storage and is suitable for tasks like configuration sharing, leader election, and other significant signals and data sharing within a cluster. While it can be used for real-time messaging, it might not be as optimized as dedicated messaging systems like Redis or Kafka for high-throughput real-time message passing. So the answer is yes and no. you can use it for real-time messaging, but it might not be the best choice for high-throughput messaging, not mentioned about memory optimization.
+
+### How can I check if the queue is empty?
+
+You can check if the queue is empty by using the `empty` property of the `HamokQueue` instance.
+
+```typescript
+if (queue.empty) {
+    console.log('The queue is empty');
+} else {
+    console.log('The queue is not empty');
+}
+```
+
+### Can I iterate over the items in the queue?
+
+Yes, you can iterate over the items in the queue using the iterator provided by the `[Symbol.iterator]()` method.
+
+```typescript
+for (const item of queue) {
+    console.log('Iterated item:', item);
+}
+```

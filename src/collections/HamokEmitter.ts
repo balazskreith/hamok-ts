@@ -89,6 +89,25 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				}
 				
 			})
+			.on('UpdateEntriesRequest', (request) => {
+				// this is for the events to emit
+
+				for (const [ event, serializedPayload ] of request.entries) {
+					try {
+						const payloads = this.payloadsCodec?.get(event)?.decode(serializedPayload) ?? JSON.parse(serializedPayload);
+
+						this._emitter.emit(event, ...payloads);
+					} catch (err) {
+						logger.error('Error while decoding the payload for %s, %s, %o', this.id, event, `${err}`);
+					}
+				} 
+
+				this.connection.respond(
+					'UpdateEntriesResponse', 
+					request.createResponse(new Map([ [ this.connection.localPeerId, 'empty' ] ])), 
+					request.sourceEndpointId
+				);
+			})
 			.on('UpdateEntriesNotification', (notification) => {
 				// this is for the events to emit
 
@@ -177,7 +196,29 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		this._emitter.removeAllListeners();
 	}
 
-	public publish<K extends keyof T>(event: K, ...args: T[K]): void {
+	public async publish<K extends keyof T>(event: K, ...args: T[K]): Promise<string[]> {
+		if (this._closed) throw new Error('Cannot publish on a closed emitter');
+
+		const remotePeerIds = this._subscriptions.get(event);
+		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
+
+		if (!remotePeerIds || remotePeerIds.size < 1) return [];
+
+		const respondedPeerIds = await this.connection.requestUpdateEntries(
+			new Map([ entry ]),
+			[ ...remotePeerIds ].filter((peerId) => peerId !== this.connection.grid.localPeerId)
+		);
+		const result = [ ...respondedPeerIds.keys() ];
+
+		if (remotePeerIds?.has(this.connection.grid.localPeerId)) {
+			this._emitter.emit(event as string, ...args);
+			result.push(this.connection.grid.localPeerId);
+		}
+
+		return result;
+	}
+
+	public notify<K extends keyof T>(event: K, ...args: T[K]): void {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
 
 		const remotePeerIds = this._subscriptions.get(event);

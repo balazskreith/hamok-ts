@@ -37,7 +37,7 @@ export class HamokGrid {
 		message: HamokMessage,
 		timeoutInMs?: number,
 		neededResponses?: number,
-		targetPeerIds?: ReadonlySet<string> | string[],
+		targetPeerIds?: ReadonlySet<string> | string[] | string,
 		submit?: boolean,
 	}): Promise<HamokMessage[]> {
 		const requestId = options.message.requestId;
@@ -49,7 +49,8 @@ export class HamokGrid {
 			return Promise.resolve([]);
 		}
 		const remotePeers = options.targetPeerIds 
-			? Array.isArray(options.targetPeerIds) ? new Set(options.targetPeerIds) : options.targetPeerIds 
+			? typeof options.targetPeerIds === 'string' ? new Set([ options.targetPeerIds ]) 
+				: Array.isArray(options.targetPeerIds) ? new Set(options.targetPeerIds) : options.targetPeerIds 
 			: undefined;
 		const pendingRequest = new PendingRequest({
 			requestId,

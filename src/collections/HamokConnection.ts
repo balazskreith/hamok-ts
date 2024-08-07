@@ -371,7 +371,7 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 
 	public async requestUpdateEntries(
 		entries: ReadonlyMap<K, V>,
-		targetPeerIds?: ReadonlySet<string> | string[],
+		targetPeerIds?: ReadonlySet<string> | string[] | string,
 		prevValue?: V
 	): Promise<ReadonlyMap<K, V>> {
 		const result = new Map<K, V>();
@@ -452,7 +452,7 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 
 	private async _request(options: {
 		message: HamokMessage, 
-		targetPeerIds?: ReadonlySet<string> | string[], 
+		targetPeerIds?: ReadonlySet<string> | string[] | string, 
 	}): Promise<HamokMessage[]> {
 		options.message.storageId = this.config.storageId;
 		options.message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;

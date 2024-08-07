@@ -260,8 +260,105 @@ map.import(snapshot);
 
 ## Examples
 
- - [use insert()]()
- - [use events]()
- - [use updateIf()]()
+ - [use insert](../examples/src/map-insert-get-example.ts)
+ - [use events](../examples/src/map-events-example.ts)
+ - [use updateIf](../examples/src/map-update-if-example.ts)
 
 ## FAQ
+
+## FAQ
+
+### How do I create a HamokMap instance?
+
+To create a HamokMap instance, you need a Hamok instance. Here is an example:
+
+```typescript
+const map = hamok.createMap<string, number>({
+	mapId: 'exampleMap',
+});
+```
+
+### What configuration options are available for HamokMap?
+
+When creating a HamokMap instance, you can configure various options, such as `mapId`, `requestTimeoutInMs`, `maxMessageWaitingTimeInMs`, `keyCodec`, `valueCodec`, `maxOutboundMessageKeys`, `maxOutboundMessageValues`, `baseMap`, and `equalValues`.
+
+### What events does HamokMap emit?
+
+HamokMap extends `EventEmitter` and emits the following events:
+
+- `insert`
+- `update`
+- `remove`
+- `clear`
+- `close`
+
+### How can I listen to HamokMap events?
+
+You can listen to HamokMap events using the `on` method. Here is an example:
+
+```typescript
+map.on('insert', (key, value) => console.log(`Inserted: ${key} -> ${value}`));
+map.on('update', (key, oldValue, newValue) => console.log(`Updated: ${key} from ${oldValue} to ${newValue}`));
+map.on('remove', (key, value) => console.log(`Removed: ${key} -> ${value}`));
+map.on('clear', () => console.log('Map cleared'));
+map.on('close', () => console.log('Map closed'));
+```
+
+### What properties are available in HamokMap?
+
+- **id**: `string` - The unique identifier for the HamokMap instance.
+- **closed**: `boolean` - Indicates whether the map is closed.
+- **size**: `number` - The number of entries in the map.
+- **isEmpty**: `boolean` - Indicates whether the map is empty.
+
+### How do I close a HamokMap instance?
+
+To close a HamokMap instance, use the `close` method:
+
+```typescript
+map.close();
+```
+
+### How do I clear all entries in a HamokMap?
+
+To clear all entries in a HamokMap, use the `clear` method:
+
+```typescript
+await map.clear();
+```
+
+### How do I retrieve a value for a given key?
+
+To retrieve a value for a given key, use the `get` method:
+
+```typescript
+const value = map.get('key1');
+console.log(value);
+```
+
+### How do I set a value for a given key?
+
+To set a value for a given key, use the `set` method:
+
+```typescript
+const oldValue = await map.set('key1', 'value1');
+console.log(oldValue);
+```
+
+### How do I insert a value for a given key?
+
+To insert a value for a given key, use the `insert` method:
+
+```typescript
+const existingValue = await map.insert('key1', 'value1');
+console.log(existingValue ? 'Insert failed, because the map already has a value for the key: ' + existingValue : 'Insert successful');
+```
+
+### How do I delete an entry for a given key?
+
+To delete an entry for a given key, use the `delete` method:
+
+```typescript
+const success = await map.delete('key1');
+console.log('Deleted', success ? 'successfully' : 'failed');
+```

@@ -2,6 +2,7 @@
  Hamok | [HamokEmitter](./emitter.md) | [HamokMap](./map.md) | [HamokQueue](./queue.md) | [HamokRecord](./record.md)
 
 ## Table of Contents
+
 1. [Introduction](#introduction)
 2. [Installation](#installation)
 3. [Configuration](#configuration)

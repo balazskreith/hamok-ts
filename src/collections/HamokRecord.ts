@@ -125,8 +125,6 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter<Hamok
 						request.sourceEndpointId
 					);
 				}
-
-				request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', { key: k, value: this._decodeValue(k, v) }));
 			})
 			.on('UpdateEntriesRequest', (request) => {
 
