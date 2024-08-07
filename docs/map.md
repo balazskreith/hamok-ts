@@ -1,9 +1,5 @@
-## User Manuals
- - [Hamok](./index.md)
- - [HamokEmitter](./emitter.md)
- - HamokMap
- - [HamokQueue](./queue.md)
- - [HamokRecord](./record.md)
+## User Manual
+ [Hamok](./index.md) | [HamokEmitter](./emitter.md) | HamokMap | [HamokQueue](./queue.md) | [HamokRecord](./record.md)
 
 ## Table of Contents
 * [Overview](#overview)

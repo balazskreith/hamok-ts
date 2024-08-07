@@ -1,9 +1,5 @@
-## User Manuals
- - Hamok
- - [HamokEmitter](./emitter.md)
- - [HamokMap](./map.md)
- - [HamokQueue](./queue.md)
- - [HamokRecord](./record.md)
+## User Manual
+ Hamok | [HamokEmitter](./emitter.md) | [HamokMap](./map.md) | [HamokQueue](./queue.md) | [HamokRecord](./record.md)
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -328,13 +324,22 @@ either explicitly remove logs or set the expiration time for logs. Additionally 
 to store the state of the instance along with the commitIndex a snapshot represents. 
 Therefore any new instance can start from the snapshot and apply only the logs after the snapshot.
 
+### If I export a snapshot do I have to delete the logs?
+
+Yes, if you don't have an expiration time set for logs, 
+you should delete the logs after exporting a snapshot.
+
 ### What is the difference between a map and a record?
 
 A map is a key-value store, while a record is a single object with multiple fields.
 
 ### Is this an attempt to replace Redis?
 
-No. Hamok is designed to be lightweight and its primary purpose is to manage 
-a leader within a cluster and share data atomically. 
+No. Hamok primary purpose is to give the RAFT consensus algorithm to your service cluster, 
+so you can manage a leader within a cluster and share data atomically. 
 It is more suitable for configuration sharing, leader election, and other small but significant 
-signals and data sharing, rather than acting as a full-fledged large and fast data sharing.
+signals and data sharing, rather than acting as a full-fledged large and fast data storing and retrieving service.
+
+In general, if you just want to share key-value map or queue between two instance and you need it fast use Redis.
+If you need to apply distributed lock to access a key in redis, Hamok can come into the picture as RAFT gives you atomicity.
+Hamok can also be used to elect a leader in the cluster giving some special management job to one instance amongst the replicated many. 
