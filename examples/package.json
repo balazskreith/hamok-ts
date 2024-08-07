@@ -6,6 +6,7 @@
 	"scripts": {
 		"format": "prettier --write \"src/**/*.ts\"",
 		"dev:run-all": "nodemon -x ts-node src/run-all.ts | pino-pretty",
+		"dev:readme": "nodemon -x ts-node src/common-readme-example.ts | pino-pretty",
 		"dev:map:1": "nodemon -x ts-node src/map-insert-get-example.ts | pino-pretty",
 		"dev:map:2": "nodemon -x ts-node src/map-update-if-example.ts | pino-pretty",
 		"dev:map:3": "nodemon -x ts-node src/map-events-example.ts | pino-pretty",
@@ -44,7 +45,7 @@
 	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
 	"dependencies": {
 		"pino": "^9.3.2",
-		"@hamok-dev/hamok-ts": "file:../"
+		"hamok": "file:../"
 	},
 	"devDependencies": {
 		"@types/events": "^3.0.0",

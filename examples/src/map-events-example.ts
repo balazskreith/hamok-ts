@@ -1,4 +1,4 @@
-import { Hamok, setHamokLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
 
 const logger = pino.pino({
@@ -11,6 +11,7 @@ export async function run() {
 	const server_2 = new Hamok();
 
 	server_1.on('message', server_2.accept.bind(server_2));
+	server_1.on('message', server_2.accept.bind(server_1));
 	server_2.on('message', server_1.accept.bind(server_1));
 	
 	server_1.addRemotePeerId(server_2.localPeerId);

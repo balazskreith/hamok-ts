@@ -1,4 +1,4 @@
-import { setHamokLogLevel } from '@hamok-dev/hamok-ts';
+import { setHamokLogLevel } from 'hamok';
 import { run as reelection } from './common-reelection-example';
 import { run as discovery } from './common-discovery-example';
 import { run as mapUpdateIf } from './map-update-if-example';

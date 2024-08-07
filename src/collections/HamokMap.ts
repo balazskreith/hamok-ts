@@ -21,18 +21,15 @@ export type HamokMapEventMap<K, V> = {
 export class HamokMap<K, V> extends EventEmitter<HamokMapEventMap<K, V>> {
 	private _closed = false;
 	public equalValues: (a: V, b: V) => boolean;
-	public equalKeys: (a: K, b: K) => boolean;
 
 	public constructor(
 		public readonly connection: HamokConnection<K, V>,
 		public readonly baseMap: BaseMap<K, V>,
 		equalValues?: (a: V, b: V) => boolean,
-		equalKeys?: (a: K, b: K) => boolean
 	) {
 		super();
 		this.setMaxListeners(Infinity);
 		
-		this.equalKeys = equalKeys ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
 		this.equalValues = equalValues ?? ((a, b) => {
 			// logger.info('Comparing values: %o (%s), %o (%s)', a, b, JSON.stringify(a), JSON.stringify(b));
 			return JSON.stringify(a) === JSON.stringify(b);

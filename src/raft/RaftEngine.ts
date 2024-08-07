@@ -10,10 +10,32 @@ import { RaftLogs } from './RaftLogs';
 
 const logger = createLogger('RaftEngine');
 
+/**
+ * Configuration settings for the Raft engine.
+ */
 export type RaftEngineConfig = {
+
+	/**
+	 * The unique identifier for the peer in the Raft cluster.
+	 */
 	peerId: string,
-	electionTimeoutInMs: number;
+
+	/**
+	 * The timeout duration in milliseconds for elections.
+	 * If an election has not been completed within this duration, a  candidate change state to follower.
+	 */
+	electionTimeoutInMs: number,
+
+	/**
+	 * The maximum idle time in milliseconds for a follower.
+	 * If the follower is idle for longer than this duration, it considers the leader to be unavailable and starts an election.
+	 */
 	followerMaxIdleInMs: number,
+
+	/**
+	 * The interval in milliseconds at which heartbeats are sent by the leader to maintain authority over followers,
+	 * and sending the logs.
+	 */
 	heartbeatInMs: number,
 
 	/**

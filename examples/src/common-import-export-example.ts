@@ -1,4 +1,4 @@
-import { Hamok, HamokSnapshot, setHamokLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, HamokSnapshot, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
 
 const logger = pino.pino({

@@ -1,4 +1,4 @@
-import { Hamok, HamokEventMap, HamokFetchRemotePeersResponse, setHamokLogLevel } from '@hamok-dev/hamok-ts';
+import { Hamok, HamokEventMap, HamokFetchRemotePeersResponse, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
 
 const logger = pino.pino({
