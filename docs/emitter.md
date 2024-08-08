@@ -3,17 +3,6 @@
 
 ## Table of Contents
 * [Overview](#overview)
-* [API Reference](#api-reference)
-	* [Create a HamokEmitter instance](#create-a-hamokemitter-instance)
-	* [Configuration](#configuration)
-	* [Events](#events)
-	* [Properties](#properties)
-	* [Methods](#methods)
-* [Examples](#examples)
-* [FAQ](#faq)
-
-## Table of Contents
-* [Overview](#overview)
 * [Configuration](#configuration)
 * [API Reference](#api-reference)
 	* [Properties](#properties)

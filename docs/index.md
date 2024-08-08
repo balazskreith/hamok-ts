@@ -7,13 +7,15 @@
 2. [Installation](#installation)
 3. [Configuration](#configuration)
 4. [API Reference](#api-reference)
-   - [Hamok Class](#hamok-class)
-	 - [Executing Tasks on the leader](#executing-tasks-on-the-leader)
-   - [Creating and Managing Maps](#creating-and-managing-maps)
-   - [Creating and Managing Records](#creating-and-managing-records)
-   - [Creating and Managing Queues](#creating-and-managing-queues)
-   - [Creating and Managing Emitters](#creating-and-managing-emitters)
-5. [Events](#events)
+	 - [Properties](#properties)
+	 - [Events](#events)
+	 - [Methods](#methods)
+5. [Use Cases](#use-cases)
+	- [Executing Tasks on the leader](#executing-tasks-on-the-leader)
+	- [Creating and Managing Maps](#creating-and-managing-maps)
+	- [Creating and Managing Records](#creating-and-managing-records)
+	- [Creating and Managing Queues](#creating-and-managing-queues)
+	- [Creating and Managing Emitters](#creating-and-managing-emitters)
 6. [Snapshots](#snapshots)
 7. [Error Handling](#error-handling)
 8. [Examples](#examples)
@@ -90,11 +92,9 @@ const config = {
 const hamok = new Hamok(config);
 ```
 
-## API Reference
+## API Reference `Hamok`
 
-### `Hamok` Class
-
-#### Properties
+### Properties
 
 - `config`: `HamokConfig`
   - The configuration object for the Hamok instance.
@@ -132,7 +132,27 @@ const hamok = new Hamok(config);
 - `run`: `boolean`
   - A boolean indicating if the Raft timer is running.
 
-#### Methods
+### Events
+
+Hamok emits various events that can be listened to for handling specific actions.
+
+- `started`: Emitted when the Hamok instance starts.
+- `stopped`: Emitted when the Hamok instance stops.
+- `follower`: Emitted when the instance becomes a follower.
+- `leader`: Emitted when the instance becomes the leader.
+- `message`: Emitted when a message is received.
+- `remote-peer-joined`: Emitted when a remote peer joins.
+- `remote-peer-left`: Emitted when a remote peer leaves.
+- `leader-changed`: Emitted when the leader changes.
+- `state-changed`: Emitted when the state changes.
+- `commit`: Emitted when a commit occurs.
+- `heartbeat`: Emitted during heartbeats.
+- `error`: Emitted when an error occurs.
+- `hello-notification`: Emitted when a hello notification is received.
+- `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
+
+
+### Methods
 
 - **constructor**(`providedConfig?: Partial<HamokConstructorConfig>`):
   - Creates a new Hamok instance with the provided configuration.
@@ -178,6 +198,8 @@ const hamok = new Hamok(config);
 
 - **fetchRemotePeers**(`options?: { customRequest?: string, timeoutInMs?: number }`): `Promise<HamokFetchRemotePeersResponse>`
   - Fetches remote peers with optional custom requests and timeout.
+
+## Use cases
 
 ### Executing Tasks on the leader
 
@@ -270,25 +292,6 @@ await emitter.subscribe('event', () => {
 emitter.emit('event');
 ```
 
-
-## Events
-
-Hamok emits various events that can be listened to for handling specific actions.
-
-- `started`: Emitted when the Hamok instance starts.
-- `stopped`: Emitted when the Hamok instance stops.
-- `follower`: Emitted when the instance becomes a follower.
-- `leader`: Emitted when the instance becomes the leader.
-- `message`: Emitted when a message is received.
-- `remote-peer-joined`: Emitted when a remote peer joins.
-- `remote-peer-left`: Emitted when a remote peer leaves.
-- `leader-changed`: Emitted when the leader changes.
-- `state-changed`: Emitted when the state changes.
-- `commit`: Emitted when a commit occurs.
-- `heartbeat`: Emitted during heartbeats.
-- `error`: Emitted when an error occurs.
-- `hello-notification`: Emitted when a hello notification is received.
-- `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
 
 ## Snapshots
 

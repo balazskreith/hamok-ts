@@ -126,7 +126,7 @@ HamokRecord is a feature that provides distributed storage for individual record
 
 ## User Manual
 
-You can find detailed user manuals [here](www.hamok.dev)
+You can find detailed user manuals [here](http://www.hamok.dev)
 
 
 ## Contributing
