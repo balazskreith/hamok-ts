@@ -1,4 +1,4 @@
-![Logo](assets/readme-logo.png)
+![Logo](assets/logo-readme.png)
 
 # Hamok Library
 
