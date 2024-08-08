@@ -8,6 +8,7 @@
 3. [Configuration](#configuration)
 4. [API Reference](#api-reference)
    - [Hamok Class](#hamok-class)
+	 - [Executing Tasks on the leader](#executing-tasks-on-the-leader)
    - [Creating and Managing Maps](#creating-and-managing-maps)
    - [Creating and Managing Records](#creating-and-managing-records)
    - [Creating and Managing Queues](#creating-and-managing-queues)
@@ -91,62 +92,103 @@ const hamok = new Hamok(config);
 
 ## API Reference
 
-### Hamok Class
-The `Hamok` class is the main entry point for using the Hamok library.
+### `Hamok` Class
 
-### Events
-Hamok emits various events that can be listened to for handling specific actions.
+#### Properties
 
-- `started`: Emitted when the Hamok instance starts.
-- `stopped`: Emitted when the Hamok instance stops.
-- `follower`: Emitted when the instance becomes a follower.
-- `leader`: Emitted when the instance becomes the leader.
-- `message`: Emitted when a message is received.
-- `remote-peer-joined`: Emitted when a remote peer joins.
-- `remote-peer-left`: Emitted when a remote peer leaves.
-- `leader-changed`: Emitted when the leader changes.
-- `state-changed`: Emitted when the state changes.
-- `commit`: Emitted when a commit occurs.
-- `heartbeat`: Emitted during heartbeats.
-- `error`: Emitted when an error occurs.
-- `hello-notification`: Emitted when a hello notification is received.
-- `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
+- `config`: `HamokConfig`
+  - The configuration object for the Hamok instance.
+
+- `raft`: `RaftEngine`
+  - The Raft engine instance used by Hamok for distributed consensus.
+
+- `records`: `Map<string, HamokRecord<any>>`
+  - A map of records managed by Hamok.
+
+- `maps`: `Map<string, HamokMap<any, any>>`
+  - A map of maps managed by Hamok.
+
+- `queues`: `Map<string, HamokQueue<any>>`
+  - A map of queues managed by Hamok.
+
+- `emitters`: `Map<string, HamokEmitter<any>>`
+  - A map of emitters managed by Hamok.
+
+- `grid`: `HamokGrid`
+  - The grid instance used for message routing and handling within Hamok.
+
+- `localPeerId`: `string`
+  - The local peer ID of the Hamok instance.
+
+- `remotePeerIds`: `ReadonlySet<string>`
+  - A read-only set of remote peer IDs connected to the Hamok instance.
+
+- `leader`: `boolean`
+  - A boolean indicating if the current instance is the leader.
+
+- `state`: `RaftStateName`
+  - The current state of the Raft engine.
+
+- `run`: `boolean`
+  - A boolean indicating if the Raft timer is running.
+
+#### Methods
+
+- **constructor**(`providedConfig?: Partial<HamokConstructorConfig>`):
+  - Creates a new Hamok instance with the provided configuration.
+
+- **start**(): `void`
+  - Starts the Hamok instance and the Raft engine.
+
+- **stop**(): `void`
+  - Stops the Hamok instance and the Raft engine.
+
+- **addRemotePeerId**(`remoteEndpointId: string`): `void`
+  - Adds a remote peer ID to the Raft engine.
+
+- **removeRemotePeerId**(`remoteEndpointId: string`): `void`
+  - Removes a remote peer ID from the Raft engine.
+
+- **export**(): `HamokSnapshot`
+  - Exports the current state of Hamok as a snapshot.
+
+- **import**(`snapshot: HamokSnapshot`): `void`
+  - Imports a snapshot to restore the state of Hamok.
+
+- **waitUntilCommitHead**(): `Promise<void>`
+  - Waits until the commit head is reached.
+
+- **createMap**<`K, V`>(`options: HamokMapBuilderConfig<K, V>`): `HamokMap<K, V>`
+  - Creates a new map with the provided options.
+
+- **createRecord**<`T extends HamokRecordObject`>(`options: HamokRecordBuilderConfig<T>`): `HamokRecord<T>`
+  - Creates a new record with the provided options.
+
+- **createQueue**<`T`>(`options: HamokQueueBuilderConfig<T>`): `HamokQueue<T>`
+  - Creates a new queue with the provided options.
+
+- **createEmitter**<`T extends HamokEmitterEventMap`>(`options: HamokEmitterBuilderConfig<T>`): `HamokEmitter<T>`
+  - Creates a new emitter with the provided options.
+
+- **submit**(`entry: HamokMessage`): `Promise<void>`
+  - Submits a message to the Raft engine.
+
+- **accept**(`message: HamokMessage`): `void`
+  - Accepts a message and processes it according to its type and protocol.
+
+- **fetchRemotePeers**(`options?: { customRequest?: string, timeoutInMs?: number }`): `Promise<HamokFetchRemotePeersResponse>`
+  - Fetches remote peers with optional custom requests and timeout.
+
+### Executing Tasks on the leader
 
 ```typescript
-hamok.on('started', () => console.log('Hamok instance started'));
-hamok.on('stopped', () => console.log('Hamok instance stopped'));
-hamok.on('follower', () => console.log('Instance is now a follower'));
-hamok.on('leader', () => console.log('Instance is now the leader'));
-hamok.on('message', (message) => console.log('Message received:', message));
-hamok.on('remote-peer-joined', (peerId) => console.log('Remote peer joined:', peerId));
-hamok.on('remote-peer-left', (peerId) => console.log('Remote peer left:', peerId));
-hamok.on('leader-changed', (leaderId) => console.log('Leader changed:', leaderId));
-hamok.on('state-changed', (state) => console.log('State changed:', state));
-hamok.on('commit', (commitIndex) => console.log('Commit occurred:', commitIndex));
-hamok.on('heartbeat', () => console.log('Heartbeat received'));
-hamok.on('error', (error) => console.error('An error occurred:', error));
-hamok.on('hello-notification', (peerId) => console.log('Hello notification received from:', peerId));
-hamok.on('no-heartbeat-from', (peerId) => console.log('No heartbeat received from:', peerId));
-```
+hamok.on('heartbeat', () => {
+	if (!hamok.leader) return;
+	
+	// Execute tasks only on the leader
 
-### Constructor
-```typescript
-new Hamok(providedConfig?: Partial<HamokConstructorConfig>);
+});
 ```
-
-### Methods
-- `start(): void`: Starts the Hamok instance.
-- `stop(): void`: Stops the Hamok instance.
-- `addRemotePeerId(remoteEndpointId: string): void`: Adds a remote peer to the cluster.
-- `removeRemotePeerId(remoteEndpointId: string): void`: Removes a remote peer from the cluster.
-- `export(): HamokSnapshot`: Exports the current state of the Hamok instance.
-- `import(snapshot: HamokSnapshot): void`: Imports a snapshot into the Hamok instance.
-- `waitUntilCommitHead(): Promise<void>`: Waits until the commit head is reached.
-- `createMap<K, V>(options: HamokMapBuilderConfig<K, V>): HamokMap<K, V>`: Creates a new map.
-- `createRecord<T extends HamokRecordObject>(options: HamokRecordBuilderConfig<T>): HamokRecord<T>`: Creates a new record.
-- `createQueue<T>(options: HamokQueueBuilderConfig<T>): HamokQueue<T>`: Creates a new queue.
-- `createEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T>`: Creates a new emitter.
-- `accept(message: HamokMessage): void`: Accepts a message.
 
 ### Creating and Managing Maps
 
@@ -212,16 +254,13 @@ const item = queue.dequeue();
 Hamok provides the `createEmitter` method to create and manage distributed emitters.
 
 ```typescript
-const emitterConfig = {
-  emitterId: 'exampleEmitter',
-  requestTimeoutInMs: 5000,
-};
-
 type EventMap = {
 	'event': [data: string],
 }
 
-const emitter = hamok.createEmitter(emitterConfig);
+const emitter = hamok.createEmitter({
+  emitterId: 'exampleEmitter',
+});
 
 await emitter.subscribe('event', () => {
 	console.log('Event received');
@@ -231,21 +270,41 @@ await emitter.subscribe('event', () => {
 emitter.emit('event');
 ```
 
+
+## Events
+
+Hamok emits various events that can be listened to for handling specific actions.
+
+- `started`: Emitted when the Hamok instance starts.
+- `stopped`: Emitted when the Hamok instance stops.
+- `follower`: Emitted when the instance becomes a follower.
+- `leader`: Emitted when the instance becomes the leader.
+- `message`: Emitted when a message is received.
+- `remote-peer-joined`: Emitted when a remote peer joins.
+- `remote-peer-left`: Emitted when a remote peer leaves.
+- `leader-changed`: Emitted when the leader changes.
+- `state-changed`: Emitted when the state changes.
+- `commit`: Emitted when a commit occurs.
+- `heartbeat`: Emitted during heartbeats.
+- `error`: Emitted when an error occurs.
+- `hello-notification`: Emitted when a hello notification is received.
+- `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
+
 ## Snapshots
 
 Hamok supports exporting and importing snapshots for persistence and recovery.
+Snapshots are used to store the state of a Hamok instance, including the Raft logs and the commit index.
+It is designed to trim the logs and store the state of the instance along with the commit index a snapshot represents.
+When you use snapshots you can start a new instance from the snapshot and apply only the logs after the snapshot.
 
 
-MORE DESCRIPTION ABOUT SNAPSHOTS
-
-
-#### Exporting a Snapshot
+### Exporting a Snapshot
 
 ```typescript
 const snapshot = hamok.export();
 ```
 
-#### Importing a Snapshot
+### Importing a Snapshot
 
 ```typescript
 hamok.import(snapshot);
@@ -255,7 +314,6 @@ hamok.import(snapshot);
 
 Hamok emits an `error` event when an error occurs. Listen for this event to handle errors.
 
-#### Example
 ```typescript
 hamok.on('error', (error) => {
   console.error('An error occurred:', error);
@@ -263,7 +321,10 @@ hamok.on('error', (error) => {
 ```
 
 ## Examples
-
+ - [election and reelection](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-reelection-example.ts)
+ - [Import and export snapshots](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-import-export-example.ts)
+ - [Waiting for at least peers](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-waiting-example.ts)
+ - [Use helper method to discover/add/remove remote peers](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-discovery-example.ts)
 
 ## Best Practices
 - Ensure to handle the `error` event to catch and respond to any issues.
@@ -308,6 +369,25 @@ Use the `removeRemotePeerId` method to remove a remote peer:
 hamok.removeRemotePeerId('remotePeerId');
 ```
 
+### How can I subscribe to events from the Hamok instance?
+
+```typescript
+hamok.on('started', () => console.log('Hamok instance started'));
+hamok.on('stopped', () => console.log('Hamok instance stopped'));
+hamok.on('follower', () => console.log('Instance is now a follower'));
+hamok.on('leader', () => console.log('Instance is now the leader'));
+hamok.on('message', (message) => console.log('Message received:', message));
+hamok.on('remote-peer-joined', (peerId) => console.log('Remote peer joined:', peerId));
+hamok.on('remote-peer-left', (peerId) => console.log('Remote peer left:', peerId));
+hamok.on('leader-changed', (leaderId) => console.log('Leader changed:', leaderId));
+hamok.on('state-changed', (state) => console.log('State changed:', state));
+hamok.on('commit', (commitIndex) => console.log('Commit occurred:', commitIndex));
+hamok.on('heartbeat', () => console.log('Heartbeat received'));
+hamok.on('error', (error) => console.error('An error occurred:', error));
+hamok.on('hello-notification', (peerId) => console.log('Hello notification received from:', peerId));
+hamok.on('no-heartbeat-from', (peerId) => console.log('No heartbeat received from:', peerId));
+```
+
 ### What is stored in Raft logs?
 
 `HamokMessage`s. Every operation on a map, record, queue, or emitter is represented as a `HamokMessage` and 
@@ -344,3 +424,8 @@ signals and data sharing, rather than acting as a full-fledged large and fast da
 In general, if you just want to share key-value map or queue between two instance and you need it fast use Redis.
 If you need to apply distributed lock to access a key in redis, Hamok can come into the picture as RAFT gives you atomicity.
 Hamok can also be used to elect a leader in the cluster giving some special management job to one instance amongst the replicated many. 
+
+### What if the import/export is too large?
+
+Well, I have not designed my neat lightweight distributed object storage to store billions of entries, but in this case 
+contact me and we can discuss the possibility of adding a feature to export the snapshot in chunks.

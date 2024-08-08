@@ -113,14 +113,15 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 	) {
 		super();
 		this.setMaxListeners(Infinity);
-		
+		this._leaderChangedListener = this._leaderChangedListener.bind(this);
+
 		this._responseChunker = createResponseChunker(
 			config.maxOutboundKeys ?? 0,
 			config.maxOutboundValues ?? 0,
 		);
-
+		
 		this._connected = this.grid.leaderId !== undefined;
-		this.on('leader-changed', this._leaderChangedListener.bind(this));
+		this.on('leader-changed', this._leaderChangedListener);
 	}
 
 	public get closed() {
@@ -486,7 +487,7 @@ export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<
 
 		if (!this.grid.connected) {
 			if (!this._waitingQueue) {
-				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
+				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 10;
 
 				this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
 					this._waitingQueue = undefined;

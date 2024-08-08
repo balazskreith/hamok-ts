@@ -3,11 +3,10 @@
 
 ## Table of Contents
 * [Overview](#overview)
+* [Configuration](#configuration)
 * [API Reference](#api-reference)
-	* [Create a HamokMap instance](#create-a-hamokmap-instance)
-	* [Configuration](#configuration)
-	* [Events](#events)
 	* [Properties](#properties)
+	* [Events](#events)
 	* [Methods](#methods)
 * [Examples](#examples)
 * [FAQ](#faq)
@@ -16,7 +15,6 @@
 
 `HamokMap` is a class that provides a replicated storage solution across instances, allowing for key-value pair manipulation with event-driven notifications.
 
-## API Reference `HamokMap<K, V>`
 
 ### Create a HamokMap instance
 
@@ -29,7 +27,7 @@ const map = hamok.createMap<string, number>({
 
 ```
 
-### Configuration
+## Configuration
 
 At the time of creation, you can pass the following configuration options:
 
@@ -42,18 +40,44 @@ const map = hamok.createMap<string, number>({
 
 	/**
 	 * Optional. The timeout duration in milliseconds for requests.
+	 * 
+	 * DEFAULT: 5000
 	 */
 	requestTimeoutInMs: 5000,
 
 	/**
 	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
 	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 * 
+	 * DEFAULT: 10x requestTimeoutInMs
 	 */
 	maxMessageWaitingTimeInMs: 50000,
 
 	/**
+	 * Optional. The maximum number of keys allowed in request or response messages.
+	 * 
+	 * DEFAULT: 0 means infinity
+	 */
+	maxOutboundMessageKeys: 1000,
+
+	/**
+	 * Optional. The maximum number of values allowed in request or response messages.
+	 * 
+	 * DEFAULT: 0 means infinity
+	 */
+	maxOutboundMessageValues: 100,
+
+	/**
+	 * Optional. A base map to be used as the initial state of the map.
+	 * 
+	 * DEFAULT: a new and empty BaseMap instance
+	 */
+	baseMap: new BaseMap<K, V>(),
+
+	/**
 	 * Optional. A codec for encoding and decoding keys in the map.
-	 * The default is a JSON codec
+	 * 
+	 * DEFAULT: JSON codec
 	 */
 	keyCodec: {
 		encode: (key: K) => Buffer.from(JSON.stringify(key)),
@@ -62,27 +86,13 @@ const map = hamok.createMap<string, number>({
 
 	/**
 	 * Optional. A codec for encoding and decoding values in the map.
-	 * The default is a JSON codec
+	 * 
+	 * DEFAULT: JSON codec
 	 */
 	valueCodec?: {
 		encode: (key: V) => Buffer.from(JSON.stringify(key)),
 		decode: (data: Uint8Array) => JSON.parse(Buffer.from(data).toString()),
 	}
-
-	/**
-	 * Optional. The maximum number of keys allowed in request or response messages.
-	 */
-	maxOutboundMessageKeys: 1000,
-
-	/**
-	 * Optional. The maximum number of values allowed in request or response messages.
-	 */
-	maxOutboundMessageValues: 100,
-
-	/**
-	 * Optional. A base map to be used as the initial state of the map.
-	 */
-	baseMap: new BaseMap<K, V>(),
 
 	/**
 	 * Optional. A function to determine equality between two values.
@@ -92,179 +102,107 @@ const map = hamok.createMap<string, number>({
 });
 ```
 
+
+## API Reference `HamokMap<K, V>`
+
+A class representing a distributed map with various methods for manipulating and accessing the stored entries.
+
+### Properties
+
+- `id`: `string` - The unique identifier of the map.
+- `closed`: `boolean` - Indicates whether the map is closed.
+- `size`: `number` - The number of entries in the map.
+- `isEmpty`: `boolean` - Indicates whether the map is empty.
+- `equalValues`: `(a: V, b: V) => boolean` - A function to compare values for equality.
+
+
 ### Events
 
 The `HamokMap` class extends `EventEmitter` and emits the following events:
 
-- `insert`
-- `update`
-- `remove`
-- `clear`
-- `close`
-
-```typescript
-map.on('insert', (key, value) => console.log(`Inserted: ${key} -> ${value}`));
-map.on('update', (key, oldValue, newValue) => console.log(`Updated: ${key} from ${oldValue} to ${newValue}`));
-map.on('remove', (key, value) => console.log(`Removed: ${key} -> ${value}`));
-map.on('clear', () => console.log('Map cleared'));
-map.on('close', () => console.log('Map closed'));
-```
-
-### Properties
-
-- **id**: `string` - The unique identifier for the HamokMap instance.
-- **closed**: `boolean` - Indicates whether the map is closed.
-- **size**: `number` - The number of entries in the map.
-- **isEmpty**: `boolean` - Indicates whether the map is empty.
+- `insert` - Emitted when a new entry is inserted.
+- `update` - Emitted when an entry is updated.
+- `remove` - Emitted when an entry is removed.
+- `clear` - Emitted when all entries are cleared.
+- `close` - Emitted when the map is closed.
 
 ### Methods
 
-#### `close()`
+- **close**(): `void`
+  - Closes the map and releases any held resources.
 
-Closes the HamokMap instance and releases resources.
+- **keys**(): `IterableIterator<K>`
+  - Returns an iterator over the keys in the map.
+
+- **clear**(): `Promise<void>`
+  - Clears all entries in the map.
+
+- **get**(`key: K`): `V | undefined`
+  - Retrieves the value associated with the specified key.
+
+- **getAll**(`keys: IterableIterator<K> | K[]`): `ReadonlyMap<K, V>`
+  - Retrieves all values associated with the specified keys.
+
+- **set**(`key: K`, `value: V`): `Promise<V | undefined>`
+  - Sets the value for the specified key.
+
+- **setAll**(`entries: ReadonlyMap<K, V>`): `Promise<ReadonlyMap<K, V>>`
+  - Sets multiple entries in the map.
+
+- **insert**(`key: K`, `value: V`): `Promise<V | undefined>`
+  - Inserts the specified entry into the map.
+
+- **insertAll**(`entries: ReadonlyMap<K, V> | [K, V][]`): `Promise<ReadonlyMap<K, V>>`
+  - Inserts multiple entries into the map.
+
+- **delete**(`key: K`): `Promise<boolean>`
+  - Deletes the entry associated with the specified key.
+
+- **deleteAll**(`keys: ReadonlySet<K> | K[]`): `Promise<ReadonlySet<K>>`
+  - Deletes multiple entries from the map.
+
+- **remove**(`key: K`): `Promise<boolean>`
+  - Removes the entry associated with the specified key.
+
+- **removeAll**(`keys: ReadonlySet<K> | K[]`): `Promise<ReadonlyMap<K, V>>`
+  - Removes multiple entries from the map.
+
+- **updateIf**(`key: K`, `value: V`, `oldValue: V`): `Promise<boolean>`
+  - Updates the entry if the current value matches the specified old value.
+
+- **export**(): `HamokMapSnapshot`
+  - Exports the map data as a snapshot.
+
+- **import**(`data: HamokMapSnapshot`, `eventing?: boolean`): `void`
+  - Imports data from a snapshot.
+
+- **[Symbol.iterator]**(): `IterableIterator<[K, V]>`
+  - Returns an iterator over the entries in the map.
+
+### Example Usage
 
 ```typescript
+const map = new HamokMap(connection, baseMap);
+
+map.set('key', 'value').then((oldValue) => {
+  console.log(`Old value: ${oldValue}`);
+});
+
+const value = map.get('key');
+console.log(`Value: ${value}`);
+
+for (const [key, value] of map) {
+  console.log(`Key: ${key}, Value: ${value}`);
+}
+
 map.close();
-```
-
-#### `clear()`
-
-Clears all entries in the map.
-
-```typescript
-await map.clear();
-```
-
-#### `get(key: K)`
-
-Retrieves the value for a given key.
-
-```typescript
-const value = map.get('key1');
-console.log(value);
-```
-
-#### `getAll(keys: IterableIterator<K> | K[])`
-
-Retrieves values for multiple keys.
-
-```typescript
-const keys = ['key1', 'key2'];
-const values = map.getAll(keys);
-console.log(values);
-```
-
-#### `set(key: K, value: V)`
-
-Sets a value for a given key.
-
-```typescript
-const oldValue = await map.set('key1', 'value1');
-console.log(oldValue);
-```
-
-#### `setAll(entries: ReadonlyMap<K, V>)`
-
-Sets multiple entries in the map.
-
-```typescript
-const entries = new Map([['key1', 'value1'], ['key2', 'value2']]);
-const oldValues = await map.setAll(entries);
-console.log(oldValues);
-```
-
-#### `insert(key: K, value: V)`
-
-Inserts a value for a given key.
-
-```typescript
-const existingValue = await map.insert('key1', 'value1');
-console.log(existingValue ? 'Insert failed, becasue the map already has a value for the key: ' + existingValue : 'Insert successful');
-```
-
-#### `insertAll(entries: ReadonlyMap<K, V> | [K, V][])`
-
-Inserts multiple entries in the map.
-
-```typescript
-const entries = new Map([['key1', 'value1'], ['key2', 'value2']]);
-const existingValues = await map.insertAll(entries);
-const existingValue = existingValues.get('key1');
-
-console.log(existingValue ? 'Insert failed for key1, becasue the map already has a value for the key: ' + existingValue : 'Insert successful for key1');
-```
-
-#### `delete(key: K)`
-
-Deletes an entry for a given key.
-
-```typescript
-const success = await map.delete('key1');
-console.log('Deleted', success ? 'successfully' : 'failed');
-```
-
-#### `deleteAll(keys: ReadonlySet<K> | K[])`
-
-Deletes multiple entries in the map.
-
-```typescript
-const keys = new Set(['key1', 'key2']);
-const deletedKeys = await map.deleteAll(keys);
-console.log('Deleted the following keys', deletedKeys);
-```
-
-#### `remove(key: K)`
-
-Removes an entry for a given key.
-
-```typescript
-const success = await map.remove('key1');
-console.log(success);
-```
-
-#### `removeAll(keys: ReadonlySet<K> | K[])`
-
-Removes multiple entries in the map.
-
-```typescript
-const keys = new Set(['key1', 'key2']);
-const removedEntries = await map.removeAll(keys);
-console.log(removedEntries);
-```
-
-#### `updateIf(key: K, value: V, oldValue: V)`
-
-Updates an entry if the old value matches.
-
-```typescript
-const success = await map.updateIf('key1', 'newValue', 'oldValue');
-console.log(success);
-```
-
-#### `export()`
-
-Exports the storage data. (Used by Hamok to export the map data)
-
-```typescript
-const snapshot = map.export();
-console.log(snapshot);
-```
-
-#### `import(data: HamokMapSnapshot, eventing?: boolean)`
-
-Imports storage data. (Used by Hamok to import the map data)
-
-```typescript
-map.import(snapshot);
 ```
 
 ## Examples
 
- - [use insert](../examples/src/map-insert-get-example.ts)
- - [use events](../examples/src/map-events-example.ts)
- - [use updateIf](../examples/src/map-update-if-example.ts)
-
-## FAQ
+ - [use insert](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-insert-get-example.ts)
+ - [use events](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-events-example.ts)
+ - [use updateIf](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-update-if-example.ts)
 
 ## FAQ
 
@@ -278,20 +216,6 @@ const map = hamok.createMap<string, number>({
 });
 ```
 
-### What configuration options are available for HamokMap?
-
-When creating a HamokMap instance, you can configure various options, such as `mapId`, `requestTimeoutInMs`, `maxMessageWaitingTimeInMs`, `keyCodec`, `valueCodec`, `maxOutboundMessageKeys`, `maxOutboundMessageValues`, `baseMap`, and `equalValues`.
-
-### What events does HamokMap emit?
-
-HamokMap extends `EventEmitter` and emits the following events:
-
-- `insert`
-- `update`
-- `remove`
-- `clear`
-- `close`
-
 ### How can I listen to HamokMap events?
 
 You can listen to HamokMap events using the `on` method. Here is an example:
@@ -304,13 +228,6 @@ map.on('clear', () => console.log('Map cleared'));
 map.on('close', () => console.log('Map closed'));
 ```
 
-### What properties are available in HamokMap?
-
-- **id**: `string` - The unique identifier for the HamokMap instance.
-- **closed**: `boolean` - Indicates whether the map is closed.
-- **size**: `number` - The number of entries in the map.
-- **isEmpty**: `boolean` - Indicates whether the map is empty.
-
 ### How do I close a HamokMap instance?
 
 To close a HamokMap instance, use the `close` method:
@@ -318,6 +235,12 @@ To close a HamokMap instance, use the `close` method:
 ```typescript
 map.close();
 ```
+
+#### And what does that do?
+
+The `close` method closes the map and releases any held resources. 
+It deletes the map from the Hamok instance and stops all event emissions. 
+You cannot mutate the map after it is closed.
 
 ### How do I clear all entries in a HamokMap?
 
@@ -362,3 +285,50 @@ To delete an entry for a given key, use the `delete` method:
 const success = await map.delete('key1');
 console.log('Deleted', success ? 'successfully' : 'failed');
 ```
+
+### What is the difference between the `set` and `insert` methods?
+
+The `set` method updates the value for a given key, regardless of whether the key already exists.
+The `insert` method, however, only adds a new key-value pair if the key does not already exist.
+
+```typescript
+map.on('insert', (key, value) => console.log(`Inserted: ${key} -> ${value}`));
+map.on('update', (key, oldValue, newValue) => console.log(`Updated: ${key} from ${oldValue} to ${newValue}`));
+await map.set('key', 'value'); // Updates or inserts the key-value pair
+await map.set('key', 'new-value'); // Updates or inserts the key-value pair
+
+```
+
+### What is the difference between delete and remove methods?
+
+The `delete` method deletes the entry associated with the specified keyand returns `true`, or `false` indicating it's success or failuire.
+The `remove` method removes the entry associated with the specified key return the removed value.
+
+### How many entries can be pushed as batch to `setAll`, `insertAll`, `deleteAll`, and `removeAll` methods?
+
+As many as you wish, just take care of the memory usage. 
+If you go in this way of large maps and batches, you should configure the `maxOutboundMessageKeys` and `maxOutboundMessageValues` options.
+In that way, you can control the maximum number of keys and values allowed in request or response messages 
+preventing the communication channel to be bloated.
+
+### How do I retrieve multiple values for multiple keys?
+
+To retrieve multiple values for multiple keys, use the `getAll` method:
+
+```typescript
+const keys = ['key1', 'key2'];
+const values = map.getAll(keys);
+
+console.log(values);
+```
+
+### Should I export the map? 
+
+As you wish, but I designed the `export` and `import` methods to be used by `Hamok` to export and import the whole state of the map.
+
+### Can I change the value of entries in the map when iterating or modify the baseMap?
+
+You can, but you should not! THe whole purpose of the HamokMap is to give a wrapper 
+to mutate the baseMap in a safe way. If you use the method designed for mutating the baseMap and 
+keep entries consistent then you have a consistent map. If you change the baseMap directly,
+you can break the consistency of the map. But noone stops you from doing that.

@@ -12,15 +12,32 @@
 * [Examples](#examples)
 * [FAQ](#faq)
 
+## Table of Contents
+* [Overview](#overview)
+* [Configuration](#configuration)
+* [API Reference](#api-reference)
+	* [Properties](#properties)
+	* [Events](#events)
+	* [Methods](#methods)
+* [Examples](#examples)
+* [FAQ](#faq)
+
+
 ## Overview
 
 `HamokEmitter` is a class that provides a mechanism for managing distributed event subscriptions and publishing events across multiple nodes in a distributed system. It integrates with `HamokConnection` for communication and uses `EventEmitter` for event handling.
 
-## API Reference `HamokEmitter<T extends HamokEmitterEventMap>`
-
 ### Create a HamokEmitter instance
 
 To create a `HamokEmitter` instance, you need a `Hamok` instance. Here is how you can create a `HamokEmitter` instance:
+
+```typescript
+const emitter = hamok.createEmitter<MyEventMap>({
+	emitterId: 'exampleEmitter',
+});
+```
+
+### Configuration
 
 ```typescript
 type MyEventMap = {
@@ -35,132 +52,100 @@ const emitter = hamok.createEmitter<MyEventMap>({
 
 	/**
 	 * Optional. The timeout duration in milliseconds for requests.
+	 * 
+	 * DEFAULT: 5000
 	 */
 	requestTimeoutInMs: 5000,
 
 	/**
 	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
 	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 * 
+	 * DEFAULT: 10x requestTimeoutInMs
 	 */
 	maxMessageWaitingTimeInMs: 50000,
-
+	
 	/**
 	 * Optional. The maximum number of keys allowed in request or response messages.
+	 * 
+	 * DEFAULT: 0 means infinity
 	 */
 	maxOutboundMessageKeys: 1000,
 
 	/**
 	 * Optional. The maximum number of values allowed in request or response messages.
+	 * 
+	 * DEFAULT: 0 means infinity
 	 */
 	maxOutboundMessageValues: 100,
 
 	/**
 	 * Optional. A map of payload codecs for encoding and decoding event payloads.
 	 * The key is an event type, and the value is a codec for that event type.
+	 * 
+	 * DEFAULT: JSON codec
 	 */
-	payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
+	payloadsCodec?: Map<keyof MyEventMap, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
 });
 ```
 
-### Configuration
+## API Reference
 
-```typescript
-const emitter = hamok.createEmitter<MyEventMap>({
-	emitterId: 'exampleEmitter',
-});
-```
+### `HamokEmitter<T extends HamokEmitterEventMap>` Class
+
+A class for managing events and subscriptions in a distributed system.
+
+#### Properties
+
+- `id`: `string` - The unique identifier of the emitter.
+- `closed`: `boolean` - Indicates whether the emitter is closed.
+- `connection`: `HamokConnection<string, string>` - The connection used by the emitter.
+- `payloadsCodec`: `Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>` - Optional codec for encoding and decoding payloads.
+
+#### Methods
+
+- **close**(): `void` - Closes the emitter and releases any held resources.
+- **subscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Subscribes a listener to an event.
+- **unsubscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Unsubscribes a listener from an event.
+- **clear**(): `void` - Clears all subscriptions and listeners.
+- **publish**<K extends keyof T>(`event: K`, `...args: T[K]`): `Promise<string[]>` - Publishes an event to all subscribed listeners.
+- **notify**<K extends keyof T>(`event: K`, `...args: T[K]`): `void` - Notifies all subscribed listeners of an event.
+- **export**(): `HamokEmitterSnapshot` - Exports the current state of the emitter.
+- **import**(`snapshot: HamokEmitterSnapshot`): `void` - Imports the state from a snapshot.
 
 ### Events
 
-The `HamokEmitter` class emits event given the event keys defined in the `HamokEmitterEventMap`. Each event will pass the arguments defined in the event map to its listeners.
+- `InsertEntriesRequest`: Manages subscription and adds the source endpoint to the list.
+- `RemoveEntriesRequest`: Manages subscription and removes the source endpoint from the list.
+- `UpdateEntriesRequest`: Emits events with decoded payloads.
+- `UpdateEntriesNotification`: Emits events with decoded payloads.
+- `ClearEntriesNotification`: Manages subscription and removes the source endpoint from the list.
+- `remote-peer-removed`: Removes the remote peer from all subscriptions.
+- `close`: Closes the emitter and removes all listeners.
+
+### Example Usage
 
 ```typescript
-await emitter.subscribe('myEvent', (message, count) => {
-  console.log(`Received: ${message} - ${count}`);
+const emitter = new HamokEmitter(connection, payloadsCodec);
+
+emitter.subscribe('event', (data) => {
+  console.log(`Received data: ${data}`);
 });
-```
 
-### Properties
+emitter.publish('event', 'sample data').then((peerIds) => {
+  console.log(`Event published to peers: ${peerIds}`);
+});
 
-- **id**: `string` - The unique identifier for the `HamokEmitter` instance.
-- **closed**: `boolean` - Indicates whether the emitter is closed.
+emitter.unsubscribe('event', (data) => {
+  console.log(`Unsubscribed from event`);
+});
 
-### Methods
-
-#### `close()`
-
-Closes the `HamokEmitter` instance, stopping all event subscriptions and communication.
-
-```typescript
 emitter.close();
-```
-
-#### `subscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void>`
-
-Subscribes a listener to an event.
-
-```typescript
-await emitter.subscribe('myEvent', (message, count) => {
-  console.log(`Received: ${message} - ${count}`);
-});
-```
-
-#### `unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void>`
-
-Unsubscribes a listener from an event.
-
-```typescript
-await emitter.unsubscribe('myEvent', (message, count) => {
-  console.log(`Received: ${message} - ${count}`);
-});
-```
-
-#### `clear()`
-
-Clears all event subscriptions.
-
-```typescript
-emitter.clear();
-```
-
-#### `publish<K extends keyof T>(event: K, ...args: T[K]): void`
-
-Publishes an event to all subscribed listeners. 
-It returns a promise that resolves when the event is published on all remote peers subscribed to this event.
-
-```typescript
-await emitter.publish('myEvent', 'Hello, world!', 42);
-```
-
-#### `notify<K extends keyof T>(event: K, ...args: T[K]): void`
-
-Notifies all subscribed listeners of an event without waiting for the event to be published on remote peers.
-
-```typescript
-emitter.notify('myEvent', 'Hello, world!', 42);
-```
-
-
-#### `export(): HamokEmitterSnapshot`
-
-Exports the current state of the emitter, including all event subscriptions. (Used by the `Hamok` class to export the entire state of the Hamok instance.)
-
-```typescript
-const snapshot = emitter.export();
-console.log(snapshot);
-```
-
-#### `import(snapshot: HamokEmitterSnapshot): void`
-
-Imports a previously exported emitter state. (Used by the `Hamok` class to import the entire state of the Hamok instance.)
-
-```typescript
-emitter.import(snapshot);
 ```
 
 ## Examples
 
- - [simple distributed emitter](../examples/src/emitter-example.ts)
+ - [simple distributed emitter](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/emitter-example.ts)
 
 ## FAQ
 
@@ -239,3 +224,16 @@ To publish an event, use the `publish` method:
 ```typescript
 emitter.publish('myEvent', 'Hello, world!', 42);
 ```
+
+### What is the difference between the `publish` and `notify` methods?
+
+The `publish` method publishes an event to all subscribed listeners and waits for the event to be published on remote peers.
+then return a promise that resolves when the event is published on all remote peers subscribed to this event.
+
+The `notify` method notifies all subscribed listeners of an event without waiting for the event to be published on remote peers.
+
+In short use notify for fire and forget messages, and use publish for messages that need to be checked if it is delivered to the target remote peers.
+
+### What is the payloadsCodec for?
+
+The `payloadsCodec` is a map of payload codecs for encoding and decoding event payloads. The key is an event type, and the value is a codec for that event type. This is useful for customizing the encoding and decoding of event payloads, if you are for example unsatisfied with the default JSON encoding/decoding.

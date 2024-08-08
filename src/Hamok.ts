@@ -293,6 +293,11 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	public constructor(providedConfig?: Partial<HamokConstructorConfig>) {
 		super();
 		this.setMaxListeners(Infinity);
+		this._emitMessage = this._emitMessage.bind(this);
+		this._emitLeaderChanged = this._emitLeaderChanged.bind(this);
+		this._acceptCommit = this._acceptCommit.bind(this);
+		this._emitRemotePeerRemoved = this._emitRemotePeerRemoved.bind(this);
+
 		const raftLogs = providedConfig?.raftLogs ?? new MemoryStoredRaftLogs({
 			expirationTimeInMs: 0,
 			memorySizeHighWaterMark: 0,
@@ -355,10 +360,10 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 		const raftEngine = this.raft;
 
-		raftEngine.transport.on('message', this._emitMessage.bind(this));
-		this.on('leader-changed', this._emitLeaderChanged.bind(this));
-		this.on('commit', this._acceptCommit.bind(this));
-		this.on('remote-peer-left', this._emitRemotePeerRemoved.bind(this));
+		raftEngine.transport.on('message', this._emitMessage);
+		this.on('leader-changed', this._emitLeaderChanged);
+		this.on('commit', this._acceptCommit);
+		this.on('remote-peer-left', this._emitRemotePeerRemoved);
 
 		raftEngine.state = createRaftFollowerState({
 			raftEngine,
@@ -385,10 +390,10 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			raftEngine,
 		});
 		
-		raftEngine.transport.off('message', this._emitMessage.bind(this));
-		this.off('commit', this._acceptCommit.bind(this));
-		this.off('leader-changed', this._emitLeaderChanged.bind(this));
-		this.off('remote-peer-left', this._emitRemotePeerRemoved.bind(this));
+		raftEngine.transport.off('message', this._emitMessage);
+		this.off('commit', this._acceptCommit);
+		this.off('leader-changed', this._emitLeaderChanged);
+		this.off('remote-peer-left', this._emitRemotePeerRemoved);
 
 		this._remoteHeartbeats.forEach((timer) => clearTimeout(timer));
 		this._remoteHeartbeats.clear();

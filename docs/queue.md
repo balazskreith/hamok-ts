@@ -3,21 +3,19 @@
 
 ## Table of Contents
 * [Overview](#overview)
+* [Configuration](#configuration)
 * [API Reference](#api-reference)
-	* [Create a HamokQueue instance](#create-a-hamokqueue-instance)
-	* [Configuration](#configuration)
-	* [Events](#events)
 	* [Properties](#properties)
+	* [Events](#events)
 	* [Methods](#methods)
 * [Examples](#examples)
 * [FAQ](#faq)
+
 
 ## Overview
 
 `HamokQueue` is a class that implements a replicated queue with event-driven notifications. 
 It supports typical queue operations like push, pop, and peek.
-
-## API Reference `HamokQueue<T>`
 
 ### Create a HamokQueue instance
 
@@ -29,7 +27,7 @@ const queue = hamok.createQueue<string>({
 });
 ```
 
-### Configuration
+## Configuration
 
 You can pass the following configuration options at the time of creating a `HamokQueue`:
 
@@ -41,23 +39,17 @@ const queue = hamok.createQueue<string>({
 	queueId: 'queue1',
 
 	/**
-	 * Optional. A codec for encoding and decoding items in the queue.
-	 *
-	 * DEFAULT: JSON codec
-	 */
-	codec: {
-		encode: (item: T) => Buffer.from(JSON.stringify(item)),
-		decode: (data: Uint8Array) => JSON.parse(Buffer.from(data).toString()),
-	},
-
-	/**
 	 * Optional. The timeout duration in milliseconds for requests.
+	 * 
+	 * DEFAULT: 5000
 	 */
 	requestTimeoutInMs: 5000,
 
 	/**
 	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
 	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+	 * 
+	 * DEFAULT: 10x requestTimeoutInMs
 	 */
 	maxMessageWaitingTimeInMs: 50000,
 
@@ -76,9 +68,11 @@ const queue = hamok.createQueue<string>({
 	maxOutboundMessageValues: 100,
 
 	/**
-	 * Optional. A base map to be used as the initial state of the queue.
+	 * Optional. A base map to be used as the initial state of the map.
+	 * 
+	 * DEFAULT: a new and empty BaseMap instance
 	 */
-	baseMap: new BaseMap<number, T>(),
+	baseMap: new BaseMap<K, V>(),
 
 	/**
 	 * Optional. The length of byte array used for queue keys.
@@ -88,112 +82,82 @@ const queue = hamok.createQueue<string>({
 	 * Default is 4, which allows for 4.3 billion items in the queue during it's lifetime.
 	 */
 	lengthOfBytesQueueKeys: 4,
+
+		/**
+	 * Optional. A codec for encoding and decoding items in the queue.
+	 *
+	 * DEFAULT: JSON codec
+	 */
+	codec: {
+		encode: (item: T) => Buffer.from(JSON.stringify(item)),
+		decode: (data: Uint8Array) => JSON.parse(Buffer.from(data).toString()),
+	},
 });
 ```
 
-### Events
 
-The `HamokQueue` class extends `EventEmitter` and emits the following events:
+## API Reference
 
-- `empty`
-- `not-empty`
-- `close`
-- `remove`
-- `add`
+### `HamokQueue<T>` Class
 
-```typescript
-queue.on('empty', () => console.log('Queue is empty'));
-queue.on('not-empty', () => console.log('Queue is not empty'));
-queue.on('close', () => console.log('Queue is closed'));
-queue.on('remove', (item) => console.log(`Removed from queue ${item}`));
-queue.on('add', (item) => console.log(`Added to the queue ${item}`));
-```
+A class for managing a distributed queue with event-driven capabilities.
 
-### Properties
+#### Properties
 
-- **id**: `string` - The unique identifier for the HamokQueue instance.
-- **empty**: `boolean` - Indicates whether the queue is empty.
-- **size**: `number` - The number of entries in the queue.
+- **`id`**: `string` - The unique identifier of the queue.
+- **`empty`**: `boolean` - Indicates whether the queue is empty.
+- **`size`**: `number` - Returns the number of elements in the queue.
+- **`connection`**: `HamokConnection<number, T>` - The connection used by the queue.
+- **`baseMap`**: `BaseMap<number, T>` - The base map used for storing the queue elements.
 
-### Methods
+#### Methods
 
-#### `push(...values: T[]): Promise<void>`
+- **push**(`...values: T[]`): `Promise<void>` - Pushes values onto the queue.
+- **pop**(): `Promise<T | undefined>` - Removes and returns the value at the front of the queue.
+- **peek**(): `T | undefined` - Returns the value at the front of the queue without removing it.
+- **clear**(): `Promise<void>` - Clears the queue.
+- **close**(): `void` - Closes the queue and releases any held resources.
+- **export**(): `HamokQueueSnapshot` - Exports the current state of the queue.
+- **import**(`snapshot: HamokQueueSnapshot`): `void` - Imports the state from a snapshot.
 
-Adds one or more values to the end of the queue.
+#### Events
 
-```typescript
-await queue.push('item1', 'item2');
-console.log('Items pushed to the queue');
-```
+- **`empty`**: Emitted when the queue becomes empty.
+- **`not-empty`**: Emitted when the queue transitions from empty to not empty.
+- **`add`**: Emitted when an item is added to the queue.
+- **`remove`**: Emitted when an item is removed from the queue.
+- **`close`**: Emitted when the queue is closed.
 
-#### `pop(): Promise<T | undefined>`
-
-Removes and returns the value at the front of the queue.
+### Example Usage
 
 ```typescript
-const item = await queue.pop();
-console.log('Popped item:', item);
-```
+const queue = new HamokQueue(connection, baseMap);
 
-#### `peek(): T | undefined`
+queue.on('add', (value) => {
+  console.log(`Added value: ${value}`);
+});
 
-Returns the value at the front of the queue without removing it.
+queue.on('remove', (value) => {
+  console.log(`Removed value: ${value}`);
+});
 
-```typescript
-const item = queue.peek();
-console.log('Peeked item:', item);
-```
+queue.push('item1', 'item2').then(() => {
+  return queue.pop();
+}).then((value) => {
+  console.log(`Popped value: ${value}`);
+});
 
-#### `clear(): Promise<void>`
+queue.clear().then(() => {
+  console.log('Queue cleared');
+});
 
-Clears all entries in the queue.
-
-```typescript
-await queue.clear();
-console.log('Queue cleared');
-```
-
-#### `[Symbol.iterator](): IterableIterator<T>`
-
-Returns an iterator for the queue.
-
-```typescript
-for (const item of queue) {
-    console.log('Iterated item:', item);
-}
-```
-
-#### `close()`
-
-Closes the HamokQueue instance and releases resources.
-
-```typescript
 queue.close();
-console.log('Queue closed');
-```
-
-#### `export(): HamokQueueSnapshot`
-
-Exports the storage data. (Used by the `Hamok` class to export the entire state of the Hamok instance.)
-
-```typescript
-const snapshot = queue.export();
-console.log('Queue snapshot:', snapshot);
-```
-
-#### `import(snapshot: HamokQueueSnapshot): void`
-
-Imports storage data. (Used by the `Hamok` class to import the entire state of the Hamok instance.)
-
-```typescript
-queue.import(snapshot);
-console.log('Queue data imported');
 ```
 
 ## Examples
 
- - [push() and pop()](../examples/src/queue-push-pop-example.ts)
- - [events from the queue](../examples/src/queue-events-example.ts)
+ - [push() and pop()](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-push-pop-example.ts)
+ - [events from the queue](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-events-example.ts)
 
 ## FAQ
 
