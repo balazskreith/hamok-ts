@@ -1,4 +1,4 @@
-Here's the combined README for the Hamok library:
+![Logo](assets/readme-logo.png)
 
 # Hamok Library
 
