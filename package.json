@@ -1,7 +1,7 @@
 {
 	"name": "hamok",
-	"version": "2.1.0",
-	"description": "Lightweight Distributed Object Storage",
+	"version": "2.2.0",
+	"description": "Lightweight Distributed Object Storage on RAFT consensus algorithm",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"scripts": {
@@ -21,7 +21,7 @@
 		"storage"
 	],
 	"author": "Balazs Kreith",
-	"license": "ISC",
+	"license": "Apache-2.0",
 	"bugs": {
 		"url": "https://github.com/balazskreith/hamok-ts/issues"
 	},
