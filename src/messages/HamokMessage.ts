@@ -233,6 +233,15 @@ export enum HamokMessage_MessageType {
 
   /**
    * *
+   * Join notification is sent by a new endpoint to every other endpoint
+   * in order to join the grid
+   *
+   * @generated from enum value: JOIN_NOTIFICATION = 4;
+   */
+  JOIN_NOTIFICATION = 4,
+
+  /**
+   * *
    * Raft Vote request is sent by a raccoon made itself a candidate 
    * in order to be a leader of the cluster
    *
@@ -467,6 +476,7 @@ proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.Ha
   { no: 1, name: "HELLO_NOTIFICATION" },
   { no: 2, name: "ENDPOINT_STATES_NOTIFICATION" },
   { no: 3, name: "ONGOING_REQUESTS_NOTIFICATION" },
+  { no: 4, name: "JOIN_NOTIFICATION" },
   { no: 12, name: "RAFT_VOTE_REQUEST" },
   { no: 13, name: "RAFT_VOTE_RESPONSE" },
   { no: 16, name: "RAFT_APPEND_ENTRIES_REQUEST_CHUNK" },

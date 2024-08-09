@@ -28,6 +28,7 @@ yarn add hamok
   - [HamokEmitter](#hamokemitter)
   - [HamokRecord](#hamokrecord)
 - [User Manual](#user-manual)
+- [Important Notes](#important-notes)
 - [Contributing](#contributing)
 - [License](#license)
 ## Quick Start
