@@ -24,12 +24,38 @@ import { RaftLogs } from './raft/RaftLogs';
 import { HamokRecord, HamokRecordObject } from './collections/HamokRecord';
 import { HelloNotification } from './messages/messagetypes/HelloNotification';
 import { EndpointStatesNotification } from './messages/messagetypes/EndpointNotification';
+import { JoinNotification } from './messages/messagetypes/JoinNotification';
 
 const logger = createLogger('Hamok');
 
+type HamokHelloNotificationCustomRequestType = 'snapshot';
+
+export type HamokJoinProcessParams = {
+
+	/**
+	 * Timeout in milliseconds for fetching the remote peers.
+	 */
+	fetchRemotePeerTimeoutInMs: number,
+	
+	/**
+	 * Indicate if the remote peers automatically should be removed if no heartbeat is received.
+	 */
+	removeRemotePeersOnNoHeartbeat: boolean,
+
+	/**
+	 * indicates if the snapshot should be requested from the remote peers, 
+	 * and if it is provided then it is used in local
+	 */
+	requestSnapshot?: boolean,
+
+	/**
+	 * indicates if the start() method should be called automatically after the join process is completed
+	 */
+	startAfterJoin?: boolean,
+}
+
 export type HamokConfig = {
 	// empty
-	raftLogs?: RaftLogs,
 }
 
 /**
@@ -57,6 +83,11 @@ export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
 	 * automatically stopping notifications for explicitly postponed requests.
 	 */
 	ongoingRequestsSendingPeriodInMs: number;
+
+	/**
+	 * Optional. A custom implementation of RaftLogs to store log entries.
+	 */
+	raftLogs?: RaftLogs,
 }
 
 /**
@@ -265,10 +296,10 @@ export type HamokEventMap = {
 	commit: [commitIndex: number, message: HamokMessage],
 	heartbeat: [],
 	error: [error: Error],
-	'hello-notification': [remotePeerId: string, request: {
-		customData: string,
-		callback: (response: string) => void,
-	} | undefined],
+	// 'hello-notification': [remotePeerId: string, request: {
+	// 	customData: string,
+	// 	callback: (response: string) => void,
+	// } | undefined],
 	'no-heartbeat-from': [remotePeerId: string],
 }
 
@@ -812,7 +843,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				switch (message.type) {
 					case HamokMessageType.RAFT_APPEND_ENTRIES_REQUEST_CHUNK:
 					case HamokMessageType.RAFT_APPEND_ENTRIES_RESPONSE:
-						this._acceptAppendRequestResponse(message);
+						this._acceptKeepAliveHamokMessage(message);
 						break;
 				}
 				this.raft.transport.receive(message);
@@ -842,8 +873,67 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	public async fetchRemotePeers(options?: { customRequest?: string, timeoutInMs?: number }): Promise<HamokFetchRemotePeersResponse> {
-		const helloMsg = this._codec.encodeHelloNotification(new HelloNotification(this.localPeerId, this.raft.leaderId));
+	public async join(params: HamokJoinProcessParams): Promise<void> {
+		const { remotePeers, customResponses } = await this.fetchRemotePeers(
+			params.fetchRemotePeerTimeoutInMs,
+			params?.requestSnapshot ? 'snapshot' : undefined
+		);
+		let bestSnapshot: HamokSnapshot | undefined;
+
+		if (params.requestSnapshot) {
+			for (const serializedSnapshot of customResponses ?? []) {
+				try {
+					const snapshot = JSON.parse(serializedSnapshot) as HamokSnapshot;
+	
+					if (!bestSnapshot) bestSnapshot = snapshot;
+	
+					if (bestSnapshot.term < snapshot.term || bestSnapshot.commitIndex < snapshot.commitIndex) {
+						bestSnapshot = snapshot;
+					}
+				} catch (err) {
+					logger.error('Failed to parse snapshot %o', err);
+				}
+			}
+		}
+
+		if (bestSnapshot) {
+			try {
+				this.import(bestSnapshot);
+			} catch (err) {
+				logger.error('Failed to import snapshot %o', err);
+			}
+		}
+
+		if (params.removeRemotePeersOnNoHeartbeat) {
+			const noHeartbeatListener = (remotePeerId: string) => this.removeRemotePeerId(remotePeerId);
+
+			this.once('stopped', () => {
+				this.off('no-heartbeat-from', noHeartbeatListener);
+			});
+			this.on('no-heartbeat-from', noHeartbeatListener);
+		}
+
+		for (const remotePeerId of remotePeers) {
+			// this._remoteHeartbeats
+			this._addNoHeartbeatTimer(remotePeerId);
+			this.addRemotePeerId(remotePeerId);
+
+			const message = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId, remotePeerId));
+
+			// this will trigger the remote endpoint to add this endpoint
+			this._emitMessage(message, remotePeerId);
+		}
+		if (params.startAfterJoin) {
+			this.start();
+		}
+	}
+
+	public async fetchRemotePeers(timeout?: number, customRequest?: HamokHelloNotificationCustomRequestType): Promise<HamokFetchRemotePeersResponse> {
+		const helloMsg = this._codec.encodeHelloNotification(new HelloNotification(
+			this.localPeerId, 
+			this.raft.leaderId,
+			customRequest
+		));
 		
 		return new Promise((resolve) => {
 			const remotePeerIds = new Set<string>();
@@ -865,7 +955,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 					remotePeers: [ ...remotePeerIds ],
 					customResponses: 0 < customResponses.length ? customResponses : undefined,
 				});
-			}, options?.timeoutInMs ?? 3000);
+			}, timeout ?? 5000);
 	
 			this._remoteStateRequest = {
 				timer,
@@ -880,36 +970,37 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		switch (message.type) {
 			case HamokMessageType.HELLO_NOTIFICATION: {
 				const hello = this._codec.decodeHelloNotification(message);
-				const customRequest = hello.customData;
-				let replying: Promise<string | undefined> | undefined;
+				let customResponse: string | undefined;
 
-				if (customRequest) {
-					replying = new Promise((resolve) => {
-						if (!this.emit('hello-notification', hello.sourcePeerId, {
-							customData: customRequest,
-							callback: (response) => resolve(response),
-						})) {
-							logger.warn('%s Received hello notification with custom data but no listener is registered %o', this.localPeerId, hello);
-							resolve(undefined);
-						}
-					});
-				} else this.emit('hello-notification', hello.sourcePeerId, undefined);
+				switch (hello.customData as HamokHelloNotificationCustomRequestType) {
+					case 'snapshot': {
+						customResponse = JSON.stringify(this.export());
+					}
+				}
 
-				(replying ?? Promise.resolve(undefined)).then((customResponse) => {
-					const notification = this._codec.encodeEndpointStateNotification(new EndpointStatesNotification(
-						this.localPeerId,
-						hello.sourcePeerId,
-						this.raft.props.currentTerm,
-						this.raft.logs.commitIndex,
-						this.leader ? this.raft.logs.nextIndex : -1,
-						this.raft.logs.size,
-						this.raft.remotePeers,
-						customResponse
-					));
+				const notification = this._codec.encodeEndpointStateNotification(new EndpointStatesNotification(
+					this.localPeerId,
+					hello.sourcePeerId,
+					this.raft.props.currentTerm,
+					this.raft.logs.commitIndex,
+					this.leader ? this.raft.logs.nextIndex : -1,
+					this.raft.logs.size,
+					this.raft.remotePeers,
+					customResponse
+				));
 
-					this.emit('message', notification);
-				});
-				
+				this.emit('message', notification);
+				break;
+			}
+			case HamokMessageType.JOIN_NOTIFICATION: {
+				const notification = this._codec.decodeJoinNotification(message);
+
+				if (notification.sourcePeerId === this.localPeerId) {
+					logger.warn('%s Received join notification from itself %o', this.localPeerId, notification);
+					break;
+				}
+
+				this.addRemotePeerId(notification.sourcePeerId);
 				break;
 			}
 			case HamokMessageType.ENDPOINT_STATES_NOTIFICATION: {
@@ -1043,15 +1134,21 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	private _acceptAppendRequestResponse(message: HamokMessage) {
+	private _acceptKeepAliveHamokMessage(message: HamokMessage) {
 		if (!message.sourceId || message.sourceId === this.localPeerId) return;
 		const remotePeerId = message.sourceId;
 		
-		clearTimeout(this._remoteHeartbeats.get(message.sourceId));
+		this._addNoHeartbeatTimer(remotePeerId);
+	}
 
-		this._remoteHeartbeats.set(remotePeerId, setTimeout(() => {
+	private _addNoHeartbeatTimer(remotePeerId: string) {
+		clearTimeout(this._remoteHeartbeats.get(remotePeerId));
+
+		const timer = setTimeout(() => {
 			this._remoteHeartbeats.delete(remotePeerId);
 			this.emit('no-heartbeat-from', remotePeerId);
-		}, this.raft.config.followerMaxIdleInMs));
+		}, this.raft.config.followerMaxIdleInMs);
+
+		this._remoteHeartbeats.set(remotePeerId, timer);
 	}
 }
