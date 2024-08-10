@@ -120,7 +120,7 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		
 		return new JoinNotification(
 			message.sourceId!,
-			message.destinationId!,
+			message.destinationId,
 		);
 	}
 

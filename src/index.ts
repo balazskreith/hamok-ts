@@ -8,9 +8,10 @@ export {
 	HamokFetchRemotePeersResponse,
 	HamokEventMap,
 	HamokMapBuilderConfig,
+	HamokJoinProcessParams,
 } from './Hamok';
 export { 
-	HamokMap as HamokStorage
+	HamokMap,
 } from './collections/HamokMap';
 export {
 	HamokQueue
@@ -25,7 +26,7 @@ export {
 	HamokSnapshot,
 	HamokEmitterSnapshot,
 	HamokQueueSnapshot,
-	HamokMapSnapshot as HamokStorageSnapshot,
+	HamokMapSnapshot,
 } from './HamokSnapshot';
 export {
 	LogEntry

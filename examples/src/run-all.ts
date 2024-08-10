@@ -1,6 +1,6 @@
 import { setHamokLogLevel } from 'hamok';
 import { run as reelection } from './common-reelection-example';
-import { run as discovery } from './common-discovery-example';
+import { run as discovery } from './common-join-example';
 import { run as mapUpdateIf } from './map-update-if-example';
 import { run as mapInsert } from './map-insert-get-example'
 import { run as queuePushPop } from './queue-push-pop-example';

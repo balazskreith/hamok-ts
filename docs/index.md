@@ -11,6 +11,7 @@
 	 - [Events](#events)
 	 - [Methods](#methods)
 5. [Use Cases](#use-cases)
+	- [Join to the grid by using the `join()` method](#join-to-the-grid-by-using-the-join-method)
 	- [Executing Tasks on the leader](#executing-tasks-on-the-leader)
 	- [Creating and Managing Maps](#creating-and-managing-maps)
 	- [Creating and Managing Records](#creating-and-managing-records)
@@ -59,6 +60,12 @@ Hamok can be configured using the `HamokConstructorConfig` type. Here is an exam
 import { Hamok } from 'hamok';
 
 const config = {
+	/**
+	 * Indicate if the Hamok should stop automatically when there are no remote peers.
+	 * 
+	 * DEFAULT: false
+	 */
+	autoStopOnNoRemotePeers: false,
 
 	/**
 	 * The unique identifier for the peer in the Raft cluster.
@@ -148,7 +155,6 @@ Hamok emits various events that can be listened to for handling specific actions
 - `commit`: Emitted when a commit occurs.
 - `heartbeat`: Emitted during heartbeats.
 - `error`: Emitted when an error occurs.
-- `hello-notification`: Emitted when a hello notification is received.
 - `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
 
 
@@ -196,10 +202,81 @@ Hamok emits various events that can be listened to for handling specific actions
 - **accept**(`message: HamokMessage`): `void`
   - Accepts a message and processes it according to its type and protocol.
 
-- **fetchRemotePeers**(`options?: { customRequest?: string, timeoutInMs?: number }`): `Promise<HamokFetchRemotePeersResponse>`
+- **fetchRemotePeers**(`timeout?: number, customRequest?: HamokHelloNotificationCustomRequestType`): `Promise<HamokFetchRemotePeersResponse>`
   - Fetches remote peers with optional custom requests and timeout.
 
+- **join**(`params: HamokJoinProcessParams`): `Promise<void>`
+	- Runs a join process with the provided parameters. See [here](#use-the-join-method) for more details.
+
 ## Use cases
+Here is a revised version of your text with improvements for clarity, grammar, and consistency:
+
+---
+
+### Joining the Grid Using the `join()` Method
+
+Hamok provides an automated process to join a network of instances by connecting to remote peers. This feature simplifies integrating a new Hamok instance into an existing network.
+
+The automated join process consists of two phases:
+
+1. **Discover Remote Endpoints**: Add these endpoints to the local Hamok instance's list of remote peers.
+2. **Notify Remote Peers**: Inform them about the local peer so they can add it to their lists.
+
+The first phase is executed by the `fetchRemotePeers` method, which is called by the `join` method. This method sends a `HelloNotification` message to remote peers. Each remote peer responds with an `EndpointStateNotification` message, which includes all the peers known to them. The local peer waits for these notifications within a specified timeout and then evaluates the responses. If no remote peers are received and the local instance does not have a remote peer, the process is either retried or an exception is raised. Additionally, the `HelloNotification` message can include a custom request, such as requesting a snapshot from the remote peers, which can be applied to the local instance if provided.
+
+In the second phase, a `JoinNotification` message is sent to remote peers, instructing them to add the local peer to their remote peer lists.
+
+Below is an example of using the `join` method:
+
+```typescript
+await hamok.join({
+	/**
+	 * Timeout in milliseconds for fetching remote peers.
+	 * 
+	 * DEFAULT: 5000
+	 */
+	fetchRemotePeerTimeoutInMs: 3000,
+
+	/**
+	 * The maximum number of retries for fetching remote peers.
+	 * -1 - means infinite retries
+	 * 0 - means no retries
+	 * 
+	 * DEFAULT: 3
+	 */
+	maxRetry: 3,
+	
+	/**
+	 * Indicates if remote peers should be automatically removed if no heartbeat is received.
+	 * 
+	 * DEFAULT: true
+	 */
+	removeRemotePeersOnNoHeartbeat: true,
+
+	/**
+	 * Indicates if a snapshot should be requested from the remote peers.
+	 * If provided, it is used locally.
+	 * 
+	 * DEFAULT: false
+	 */
+	requestSnapshot: true,
+
+	/**
+	 * Indicates if the start() method should be called automatically after the join process is completed.
+	 * 
+	 * DEFAULT: false
+	 */
+	startAfterJoin: true,
+});
+```
+
+In the above example, the method attempts to fetch remote peers three times, each with a timeout of 3000 milliseconds. If remote peers are not fetched within the given timeout, the process is retried. If the maximum number of retries is reached and the remote peers are still not fetched, an error is raised, indicating that joining is not possible.
+
+Once remote peers are fetched, the local peer selects the best snapshot from the remote peers (based on the highest raft terms and commit index) and applies it to the local instance.
+
+After the snapshot is applied and the remote peers are added to the local instance, the local peer sends a `JoinNotification` message to remote peers to add the local peer to their remote peer lists.
+
+If `startAfterJoin` is set to true, the `start` method is automatically called once the join process is completed.
 
 ### Executing Tasks on the leader
 

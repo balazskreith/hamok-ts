@@ -34,28 +34,49 @@ export type HamokJoinProcessParams = {
 
 	/**
 	 * Timeout in milliseconds for fetching the remote peers.
+	 * 
+	 * DEFAULT: 5000
 	 */
-	fetchRemotePeerTimeoutInMs: number,
+	fetchRemotePeerTimeoutInMs?: number,
+
+	/**
+	 * The maximum number of retries for fetching the remote peers.
+	 * -1 - means infinite retries
+	 * 0 - means no retries
+	 * 
+	 * DEFAULT: 3
+	 */
+	maxRetry?: number;
 	
 	/**
 	 * Indicate if the remote peers automatically should be removed if no heartbeat is received.
+	 * 
+	 * DEFAULT: true
 	 */
-	removeRemotePeersOnNoHeartbeat: boolean,
+	removeRemotePeersOnNoHeartbeat?: boolean,
 
 	/**
 	 * indicates if the snapshot should be requested from the remote peers, 
 	 * and if it is provided then it is used in local
+	 * 
+	 * DEFAULT: false
 	 */
 	requestSnapshot?: boolean,
 
 	/**
 	 * indicates if the start() method should be called automatically after the join process is completed
+	 * 
+	 * DEFAULT: false
 	 */
 	startAfterJoin?: boolean,
 }
 
 export type HamokConfig = {
-	// empty
+
+	/**
+	 * Indicate if the Hamok should stop automatically when there are no remote peers.
+	 */
+	autoStopOnNoRemotePeers?: boolean,
 }
 
 /**
@@ -287,6 +308,7 @@ export type HamokEventMap = {
 	started: [],
 	stopped: [],
 	follower: [],
+	candidate: [],
 	leader: [],
 	message: [message: HamokMessage]
 	'remote-peer-joined': [peerId: string],
@@ -315,6 +337,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public readonly emitters = new Map<string, HamokEmitter<any>>();
 
+	private _joining?: Promise<void>;
 	private _raftTimer?: ReturnType<typeof setInterval>;
 	private _remoteStateRequest?: { timer: ReturnType<typeof setTimeout>, responses: EndpointStatesNotification[] };
 	private readonly _remoteHeartbeats = new Map<string, ReturnType<typeof setTimeout>>();
@@ -387,7 +410,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	public start(): void {
 		if (this._raftTimer) {
-			return;
+			return logger.debug('Hamok is already running');
 		}
 		const raftEngine = this.raft;
 
@@ -407,7 +430,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 		this.emit('started');
 	}
-    
+
 	public stop() {
 		if (!this._raftTimer) {
 			return;
@@ -446,6 +469,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	}
 
 	public addRemotePeerId(remoteEndpointId: string): void {
+		if (remoteEndpointId === this.localPeerId) return;
+		if (this.raft.remotePeers.has(remoteEndpointId)) return;
+
 		this.raft.remotePeers.add(remoteEndpointId);
 
 		logger.debug('%s added remote peer %s', this.localPeerId, remoteEndpointId);
@@ -454,11 +480,17 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	}
 
 	public removeRemotePeerId(remoteEndpointId: string): void {
-		this.raft.remotePeers.delete(remoteEndpointId);
+		if (!this.raft.remotePeers.delete(remoteEndpointId)) return;
 
 		logger.debug('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
 
 		this.emit('remote-peer-left', remoteEndpointId);
+
+		if (this.remotePeerIds.size === 0) {
+			if (this.config.autoStopOnNoRemotePeers) {
+				this.stop();
+			}
+		}
 	}
 
 	public export(): HamokSnapshot {
@@ -843,6 +875,8 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				switch (message.type) {
 					case HamokMessageType.RAFT_APPEND_ENTRIES_REQUEST_CHUNK:
 					case HamokMessageType.RAFT_APPEND_ENTRIES_RESPONSE:
+					case HamokMessageType.RAFT_VOTE_REQUEST:
+					case HamokMessageType.RAFT_VOTE_RESPONSE:
 						this._acceptKeepAliveHamokMessage(message);
 						break;
 				}
@@ -873,14 +907,53 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	public async join(params: HamokJoinProcessParams): Promise<void> {
+	public async join(params?: HamokJoinProcessParams): Promise<void> {
+		if (this._joining) return this._joining;
+		try {
+			this._joining = this._join({
+				startAfterJoin: params?.startAfterJoin ?? true,
+				fetchRemotePeerTimeoutInMs: params?.fetchRemotePeerTimeoutInMs ?? 5000,
+				requestSnapshot: params?.requestSnapshot ?? false,
+				maxRetry: params?.maxRetry ?? 3,
+				removeRemotePeersOnNoHeartbeat: params?.removeRemotePeersOnNoHeartbeat ?? true,
+			});
+
+			await this._joining;
+		} finally {
+			this._joining = undefined;
+		}
+	}
+
+	public async _join(params: Required<HamokJoinProcessParams>, retried = 0): Promise<void> {
+		const {
+			startAfterJoin,
+			fetchRemotePeerTimeoutInMs,
+			requestSnapshot,
+			maxRetry,
+			removeRemotePeersOnNoHeartbeat,
+		} = params ?? {};
+
+		logger.debug('Joining the network. startAfterJoin: %s, fetchRemotePeerTimeoutInMs: %s, requestSnapshot: %s, maxRetry: %s, removeRemotePeersOnNoHeartbeat: %s',
+			startAfterJoin, fetchRemotePeerTimeoutInMs, requestSnapshot, maxRetry, removeRemotePeersOnNoHeartbeat
+		);
+
 		const { remotePeers, customResponses } = await this.fetchRemotePeers(
-			params.fetchRemotePeerTimeoutInMs,
-			params?.requestSnapshot ? 'snapshot' : undefined
+			fetchRemotePeerTimeoutInMs,
+			requestSnapshot ? 'snapshot' : undefined
 		);
 		let bestSnapshot: HamokSnapshot | undefined;
 
-		if (params.requestSnapshot) {
+		if (remotePeers.length < 1) {
+			if (0 <= maxRetry && maxRetry <= retried) throw new Error('No remote peers found');
+
+			logger.warn('No remote peers found, retrying %s/%s', retried, maxRetry < 0 ? '∞' : maxRetry);
+
+			return this._join(params, retried + 1);
+		}
+
+		logger.debug('Remote peers found %o', remotePeers);
+
+		if (requestSnapshot) {
 			for (const serializedSnapshot of customResponses ?? []) {
 				try {
 					const snapshot = JSON.parse(serializedSnapshot) as HamokSnapshot;
@@ -896,6 +969,8 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			}
 		}
 
+		logger.debug('Best snapshot %o', bestSnapshot);
+
 		if (bestSnapshot) {
 			try {
 				this.import(bestSnapshot);
@@ -904,7 +979,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			}
 		}
 
-		if (params.removeRemotePeersOnNoHeartbeat) {
+		if (removeRemotePeersOnNoHeartbeat) {
 			const noHeartbeatListener = (remotePeerId: string) => this.removeRemotePeerId(remotePeerId);
 
 			this.once('stopped', () => {
@@ -913,18 +988,27 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			this.on('no-heartbeat-from', noHeartbeatListener);
 		}
 
-		for (const remotePeerId of remotePeers) {
-			// this._remoteHeartbeats
-			this._addNoHeartbeatTimer(remotePeerId);
-			this.addRemotePeerId(remotePeerId);
+		const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId));
 
-			const message = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId, remotePeerId));
+		// this will trigger the remote endpoint to add this endpoint
+		this._emitMessage(joinMsg);
 
-			// this will trigger the remote endpoint to add this endpoint
-			this._emitMessage(message, remotePeerId);
-		}
-		if (params.startAfterJoin) {
-			this.start();
+		if (startAfterJoin) {
+			let leaderElected: () => void | undefined;
+			let noMoreRemotePeers: () => void | undefined;
+			
+			return new Promise<void>((resolve, reject) => {
+				leaderElected = () => (this.raft.leaderId !== undefined ? resolve() : void 0);
+				noMoreRemotePeers = () => (this.remotePeerIds.size === 0 ? reject(new Error('No remote peers')) : void 0);
+
+				this.on('leader-changed', leaderElected);
+				this.on('remote-peer-left', noMoreRemotePeers);
+				this.start();
+				
+			}).finally(() => {
+				this.off('leader-changed', leaderElected);
+				this.off('remote-peer-left', noMoreRemotePeers);
+			});
 		}
 	}
 
@@ -995,12 +1079,12 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			case HamokMessageType.JOIN_NOTIFICATION: {
 				const notification = this._codec.decodeJoinNotification(message);
 
-				if (notification.sourcePeerId === this.localPeerId) {
+				if (notification.sourcePeerId !== this.localPeerId) {
+					this.addRemotePeerId(notification.sourcePeerId);	
+				} else {
 					logger.warn('%s Received join notification from itself %o', this.localPeerId, notification);
-					break;
 				}
-
-				this.addRemotePeerId(notification.sourcePeerId);
+				
 				break;
 			}
 			case HamokMessageType.ENDPOINT_STATES_NOTIFICATION: {
@@ -1143,11 +1227,17 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	private _addNoHeartbeatTimer(remotePeerId: string) {
 		clearTimeout(this._remoteHeartbeats.get(remotePeerId));
+		
+		logger.trace('%s Add no heartbeat timeout for %s', this.localPeerId, remotePeerId);
 
 		const timer = setTimeout(() => {
 			this._remoteHeartbeats.delete(remotePeerId);
+
+			if (this._joining) {
+				return this._addNoHeartbeatTimer(remotePeerId);
+			}
 			this.emit('no-heartbeat-from', remotePeerId);
-		}, this.raft.config.followerMaxIdleInMs);
+		}, this.raft.config.electionTimeoutInMs);
 
 		this._remoteHeartbeats.set(remotePeerId, timer);
 	}

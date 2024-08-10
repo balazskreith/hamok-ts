@@ -75,7 +75,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			return follow();
 		}
 		// now we are talking in my term...
-		logger.debug('Received RaftAppendEntriesResponse %o', response);
+		logger.trace('Received RaftAppendEntriesResponse %o', response);
 		// if (localPeerId !== response.sourcePeerId) {
 		// remotePeers.touch(response.sourcePeerId);
 		// }
