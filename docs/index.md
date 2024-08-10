@@ -11,7 +11,7 @@
 	 - [Events](#events)
 	 - [Methods](#methods)
 5. [Use Cases](#use-cases)
-	- [Join to the grid by using the `join()` method](#join-to-the-grid-by-using-the-join-method)
+	- [Joining the Grid Using the `join()` Method](#joining-the-grid-using-the-join-method)
 	- [Executing Tasks on the leader](#executing-tasks-on-the-leader)
 	- [Creating and Managing Maps](#creating-and-managing-maps)
 	- [Creating and Managing Records](#creating-and-managing-records)
