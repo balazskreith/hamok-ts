@@ -99,7 +99,15 @@ export type HamokConnectionResponseMap<K, V> = {
 	UpdateEntriesResponse: UpdateEntriesResponse<K, V>;
 }
 
-export class HamokConnection<K, V> extends EventEmitter<HamokConnectionEventMap<K, V>> {
+export declare interface HamokConnection<K, V> {
+	on<U extends keyof HamokConnectionEventMap<K, V>>(event: U, listener: (...args: HamokConnectionEventMap<K, V>[U]) => void): this;
+	once<U extends keyof HamokConnectionEventMap<K, V>>(event: U, listener: (...args: HamokConnectionEventMap<K, V>[U]) => void): this;
+	off<U extends keyof HamokConnectionEventMap<K, V>>(event: U, listener: (...args: HamokConnectionEventMap<K, V>[U]) => void): this;
+	emit<U extends keyof HamokConnectionEventMap<K, V>>(event: U, ...args: HamokConnectionEventMap<K, V>[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class HamokConnection<K, V> extends EventEmitter {
 	private readonly _responseChunker: ResponseChunker;
 
 	private _waitingQueue?: WaitingQueue;

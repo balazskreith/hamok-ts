@@ -28,10 +28,18 @@ export type HamokRecordEventMap<T> = {
 	'close': [],
 }
 
+export declare interface HamokRecord<T extends HamokRecordObject> {
+	on<U extends keyof HamokRecordEventMap<T>>(event: U, listener: (...args: HamokRecordEventMap<T>[U]) => void): this;
+	off<U extends keyof HamokRecordEventMap<T>>(event: U, listener: (...args: HamokRecordEventMap<T>[U]) => void): this;
+	once<U extends keyof HamokRecordEventMap<T>>(event: U, listener: (...args: HamokRecordEventMap<T>[U]) => void): this;
+	emit<U extends keyof HamokRecordEventMap<T>>(event: U, ...args: HamokRecordEventMap<T>[U]): boolean;
+}
+
 /**
  * Replicated storage replicates all entries on all distributed storages
  */
-export class HamokRecord<T extends HamokRecordObject> extends EventEmitter<HamokRecordEventMap<T>> {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	private _payloadsCodec?: Map<keyof T, HamokCodec<T[keyof T], string>>;
 	private _closed = false;
 	public equalValues: <K extends keyof T>(a: T[K], b: T[K]) => boolean;

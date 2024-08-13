@@ -15,7 +15,16 @@ export type MemoryStoredRaftLogsConfig = {
 	memorySizeHighWaterMark: number;
 }
 
-export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEventMap> implements RaftLogs {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export declare interface MemoryStoredRaftLogs {
+	on<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	once<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	off<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	emit<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, ...args: MemoryStoredRaftLogsEventMap[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 
 	/**
 	 * index of highest log entry applied to state

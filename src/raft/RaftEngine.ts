@@ -44,7 +44,11 @@ export type RaftEngineConfig = {
 	onlyFollower: boolean,
 }
 
-interface HamokController extends EventEmitter<HamokEventMap> {
+interface HamokController extends EventEmitter {
+	on<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	once<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	off<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	emit<U extends keyof HamokEventMap>(event: U, ...args: HamokEventMap[U]): boolean;
 	stop(): void;
 }
 

@@ -325,7 +325,15 @@ export type HamokEventMap = {
 	'no-heartbeat-from': [remotePeerId: string],
 }
 
-export class Hamok extends EventEmitter<HamokEventMap> {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export declare interface Hamok {
+	on<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	once<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	emit<U extends keyof HamokEventMap>(event: U, ...args: HamokEventMap[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class Hamok extends EventEmitter {
 	public readonly config: HamokConfig;
 	public readonly raft: RaftEngine;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -453,6 +461,41 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		this._remoteHeartbeats.clear();
 
 		this.emit('stopped');
+	}
+
+	public get stats() {
+		const numberOfPendingRequests = this.grid.pendingRequests.size;
+		const numberOfOngoingRequests = this.grid.ongoingRequestsNotifier.activeOngoingRequests.size;
+		const numberOfRemotePeers = this.raft.remotePeers.size;
+		const numberOfPendingResponses = this.grid.pendingResponses.size;
+		const raftLogsBytesInMemory = this.raft.logs.bytesInMemory;
+
+		return {
+			/**
+			 * Number of requests sent out from the grid, but waiting for response from remote peer
+			 */
+			numberOfPendingRequests,
+
+			/**
+			 * Number of requests received by this peer and queued for processing (for example requests to be waited to be committed by the leader)
+			 */
+			numberOfOngoingRequests,
+
+			/**
+			 * Number of responses received by this peer and queued for processing as the response were chunked
+			 */
+			numberOfPendingResponses,
+
+			/**
+			 * Number of remote peers this peer is connected to
+			 */
+			numberOfRemotePeers,
+
+			/**
+			 * Number of bytes used by the raft logs in memory
+			 */
+			raftLogsBytesInMemory,
+		};
 	}
 
 	private _acceptCommit(commitIndex: number, message: HamokMessage): void {

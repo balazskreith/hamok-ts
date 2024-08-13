@@ -34,7 +34,15 @@ function *iterator<T>(first: number, last: number, baseMap: BaseMap<number, T>):
 	}
 }
 
-export class HamokQueue<T> extends EventEmitter<HamokQueueEventMap<T>> {
+export declare interface HamokQueue<T> {
+	on<U extends keyof HamokQueueEventMap<T>>(event: U, listener: (...args: HamokQueueEventMap<T>[U]) => void): this;
+	off<U extends keyof HamokQueueEventMap<T>>(event: U, listener: (...args: HamokQueueEventMap<T>[U]) => void): this;
+	once<U extends keyof HamokQueueEventMap<T>>(event: U, listener: (...args: HamokQueueEventMap<T>[U]) => void): this;
+	emit<U extends keyof HamokQueueEventMap<T>>(event: U, ...args: HamokQueueEventMap<T>[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class HamokQueue<T> extends EventEmitter {
 	private _head = 0;
 	private _tail = 0;
 	private _closed = false;

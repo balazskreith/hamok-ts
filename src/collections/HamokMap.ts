@@ -15,10 +15,18 @@ export type HamokMapEventMap<K, V> = {
 	'close': [],
 }
 
+export declare interface HamokMap<K, V> {
+	on<U extends keyof HamokMapEventMap<K, V>>(event: U, listener: (...args: HamokMapEventMap<K, V>[U]) => void): this;
+	off<U extends keyof HamokMapEventMap<K, V>>(event: U, listener: (...args: HamokMapEventMap<K, V>[U]) => void): this;
+	once<U extends keyof HamokMapEventMap<K, V>>(event: U, listener: (...args: HamokMapEventMap<K, V>[U]) => void): this;
+	emit<U extends keyof HamokMapEventMap<K, V>>(event: U, ...args: HamokMapEventMap<K, V>[U]): boolean;
+}
+
 /**
  * Replicated storage replicates all entries on all distributed storages
  */
-export class HamokMap<K, V> extends EventEmitter<HamokMapEventMap<K, V>> {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class HamokMap<K, V> extends EventEmitter {
 	private _closed = false;
 	public equalValues: (a: V, b: V) => boolean;
 
