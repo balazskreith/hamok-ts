@@ -13,9 +13,9 @@ import { ClearEntriesRequest, ClearEntriesNotification, ClearEntriesResponse } f
 import { DeleteEntriesRequest, DeleteEntriesNotification, DeleteEntriesResponse } from '../messages/messagetypes/DeleteEntries';
 import { GetKeysRequest, GetKeysResponse } from '../messages/messagetypes/GetKeys';
 import { GetSizeRequest } from '../messages/messagetypes/GetSize';
-import { InsertEntriesRequest, InsertEntriesNotification, InsertEntriesResponse } from '../messages/messagetypes/InsertEntries';
-import { RemoveEntriesRequest, RemoveEntriesNotification, RemoveEntriesResponse } from '../messages/messagetypes/RemoveEntries';
-import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse } from '../messages/messagetypes/UpdateEntries';
+import { InsertEntriesRequest, InsertEntriesNotification, InsertEntriesResponse, EntriesInsertedNotification } from '../messages/messagetypes/InsertEntries';
+import { RemoveEntriesRequest, RemoveEntriesNotification, RemoveEntriesResponse, EntriesRemovedNotification } from '../messages/messagetypes/RemoveEntries';
+import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse, EntryUpdatedNotification } from '../messages/messagetypes/UpdateEntries';
 import { createResponseChunker, ResponseChunker } from '../messages/ResponseChunker';
 import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
@@ -74,19 +74,22 @@ export type HamokConnectionEventMap<K, V> = {
 	close: [],
 
 	OngoingRequestsNotification: [OngoingRequestsNotification];
-	ClearEntriesRequest: [ClearEntriesRequest];
+	ClearEntriesRequest: [ClearEntriesRequest, commitIndex?: number];
 	ClearEntriesNotification: [ClearEntriesNotification];
 	GetEntriesRequest: [GetEntriesRequest<K>];
 	GetKeysRequest: [GetKeysRequest];
 	GetSizeRequest: [GetSizeRequest];
-	DeleteEntriesRequest: [DeleteEntriesRequest<K>];
+	DeleteEntriesRequest: [DeleteEntriesRequest<K>, commitIndex?: number];
 	DeleteEntriesNotification: [DeleteEntriesNotification<K>];
-	RemoveEntriesRequest: [RemoveEntriesRequest<K>];
+	RemoveEntriesRequest: [RemoveEntriesRequest<K>, commitIndex?: number];
 	RemoveEntriesNotification: [RemoveEntriesNotification<K>];
-	InsertEntriesRequest: [InsertEntriesRequest<K, V>];
+	EntriesRemovedNotification: [EntriesRemovedNotification<K, V>];
+	InsertEntriesRequest: [InsertEntriesRequest<K, V>, commitIndex?: number];
 	InsertEntriesNotification: [InsertEntriesNotification<K, V>];
-	UpdateEntriesRequest: [UpdateEntriesRequest<K, V>];
+	EntriesInsertedNotification: [EntriesInsertedNotification<K, V>];
+	UpdateEntriesRequest: [UpdateEntriesRequest<K, V>, commitIndex?: number];
 	UpdateEntriesNotification: [UpdateEntriesNotification<K, V>];
+	EntryUpdatedNotification: [EntryUpdatedNotification<K, V>];
 }
 
 export type HamokConnectionResponseMap<K, V> = {
@@ -170,13 +173,109 @@ export class HamokConnection<K, V> extends EventEmitter {
 		this.removeAllListeners();
 	}
 
-	public accept(message: HamokMessage) {
-		this.codec.decode(message, this._emitDecoded.bind(this));
-	}
-
-	private _emitDecoded(type: string, output: unknown) {
-		if (!(this as EventEmitter).emit(type, output)) {
-			logger.warn('Unhandled message type %s', type);
+	public accept(message: HamokMessage, commitIndex?: number) {
+		switch (message.type) {
+			case HamokMessageType.CLEAR_ENTRIES_REQUEST:
+				this.emit(
+					'ClearEntriesRequest',
+					this.codec.decodeClearEntriesRequest(message),
+					commitIndex,
+				);
+				break;
+			case HamokMessageType.CLEAR_ENTRIES_NOTIFICATION:
+				this.emit(
+					'ClearEntriesNotification',
+					this.codec.decodeClearEntriesNotification(message),
+				);
+				break;
+			case HamokMessageType.GET_ENTRIES_REQUEST:
+				this.emit(
+					'GetEntriesRequest',
+					this.codec.decodeGetEntriesRequest(message),
+				);
+				break;
+			case HamokMessageType.GET_SIZE_REQUEST:
+				this.emit(
+					'GetSizeRequest',
+					this.codec.decodeGetSizeRequest(message),
+				);
+				break;
+			case HamokMessageType.GET_KEYS_REQUEST:
+				this.emit(
+					'GetKeysRequest',
+					this.codec.decodeGetKeysRequest(message),
+				);
+				break;
+			case HamokMessageType.DELETE_ENTRIES_REQUEST:
+				this.emit(
+					'DeleteEntriesRequest',
+					this.codec.decodeDeleteEntriesRequest(message),
+					commitIndex,
+				);
+				break;
+			case HamokMessageType.DELETE_ENTRIES_NOTIFICATION:
+				this.emit(
+					'DeleteEntriesNotification',
+					this.codec.decodeDeleteEntriesNotification(message),
+				);
+				break;
+			case HamokMessageType.REMOVE_ENTRIES_REQUEST:
+				this.emit(
+					'RemoveEntriesRequest',
+					this.codec.decodeRemoveEntriesRequest(message),
+					commitIndex,
+				);
+				break;
+			case HamokMessageType.REMOVE_ENTRIES_NOTIFICATION:
+				this.emit(
+					'RemoveEntriesNotification',
+					this.codec.decodeRemoveEntriesNotification(message),
+				);
+				break;
+			case HamokMessageType.ENTRIES_REMOVED_NOTIFICATION:
+				this.emit(
+					'EntriesRemovedNotification',
+					this.codec.decodeEntriesRemovedNotification(message),
+				);
+				break;
+			case HamokMessageType.INSERT_ENTRIES_REQUEST:
+				this.emit(
+					'InsertEntriesRequest',
+					this.codec.decodeInsertEntriesRequest(message),
+					commitIndex,
+				);
+				break;
+			case HamokMessageType.INSERT_ENTRIES_NOTIFICATION:
+				this.emit(
+					'InsertEntriesNotification',
+					this.codec.decodeInsertEntriesNotification(message),
+				);
+				break;
+			case HamokMessageType.ENTRIES_INSERTED_NOTIFICATION:
+				this.emit(
+					'EntriesInsertedNotification',
+					this.codec.decodeEntriesInsertedNotification(message),
+				);
+				break;
+			case HamokMessageType.UPDATE_ENTRIES_REQUEST:
+				this.emit(
+					'UpdateEntriesRequest',
+					this.codec.decodeUpdateEntriesRequest(message),
+					commitIndex,
+				);
+				break;
+			case HamokMessageType.UPDATE_ENTRIES_NOTIFICATION:
+				this.emit(
+					'UpdateEntriesNotification',
+					this.codec.decodeUpdateEntriesNotification(message),
+				);
+				break;
+			case HamokMessageType.ENTRY_UPDATED_NOTIFICATION:
+				this.emit(
+					'EntryUpdatedNotification',
+					this.codec.decodeEntryUpdatedNotification(message),
+				);
+				break;
 		}
 	}
 
@@ -336,6 +435,16 @@ export class HamokConnection<K, V> extends EventEmitter {
 			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
 	}
 
+	public notifyEntriesRemoved(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		Collections.splitMap<K, V>(
+			entries,
+			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+			() => [ entries ]
+		)
+			.map((batchedEntries) => this.codec.encodeEntriesRemovedNotification(new EntriesRemovedNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
 	public async requestInsertEntries(
 		entries: ReadonlyMap<K, V>,
 		targetPeerIds?: ReadonlySet<string> | string[]
@@ -375,6 +484,16 @@ export class HamokConnection<K, V> extends EventEmitter {
 			() => [ entries ]
 		)
 			.map((batchedEntries) => this.codec.encodeInsertEntriesNotification(new InsertEntriesNotification(batchedEntries)))
+			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
+	public notifyEntriesInserted(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		Collections.splitMap<K, V>(
+			entries,
+			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
+			() => [ entries ]
+		)
+			.map((batchedEntries) => this.codec.encodeEntriesInsertedNotification(new EntriesInsertedNotification(batchedEntries)))
 			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
 	}
 
@@ -421,6 +540,14 @@ export class HamokConnection<K, V> extends EventEmitter {
 		)
 			.map((batchedEntries) => this.codec.encodeUpdateEntriesNotification(new UpdateEntriesNotification(batchedEntries)))
 			.forEach((notification) => this._sendMessage(notification, targetPeerIds));
+	}
+
+	public notifyEntryUpdated(key: K, oldValue: V, newValue: V, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		const message = this.codec.encodeEntryUpdatedNotification(
+			new EntryUpdatedNotification(key, newValue, oldValue)
+		);
+
+		this._sendMessage(message, targetPeerIds);
 	}
 
 	public respond<U extends keyof HamokConnectionResponseMap<K, V>>(type: U, response: HamokConnectionResponseMap<K, V>[U], targetPeerIds?: string | string[]): void {

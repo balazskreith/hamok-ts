@@ -5,7 +5,8 @@ type OngoingProcess = () => Promise<unknown>;
 const logger = createLogger('ConcurrentExecutor');
 
 export class ConcurrentExecutor {
-	private _tasks:OngoingProcess[] = [];
+	private _parked: OngoingProcess[] = [];
+	private _tasks: OngoingProcess[] = [];
 	private _semaphore: number;
 
 	public constructor(
@@ -18,15 +19,22 @@ export class ConcurrentExecutor {
 		this.postProcess = this.postProcess.bind(this);
 	}
 
-	public execute<T = unknown>(action: () => Promise<T>) {
+	public execute<T = unknown>(action: () => Promise<T>, park = false): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 
 			const task = () => action().then(resolve)
 				.catch(reject);
 
-			this._tasks.push(task);
+			if (park) this._parked.push(task);
+			else this._tasks.push(task);
 			this._run();
 		});
+	}
+
+	public flushParkedActions() {
+		this._tasks.push(...this._parked);
+		this._parked = [];
+		this._run();
 	}
 
 	private postProcess() {

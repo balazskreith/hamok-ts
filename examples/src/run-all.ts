@@ -33,8 +33,11 @@ async function run() {
         ['commonWaiting', commonWaiting],
         ['reelection', reelection],
         ['discovery', discovery],
-
     ]);
+
+    if (process.argv.includes('--include-redis')) {
+        // empty
+    }
 
     for (const [name, fn] of map) {
         logger.info([

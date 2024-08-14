@@ -139,6 +139,11 @@ message HamokMessage {
      */
     REMOVE_ENTRIES_NOTIFICATION = 46;
 
+    /**
+     * Notification about the removed entries
+     */
+    ENTRIES_REMOVED_NOTIFICATION = 47;
+
 
     /**
      * Insert item(s) only if they don't exist. if they
@@ -158,6 +163,11 @@ message HamokMessage {
      * Notification about an insert operation.
      */
     INSERT_ENTRIES_NOTIFICATION = 54;
+    
+    /**
+     * Notification about the inserted entries
+     */
+    ENTRIES_INSERTED_NOTIFICATION = 55;
 
 
     /**
@@ -172,6 +182,11 @@ message HamokMessage {
      * Notification about the update
      */
     UPDATE_ENTRIES_NOTIFICATION = 58;
+
+    /**
+     * Notification about the updated entries
+     */
+    ENTRY_UPDATED_NOTIFICATION = 59;
 
   }
 

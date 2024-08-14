@@ -50,3 +50,12 @@ export class InsertEntriesNotification<K, V> {
 		this.destinationEndpointId = destinationEndpointId;
 	}
 }
+
+export class EntriesInsertedNotification<K, V> {
+	public constructor(
+		public readonly entries: ReadonlyMap<K, V>,
+		public readonly sourceEndpointId?: string,
+		public readonly destinationEndpointId?: string
+	) {
+	}
+}

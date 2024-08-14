@@ -25,6 +25,8 @@ import { HamokRecord, HamokRecordObject } from './collections/HamokRecord';
 import { HelloNotification } from './messages/messagetypes/HelloNotification';
 import { EndpointStatesNotification } from './messages/messagetypes/EndpointNotification';
 import { JoinNotification } from './messages/messagetypes/JoinNotification';
+import { RemoteMap } from './collections/RemoteMap';
+import { HamokRemoteMap } from './collections/HamokRemoteMap';
 
 const logger = createLogger('Hamok');
 
@@ -214,6 +216,13 @@ export type HamokMapBuilderConfig<K, V> = {
 }
 
 /**
+ * Configuration settings for building a Hamok remote map.
+ */
+export type HamokRemoteMapBuilderConfig<K, V> = HamokMapBuilderConfig<K, V> & {
+	remoteMap: RemoteMap<K, V>,	
+}
+
+/**
  * Configuration settings for building a Hamok queue.
  */
 export type HamokQueueBuilderConfig<T> = {
@@ -344,6 +353,8 @@ export class Hamok extends EventEmitter {
 	public readonly queues = new Map<string, HamokQueue<any>>();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public readonly emitters = new Map<string, HamokEmitter<any>>();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	public readonly remoteMaps = new Map<string, HamokRemoteMap<any, any>>();
 
 	private _joining?: Promise<void>;
 	private _raftTimer?: ReturnType<typeof setInterval>;
@@ -499,7 +510,7 @@ export class Hamok extends EventEmitter {
 	}
 
 	private _acceptCommit(commitIndex: number, message: HamokMessage): void {
-		logger.debug('%s accepted committed message %o', this.localPeerId, message);
+		logger.trace('%s accepted committed message %o', this.localPeerId, message);
 		
 		// if we put this request to hold when we accepted the submit request we remove the ongoing request notification
 		// so from this moment it is up to the storage / pubsub to accomplish the request
@@ -508,7 +519,7 @@ export class Hamok extends EventEmitter {
 
 			logger.trace('%s Request %s is removed ongoing requests', this.localPeerId, message.requestId);
 		}
-		this.accept(message);
+		this.accept(message, commitIndex);
 	}
 
 	public addRemotePeerId(remoteEndpointId: string): void {
@@ -687,6 +698,55 @@ export class Hamok extends EventEmitter {
 		connection.on('message', messageListener);
 		
 		this.maps.set(storage.id, storage);
+
+		return storage;
+	}
+
+	public createRemoteMap<K, V>(options: HamokRemoteMapBuilderConfig<K, V>): HamokRemoteMap<K, V> {
+		if (this.remoteMaps.has(options.mapId)) {
+			throw new Error(`RemoteMap with id ${options.mapId} already exists`);
+		}
+
+		const storageCodec = new StorageCodec<K, V>(
+			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
+			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
+		);
+		const connection = new HamokConnection<K, V>(
+			{
+				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
+				storageId: options.mapId,
+				neededResponse: 0,
+				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
+				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
+				maxMessageWaitingTimeInMs: options.maxMessageWaitingTimeInMs,
+				submitting: new Set([
+					HamokMessageType.CLEAR_ENTRIES_REQUEST,
+					HamokMessageType.INSERT_ENTRIES_REQUEST,
+					HamokMessageType.DELETE_ENTRIES_REQUEST,
+					HamokMessageType.REMOVE_ENTRIES_REQUEST,
+					HamokMessageType.UPDATE_ENTRIES_REQUEST,
+				])
+			}, 
+			storageCodec, 
+			this.grid,         
+		);
+		const messageListener = (message: HamokMessage, submitting: boolean) => {
+			if (submitting) return this.submit(message);
+			else this.emit('message', message);
+		};
+		const storage = new HamokRemoteMap<K, V>(
+			connection,
+			options.remoteMap,
+			options.equalValues,
+		);
+
+		connection.once('close', () => {
+			connection.off('message', messageListener);
+			this.maps.delete(storage.id);
+		});
+		connection.on('message', messageListener);
+		
+		this.remoteMaps.set(storage.id, storage);
 
 		return storage;
 	}
@@ -889,7 +949,7 @@ export class Hamok extends EventEmitter {
 		}
 	}
 
-	public accept(message: HamokMessage) {
+	public accept(message: HamokMessage, commitIndex?: number): void {
 		if (message.destinationId && message.destinationId !== this.localPeerId) {
 			return logger.trace('%s Received message address is not matching with the local peer %o', this.localPeerId, message);
 		}
@@ -933,6 +993,7 @@ export class Hamok extends EventEmitter {
 				const storage = (
 					this.records.get(message.storageId ?? '') ??
 					this.maps.get(message.storageId ?? '') ??
+					this.remoteMaps.get(message.storageId ?? '') ??
 					this.queues.get(message.storageId ?? '') ??
 					this.emitters.get(message.storageId ?? '')
 				);
@@ -941,7 +1002,7 @@ export class Hamok extends EventEmitter {
 					return logger.trace('Received message for unknown collection %s', message.storageId);
 				}
 				
-				return storage.connection.accept(message);
+				return storage.connection.accept(message, commitIndex);
 			}
 			// case HamokMessageProtocol.PUBSUB_COMMUNICATION_PROTOCOL:
 			// 	this._dispatchToPubSub(message);

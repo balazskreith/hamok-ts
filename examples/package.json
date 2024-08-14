@@ -46,6 +46,7 @@
 	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
 	"dependencies": {
 		"pino": "^9.3.2",
+		"ioredis": "^5.4.1",
 		"hamok": "file:../"
 	},
 	"devDependencies": {

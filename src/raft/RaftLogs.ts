@@ -16,7 +16,7 @@ export interface RaftLogs {
 	compareAndAdd(expectedNextIndex: number, term: number, entry: HamokMessage): boolean;
 	removeUntil(index: number): void;
 	get(index: number): LogEntry | undefined;
-	collectEntries(startIndex: number): HamokMessage[];
+	collectEntries(startIndex: number, endIndex?: number): HamokMessage[];
 	[Symbol.iterator](): IterableIterator<LogEntry>;
 	reset(newCommitIndex: number): void;
 }
