@@ -1,11 +1,6 @@
 ## User Manual
 
-- [Hamok](./index.md)
-- [HamokEmitter](./emitter.md)
-- [HamokMap](./map.md)
-- [HamokQueue](./record.md)
-- [HamokRecord](./remoteMap.md)
-- HamokRemoteMap
+[Hamok](./index.md) / [HamokEmitter](./emitter.md) / [HamokMap](./map.md) / [HamokQueue](./record.md) / [HamokRecord](./remoteMap.md) / HamokRemoteMap
 
 ## Table of Contents
 
