@@ -231,9 +231,9 @@ In short use notify for fire and forget messages, and use publish for messages t
 
 ### How many subscribers can a HamokEmitter have for one event?
 
-A `HamokEmitter` can have an unlimited number of subscribers for each event on any peer. 
+A `HamokEmitter` can have an unlimited number of subscribers for each event on any peer.
 The underlying `EventEmitter` implementation used in `HamokEmitter` has no limit on the number of listeners for an event.
-To distribute the event to the remote peers subscribed to the event, the `HamokEmitter` uses the Raft consensus algorithm 
+To distribute the event to the remote peers subscribed to the event, the `HamokEmitter` uses the Raft consensus algorithm
 to ensure that the subscription is consistent across all peers.
 
 ### What is the payloadsCodec for?
