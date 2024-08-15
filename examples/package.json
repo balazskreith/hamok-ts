@@ -21,6 +21,8 @@
 		"dev:common:3": "nodemon -x ts-node src/common-join-example.ts | pino-pretty",
 		"dev:common:4": "nodemon -x ts-node src/common-reelection-example.ts | pino-pretty",
 		"dev:common:5": "nodemon -x ts-node src/common-waiting-example-2.ts | pino-pretty",
+
+		"dev:redis:1": "nodemon -x ts-node src/redis-remote-map-example.ts | pino-pretty",
 		"build": "tsc",
 		"test": "jest --config jest.config.js",
 		"lint": "eslint --ext .ts src"

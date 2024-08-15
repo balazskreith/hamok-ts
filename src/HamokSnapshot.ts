@@ -10,6 +10,11 @@ export type HamokMapSnapshot = {
 	values: Uint8Array[];
 }
 
+export type HamokRemoteMapSnapshot = {
+	mapId: string;
+	appliedCommitIndex?: number;
+}
+
 export type HamokQueueSnapshot = {
 	queueId: string;
 	keys: Uint8Array[];
@@ -33,4 +38,5 @@ export type HamokSnapshot = {
 	maps: HamokMapSnapshot[];
 	queues: HamokQueueSnapshot[];
 	emitters: HamokEmitterSnapshot[];
+	remoteMaps: HamokRemoteMapSnapshot[];
 }

@@ -4,6 +4,7 @@ import { HamokConnection } from './HamokConnection';
 import * as Collections from '../common/Collections';
 import { ConcurrentExecutor } from '../common/ConcurrentExecutor';
 import { RemoteMap } from './RemoteMap';
+import { HamokRemoteMapSnapshot } from '../HamokSnapshot';
 
 const logger = createLogger('HamokRemoteMap');
 
@@ -23,7 +24,7 @@ export declare interface HamokRemoteMap<K, V> {
 }
 
 /**
- * Replicated storage replicates all entries on all distributed storages
+ * A remote map is a map that is stored on a remote endpoint and magaged by Hamok instances
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class HamokRemoteMap<K, V> extends EventEmitter {
@@ -31,52 +32,54 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 	public equalValues: (a: V, b: V) => boolean;
 	private readonly _executor = new ConcurrentExecutor(1);
 
-	/**
-	 * If the local endpoint is the leader, this is the commit index of the last executed operation
-	 * when this local endpoint become the leader the pivoted commit index is loaded from the remote map
-	 * and the local endpoint will execute all operations from above the pivoted commit index, but not below
-	 * 
-	 * IMPORTANT NOTE: pivotedCommitIndex must always be set only when the local endpoint is the leader, 
-	 * and must be undefined when the local endpoint is not the leader
-	 */
-	private _pivotedCommitIndex?: number;
+	public emitEvents = true;
 
 	/**
-	 * This is for a transitional time when the endpoint become the leader until the point we fetched the pivoted commit index
+	 * The last commit index that was applied to the map
 	 */
-	private _blockingPoint?: Promise<void>;
+	private _appliedCommitIndex?: number;
+
+	/**
+	 * This is for a transitional time when no leader is elected.
+	 */
+	private _waitingForLeader?: {
+		promise: Promise<void>,
+		resolve: () => void,
+	};
+
+	/**
+	 * Whether this endpoint is the leader
+	 */
+	private _leader = false;
 
 	private async _executeIfLeader<T>(supplier: () => Promise<T>, commitIndex?: number, onCompleted?: (input: T) => void) {
 		if (this._closed) throw new Error(`Cannot execute on a closed storage (${this.id})`);
-		if (this._blockingPoint) {
-			// we are in a transitional period has to wait until the pivoted commit index is fetched
-			await this._blockingPoint.catch(() => void 0);
+		
+		logger.trace('Executing action for %s, appliedCommitIndex: %d, commitIndex: %d', 
+			this.id,
+			this._appliedCommitIndex,
+			commitIndex
+		);
+
+		if (commitIndex === undefined) {
+			return logger.warn('Commit index is undefined for %s', this.id);
+		} else if (this._waitingForLeader) {
+			await this._waitingForLeader.promise;
+		} else if (!this._leader) {
+			return logger.trace('Not the leader for %s', this.id);
 		}
 
-		if (this._pivotedCommitIndex === undefined) {
-			// we only have pivoted Index if we are the leader
-			return logger.trace('Pivoted commit index is not set for %s', this.id);
-		} else if (commitIndex === undefined) {
-			return logger.debug('Attempted to execute action without commitIndex for %s', this.id);
-		} else if (this._pivotedCommitIndex !== undefined && commitIndex <= this._pivotedCommitIndex) {
-			return logger.info('Attempted to execute action for a commit index already executed for %s. pivotCommitIndex: %d, commitIndex: %d', this.id, this._pivotedCommitIndex, commitIndex);
-		}
+		logger.trace('Executing action for %s, commitIndex: %d', this.id, commitIndex);
 
 		try {
 			const input = await this._executor.execute(supplier);
 
-			if (this._pivotedCommitIndex === undefined) {
-				return logger.warn('Pivoted commit index become undefined, for %s, but operation is executed for commit index %d', this.id, commitIndex);
+			if (commitIndex <= (this._appliedCommitIndex ?? -1)) {
+				logger.warn('Commit index is less than the applied commit index for %s. appliedCommitIndex: %d, commitIndex: %d', this.id, this._appliedCommitIndex, commitIndex);
 			}
-			
-			await this.remoteMap.setCommitIndex(commitIndex);
-			if (this._pivotedCommitIndex === undefined) {
-				return logger.warn('Pivoted commit index is not set for %s, but it is committed %d', this.id, commitIndex);
-			}
-			if (commitIndex <= this._pivotedCommitIndex) {
-				logger.warn('Commit index is less than the pivoted commit index for %s. pivotCommitIndex: %d, commitIndex: %d', this.id, this._pivotedCommitIndex, commitIndex);
-			}
-			this._pivotedCommitIndex = commitIndex;
+			this._appliedCommitIndex = commitIndex;
+			this.connection.notifyStorageAppliedCommit(this._appliedCommitIndex);
+
 			onCompleted?.(input);
 		} catch (err) {
 			logger.error('Error executing on %s', this.id, err);
@@ -97,6 +100,11 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		});
 
 		this.connection
+			.on('StorageAppliedCommitNotification', (notification) => {
+				if (!this._leader) {
+					this._appliedCommitIndex = notification.appliedCommitIndex;
+				}
+			})
 			.on('ClearEntriesRequest', (request, commitIndex) => {
 				this._executeIfLeader(() => this.remoteMap.clear(), commitIndex, () => {
 					this.connection.respond(
@@ -104,8 +112,11 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						request.createResponse(), 
 						request.sourceEndpointId
 					);
-					this.connection.notifyClearEntries(this.connection.grid.remotePeerIds);
-					this.emit('clear');
+
+					if (this.emitEvents) {
+						this.connection.notifyClearEntries(this.connection.grid.remotePeerIds);
+						this.emit('clear');
+					}
 				});
 			})
 			.on('ClearEntriesNotification', () => this.emit('clear'))
@@ -119,8 +130,10 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						request.sourceEndpointId
 					);
 					
-					this.connection.notifyEntriesRemoved(removedEntries, this.connection.grid.remotePeerIds);
-					removedEntries.forEach((v, k) => this.emit('remove', k, v));
+					if (this.emitEvents) {
+						this.connection.notifyEntriesRemoved(removedEntries, this.connection.grid.remotePeerIds);
+						removedEntries.forEach((v, k) => this.emit('remove', k, v));
+					}
 				});
 			})
 			.on('InsertEntriesRequest', (request, commitIndex) => {
@@ -144,8 +157,11 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						request.createResponse(new Map()),
 						request.sourceEndpointId
 					);
-					this.connection.notifyInsertEntries(insertedEntries, this.connection.grid.remotePeerIds);
-					insertedEntries.forEach((value, key) => this.emit('insert', key, value));
+
+					if (this.emitEvents) {
+						this.connection.notifyEntriesInserted(insertedEntries, this.connection.grid.remotePeerIds);
+						insertedEntries.forEach((value, key) => this.emit('insert', key, value));
+					}
 				});
 			})
 			.on('EntriesInsertedNotification', (insertedEntries) => insertedEntries.entries.forEach((v, k) => this.emit('insert', k, v)))
@@ -159,13 +175,15 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						request.sourceEndpointId
 					);
 					
-					this.connection.notifyEntriesRemoved(removedEntries, this.connection.grid.remotePeerIds);
-					removedEntries.forEach((v, k) => this.emit('remove', k, v));
+					if (this.emitEvents) {
+						this.connection.notifyEntriesRemoved(removedEntries, this.connection.grid.remotePeerIds);
+						removedEntries.forEach((v, k) => this.emit('remove', k, v));
+					}
 				});
 			})
 			.on('EntriesRemovedNotification', (removedEntries) => removedEntries.entries.forEach((v, k) => this.emit('remove', k, v)))
 			.on('UpdateEntriesRequest', (request, commitIndex) => {
-
+				// logger.warn('Accepting UpdateEntriesRequest %s, commitIndex: %d', request.requestId, commitIndex);
 				this._executeIfLeader(async () => {
 					logger.trace('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
 
@@ -205,34 +223,33 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						request.sourceEndpointId
 					);
 
-					insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
-					this.connection.notifyInsertEntries(new Map(insertedEntries), this.connection.grid.remotePeerIds);
-
-					updatedEntries.forEach(([ key, oldValue, newValue ]) => {
-						this.emit('update', key, oldValue, newValue);
-						this.connection.notifyEntryUpdated(key, newValue, oldValue, this.connection.grid.remotePeerIds);
-					});
+					if (this.emitEvents) {
+						insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
+						this.connection.notifyEntriesInserted(new Map(insertedEntries), this.connection.grid.remotePeerIds);
+	
+						updatedEntries.forEach(([ key, oldValue, newValue ]) => {
+							this.emit('update', key, oldValue, newValue);
+							this.connection.notifyEntryUpdated(key, oldValue, newValue, this.connection.grid.remotePeerIds);
+						});
+					}
 				});
 				
 			})
+			.on('EntryUpdatedNotification', ({ key, newValue, oldValue }) => this.emit('update', key, oldValue, newValue))
 			.on('leader-changed', (leaderId) => {
-				if (leaderId !== this.connection.grid.localPeerId) {
-					this._pivotedCommitIndex = undefined;
+				if (leaderId === undefined) {
+					let resolve: () => void = () => void 0;
+					const promise = new Promise<void>((_resolve) => {
+						resolve = () => {
+							this._waitingForLeader = undefined;
+							_resolve();
+						};
+					});
 
-					return;
+					return (this._waitingForLeader = { promise, resolve });
 				}
-				this._blockingPoint = new Promise((resolve) => {
-					this.remoteMap.getCommitIndex()
-						.then((commitIndex) => {
-							this._pivotedCommitIndex = commitIndex;
-							resolve();
-						})
-						.catch((err) => {
-							logger.error('Error fetching commit index for %s. %o', this.id, err);
-							resolve();
-						});
-				});
-
+				this._leader = leaderId === this.connection.grid.localPeerId;
+				this._waitingForLeader?.resolve();
 			})
 			.once('close', () => this.close())
 		;
@@ -252,7 +269,9 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 
 		this.connection.close();
 		
-		this.emit('close');
+		if (this.emitEvents) {
+			this.emit('close');
+		}
 		this.removeAllListeners();
 	}
     
@@ -388,5 +407,32 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
     
 	public iterator(): AsyncIterableIterator<[K, V]> {
 		return this.remoteMap.iterator();
+	}
+
+	/**
+	 * Exports the storage data
+	 */
+	public export(): HamokRemoteMapSnapshot {
+		if (this._closed) {
+			throw new Error(`Cannot export data on a closed storage (${this.id})`);
+		}
+		const result: HamokRemoteMapSnapshot = {
+			mapId: this.id,
+			appliedCommitIndex: this._appliedCommitIndex,
+		};
+
+		return result;
+	}
+
+	public import(data: HamokRemoteMapSnapshot) {
+		if (data.mapId !== this.id) {
+			throw new Error(`Cannot import data from a different storage: ${data.mapId} !== ${this.id}`);
+		} else if (this.connection.connected) {
+			throw new Error('Cannot import data while connected');
+		} else if (this._closed) {
+			throw new Error(`Cannot import data on a closed storage (${this.id})`);
+		}
+
+		this._appliedCommitIndex = data.appliedCommitIndex;
 	}
 }

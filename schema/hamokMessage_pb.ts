@@ -494,6 +494,14 @@ export enum HamokMessage_MessageType {
    * @generated from enum value: ENTRY_UPDATED_NOTIFICATION = 59;
    */
   ENTRY_UPDATED_NOTIFICATION = 59,
+
+  /**
+   * *
+   * Notification about the applied commit
+   *
+   * @generated from enum value: STORAGE_APPLIED_COMMIT_NOTIFICATION = 60;
+   */
+  STORAGE_APPLIED_COMMIT_NOTIFICATION = 60,
 }
 // Retrieve enum metadata with: proto2.getEnumType(HamokMessage_MessageType)
 proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.HamokMessage.MessageType", [
@@ -531,6 +539,7 @@ proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.Ha
   { no: 57, name: "UPDATE_ENTRIES_RESPONSE" },
   { no: 58, name: "UPDATE_ENTRIES_NOTIFICATION" },
   { no: 59, name: "ENTRY_UPDATED_NOTIFICATION" },
+  { no: 60, name: "STORAGE_APPLIED_COMMIT_NOTIFICATION" },
 ]);
 
 /**

@@ -20,6 +20,7 @@ import { createResponseChunker, ResponseChunker } from '../messages/ResponseChun
 import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
 import { WaitingQueue } from '../common/WaitingQueue';
+import { StorageAppliedCommitNotification } from '../messages/messagetypes/StorageAppliedCommit';
 
 const logger = createLogger('HamokConnection');
 
@@ -90,6 +91,7 @@ export type HamokConnectionEventMap<K, V> = {
 	UpdateEntriesRequest: [UpdateEntriesRequest<K, V>, commitIndex?: number];
 	UpdateEntriesNotification: [UpdateEntriesNotification<K, V>];
 	EntryUpdatedNotification: [EntryUpdatedNotification<K, V>];
+	StorageAppliedCommitNotification: [StorageAppliedCommitNotification];
 }
 
 export type HamokConnectionResponseMap<K, V> = {
@@ -274,6 +276,12 @@ export class HamokConnection<K, V> extends EventEmitter {
 				this.emit(
 					'EntryUpdatedNotification',
 					this.codec.decodeEntryUpdatedNotification(message),
+				);
+				break;
+			case HamokMessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION:
+				this.emit(
+					'StorageAppliedCommitNotification',
+					this.codec.decodeStorageAppliedCommitNotification(message),
 				);
 				break;
 		}
@@ -545,6 +553,14 @@ export class HamokConnection<K, V> extends EventEmitter {
 	public notifyEntryUpdated(key: K, oldValue: V, newValue: V, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		const message = this.codec.encodeEntryUpdatedNotification(
 			new EntryUpdatedNotification(key, newValue, oldValue)
+		);
+
+		this._sendMessage(message, targetPeerIds);
+	}
+
+	public notifyStorageAppliedCommit(commitIndex: number, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		const message = this.codec.encodeStorageAppliedCommitNotification(
+			new StorageAppliedCommitNotification(commitIndex)
 		);
 
 		this._sendMessage(message, targetPeerIds);

@@ -1,20 +1,21 @@
 ## User Manual
- [Hamok](./index.md) | [HamokEmitter](./emitter.md) | [HamokMap](./map.md) | HamokQueue | [HamokRecord](./record.md)
+
+[Hamok](./index.md) | [HamokEmitter](./emitter.md) | [HamokMap](./map.md) | HamokQueue | [HamokRecord](./record.md) | [HamokRemoteMap](./remoteMap.md)
 
 ## Table of Contents
-* [Overview](#overview)
-* [Configuration](#configuration)
-* [API Reference](#api-reference)
-	* [Properties](#properties)
-	* [Events](#events)
-	* [Methods](#methods)
-* [Examples](#examples)
-* [FAQ](#faq)
 
+- [Overview](#overview)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+  - [Properties](#properties)
+  - [Events](#events)
+  - [Methods](#methods)
+- [Examples](#examples)
+- [FAQ](#faq)
 
 ## Overview
 
-`HamokQueue` is a class that implements a replicated queue with event-driven notifications. 
+`HamokQueue` is a class that implements a replicated queue with event-driven notifications.
 It supports typical queue operations like push, pop, and peek.
 
 ### Create a HamokQueue instance
@@ -23,7 +24,7 @@ You need a `Hamok` to create a `HamokQueue` instance. Here is how you can create
 
 ```typescript
 const queue = hamok.createQueue<string>({
-	queueId: 'exampleQueue',
+  queueId: "exampleQueue",
 });
 ```
 
@@ -33,68 +34,67 @@ You can pass the following configuration options at the time of creating a `Hamo
 
 ```typescript
 const queue = hamok.createQueue<string>({
-	/**
-	 * The unique identifier for the queue.
-	 */
-	queueId: 'queue1',
+  /**
+   * The unique identifier for the queue.
+   */
+  queueId: "queue1",
 
-	/**
-	 * Optional. The timeout duration in milliseconds for requests.
-	 * 
-	 * DEFAULT: 5000
-	 */
-	requestTimeoutInMs: 5000,
+  /**
+   * Optional. The timeout duration in milliseconds for requests.
+   *
+   * DEFAULT: 5000
+   */
+  requestTimeoutInMs: 5000,
 
-	/**
-	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
-	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-	 * 
-	 * DEFAULT: 10x requestTimeoutInMs
-	 */
-	maxMessageWaitingTimeInMs: 50000,
+  /**
+   * Optional. The maximum waiting time in milliseconds for a message to be sent.
+   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+   *
+   * DEFAULT: 10x requestTimeoutInMs
+   */
+  maxMessageWaitingTimeInMs: 50000,
 
-	/**
-	 * Optional. The maximum number of keys allowed in request or response messages.
-	 * 
-	 * DEFAULT: 0 means infinity
-	 */
-	maxOutboundMessageKeys: 1000,
+  /**
+   * Optional. The maximum number of keys allowed in request or response messages.
+   *
+   * DEFAULT: 0 means infinity
+   */
+  maxOutboundMessageKeys: 1000,
 
-	/**
-	 * Optional. The maximum number of values allowed in request or response messages.
-	 * 
-	 * DEFAULT: 0 means infinity
-	 */
-	maxOutboundMessageValues: 100,
+  /**
+   * Optional. The maximum number of values allowed in request or response messages.
+   *
+   * DEFAULT: 0 means infinity
+   */
+  maxOutboundMessageValues: 100,
 
-	/**
-	 * Optional. A base map to be used as the initial state of the map.
-	 * 
-	 * DEFAULT: a new and empty BaseMap instance
-	 */
-	baseMap: new BaseMap<K, V>(),
+  /**
+   * Optional. A base map to be used as the initial state of the map.
+   *
+   * DEFAULT: a new and empty BaseMap instance
+   */
+  baseMap: new BaseMap<K, V>(),
 
-	/**
-	 * Optional. The length of byte array used for queue keys.
-	 * This also affects the maximum number of items ever pushed into the queue.
-	 * Can be 2, 4, or 8 bytes.
-	 * 
-	 * Default is 4, which allows for 4.3 billion items in the queue during it's lifetime.
-	 */
-	lengthOfBytesQueueKeys: 4,
+  /**
+   * Optional. The length of byte array used for queue keys.
+   * This also affects the maximum number of items ever pushed into the queue.
+   * Can be 2, 4, or 8 bytes.
+   *
+   * Default is 4, which allows for 4.3 billion items in the queue during it's lifetime.
+   */
+  lengthOfBytesQueueKeys: 4,
 
-		/**
-	 * Optional. A codec for encoding and decoding items in the queue.
-	 *
-	 * DEFAULT: JSON codec
-	 */
-	codec: {
-		encode: (item: T) => Buffer.from(JSON.stringify(item)),
-		decode: (data: Uint8Array) => JSON.parse(Buffer.from(data).toString()),
-	},
+  /**
+   * Optional. A codec for encoding and decoding items in the queue.
+   *
+   * DEFAULT: JSON codec
+   */
+  codec: {
+    encode: (item: T) => Buffer.from(JSON.stringify(item)),
+    decode: (data: Uint8Array) => JSON.parse(Buffer.from(data).toString()),
+  },
 });
 ```
-
 
 ## API Reference
 
@@ -133,22 +133,25 @@ A class for managing a distributed queue with event-driven capabilities.
 ```typescript
 const queue = new HamokQueue(connection, baseMap);
 
-queue.on('add', (value) => {
+queue.on("add", (value) => {
   console.log(`Added value: ${value}`);
 });
 
-queue.on('remove', (value) => {
+queue.on("remove", (value) => {
   console.log(`Removed value: ${value}`);
 });
 
-queue.push('item1', 'item2').then(() => {
-  return queue.pop();
-}).then((value) => {
-  console.log(`Popped value: ${value}`);
-});
+queue
+  .push("item1", "item2")
+  .then(() => {
+    return queue.pop();
+  })
+  .then((value) => {
+    console.log(`Popped value: ${value}`);
+  });
 
 queue.clear().then(() => {
-  console.log('Queue cleared');
+  console.log("Queue cleared");
 });
 
 queue.close();
@@ -156,8 +159,8 @@ queue.close();
 
 ## Examples
 
- - [push() and pop()](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-push-pop-example.ts)
- - [events from the queue](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-events-example.ts)
+- [push() and pop()](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-push-pop-example.ts)
+- [events from the queue](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-events-example.ts)
 
 ## FAQ
 
@@ -167,11 +170,10 @@ The `push` method is used to add one or more items to the end of the queue progr
 
 ```typescript
 // Listening to the add event means any instance anywhere added an item to the queue
-queue.on('add', (item) => console.log(`Added to the queue: ${item}`));
+queue.on("add", (item) => console.log(`Added to the queue: ${item}`));
 
 // Using push method to add items to the queue
-await queue.push('item1', 'item2');
-
+await queue.push("item1", "item2");
 ```
 
 ### What is the difference between the `remove` event and the `pop` method?
@@ -180,12 +182,11 @@ The `pop` method is used to remove and return the item at the front of the queue
 
 ```typescript
 // Listening to the remove event so means that any instance anywhere removed an item from the queue
-queue.on('remove', (item) => console.log(`Removed from the queue: ${item}`))
+queue.on("remove", (item) => console.log(`Removed from the queue: ${item}`));
 
 // Using pop method to remove an item from the queue
 const item = await queue.pop();
-console.log('Popped item:', item);
-;
+console.log("Popped item:", item);
 ```
 
 ### Can I use HamokQueue for real-time messaging?
@@ -198,9 +199,9 @@ You can check if the queue is empty by using the `empty` property of the `HamokQ
 
 ```typescript
 if (queue.empty) {
-    console.log('The queue is empty');
+  console.log("The queue is empty");
 } else {
-    console.log('The queue is not empty');
+  console.log("The queue is not empty");
 }
 ```
 
@@ -210,6 +211,6 @@ Yes, you can iterate over the items in the queue using the iterator provided by 
 
 ```typescript
 for (const item of queue) {
-    console.log('Iterated item:', item);
+  console.log("Iterated item:", item);
 }
 ```

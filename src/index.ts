@@ -6,6 +6,7 @@ export {
 	HamokQueueBuilderConfig,
 	HamokRecordBuilderConfig,
 	HamokFetchRemotePeersResponse,
+	HamokRemoteMapBuilderConfig,
 	HamokEventMap,
 	HamokMapBuilderConfig,
 	HamokJoinProcessParams,
@@ -13,6 +14,9 @@ export {
 export { 
 	HamokMap,
 } from './collections/HamokMap';
+export {
+	HamokRemoteMap
+} from './collections/HamokRemoteMap';
 export {
 	HamokQueue
 } from './collections/HamokQueue';
@@ -22,6 +26,12 @@ export {
 export {
 	HamokConnection
 } from './collections/HamokConnection';
+export {
+	RaftLogs
+} from './raft/RaftLogs';
+export {
+	MemoryStoredRaftLogs
+} from './raft/MemoryStoredRaftLogs';
 export {
 	HamokSnapshot,
 	HamokEmitterSnapshot,
@@ -41,6 +51,9 @@ export {
 export {
 	BaseMap
 } from './collections/BaseMap';
+export {
+	RemoteMap
+} from './collections/RemoteMap';
 export { 
 	HamokCodec, 
 	createHamokJsonBinaryCodec, 

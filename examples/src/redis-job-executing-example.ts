@@ -1,8 +1,11 @@
 import { Hamok, HamokMessage, setHamokLogLevel } from 'hamok';
 import Redis from 'ioredis';
-import { ConcurrentExecutor } from './ConcurrentExecutor';
+import * as pino from 'pino';
 
-const logger = console;
+const logger = pino.pino({
+	name: 'redis-job-executing-example',
+	level: 'debug',
+});;
 
 type Job = {
 	id: string;
@@ -13,12 +16,31 @@ type Job = {
 	result?: unknown;
 	error?: string;
 }
-const hamok = new Hamok();
+type AppData = {
+	picking: boolean;
+	ongoingJob: null | string;
+	seekNextJob(): Job | undefined;
+	pickJob(newJob: Job): Promise<void>;
+}
+const server_1 = new Hamok<{ ongoingJob: null | string }>({
+	appData: {
+		ongoingJob: null,
+	}
+});
+const server_2 = new Hamok<{ ongoingJob: null | string }>({
+	appData: {
+		ongoingJob: null,
+	}
+});
 const publisher = new Redis();
 const subscriber = new Redis();
-const jobs = hamok.createMap<string, Job>({
+const jobs_1 = server_1.createMap<string, Job>({
 	mapId: 'jobs',
 });
+const jobs_2 = server_2.createMap<string, Job>({
+	mapId: 'jobs',
+});
+
 let ongoingJob: Job | null = null;
 
 function seekNextJob(): Job | undefined {

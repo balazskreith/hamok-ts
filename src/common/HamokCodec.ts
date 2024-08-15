@@ -37,6 +37,14 @@ export function createHamokJsonBinaryCodec<T>(): HamokCodec<T, Uint8Array> {
 	};
 }
 
+export function createHamokJsonStringCodec<T>(): HamokCodec<T, string> {
+
+	return {
+		encode: (data: T) => JSON.stringify(data),
+		decode: (data: string) => JSON.parse(data),
+	};
+}
+
 export interface HamokCodec<U, R> extends HamokEncoder<U, R>, HamokDecoder<U, R> {}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -188,6 +188,11 @@ message HamokMessage {
      */
     ENTRY_UPDATED_NOTIFICATION = 59;
 
+    /**
+    * Notification about the applied commit
+    */
+    STORAGE_APPLIED_COMMIT_NOTIFICATION = 60;
+
   }
 
   enum MessageProtocol {

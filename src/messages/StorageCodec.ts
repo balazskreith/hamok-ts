@@ -9,6 +9,7 @@ import { EntriesRemovedNotification, RemoveEntriesNotification, RemoveEntriesReq
 import { EntriesInsertedNotification, InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
 import { createLogger } from '../common/logger';
+import { StorageAppliedCommitNotification } from './messagetypes/StorageAppliedCommit';
 
 const logger = createLogger('StorageCodec');
 
@@ -36,7 +37,8 @@ type Input<K, V> =
     UpdateEntriesNotification<K, V> |
     UpdateEntriesRequest<K, V> |
     UpdateEntriesResponse<K, V> | 
-    EntryUpdatedNotification<K, V>
+    EntryUpdatedNotification<K, V> |
+    StorageAppliedCommitNotification
     ;
 
 export type StorageCodecMessageMap<K, V> = {
@@ -64,6 +66,7 @@ export type StorageCodecMessageMap<K, V> = {
 	UpdateEntriesResponse: UpdateEntriesResponse<K, V>;
 	UpdateEntriesNotification: UpdateEntriesNotification<K, V>;
 	EntryUpdatedNotification: EntryUpdatedNotification<K, V>;
+	StorageAppliedCommitNotification: StorageAppliedCommitNotification;
 }
 
 export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
@@ -157,6 +160,10 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				break;
 			case EntryUpdatedNotification:
 				result = this.encodeEntryUpdatedNotification(input as EntryUpdatedNotification<K, V>);
+				break;
+
+			case StorageAppliedCommitNotification:
+				result = this.encodeStorageAppliedCommitNotification(input as StorageAppliedCommitNotification);
 				break;
 
 			default:
@@ -273,6 +280,10 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			case MessageType.ENTRY_UPDATED_NOTIFICATION:
 				type = callback ? 'EntryUpdatedNotification' : undefined;
 				result = this.decodeEntryUpdatedNotification(message);
+				break;
+			case MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION:
+				type = callback ? 'StorageAppliedCommitNotification' : undefined;
+				result = this.decodeStorageAppliedCommitNotification(message);
 				break;
 		}
 
@@ -856,6 +867,25 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			oldValue,
 			message.sourceId,
 			message.destinationId,
+		);
+	}
+
+	public encodeStorageAppliedCommitNotification(notification: StorageAppliedCommitNotification): Message {
+		return new Message({
+			type: MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION,
+			raftCommitIndex: notification.appliedCommitIndex,
+			sourceId: notification.sourceEndpointId,
+		});
+	}
+
+	public decodeStorageAppliedCommitNotification(message: Message): StorageAppliedCommitNotification {
+		if (message.type !== MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION) {
+			throw new Error('decodeStorageAppliedCommitNotification(): Message type must be STORAGE_APPLIED_COMMIT_NOTIFICATION');
+		}
+		
+		return new StorageAppliedCommitNotification(
+			message.raftCommitIndex!,
+			message.sourceId,
 		);
 	}
 
