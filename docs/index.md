@@ -23,7 +23,8 @@
 8. [Examples](#examples)
 9. [Best Practices](#best-practices)
 10. [Troubleshooting](#troubleshooting)
-11. [FAQ](#faq)
+11. [`HamokMessage` compatibility Table](#hamokmessage-compatibility-table)
+12. [FAQ](#faq)
 
 ## Introduction
 
@@ -494,6 +495,19 @@ If you encounter issues with Hamok, consider the following steps:
 - Ensure that network connectivity is stable if using remote peers.
 - Review logs for any error messages or warnings.
 - Consult the Hamok documentation and community forums for additional support.
+
+Here is the updated markdown compatibility table for the `HamokMessage` schema with version 2.0.0 removed:
+
+## `HamokMessage` compatibility Table
+
+| Version | 2.1.0 | 2.2.0 | 2.3.0 |
+| ------- | ----- | ----- | ----- |
+| 2.1.0   | ✔️    | ✔️    | ❌    |
+| 2.2.0   | ✔️    | ✔️    | ❌    |
+| 2.3.0   | ❌    | ❌    | ✔️    |
+
+- ✔️ Compatible
+- ❌ Not Compatible
 
 ## FAQ
 
