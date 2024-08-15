@@ -52,3 +52,13 @@ export class RemoveEntriesNotification<K> {
 		this.destinationEndpointId = destinationEndpointId;
 	}
 }
+
+export class EntriesRemovedNotification<K, V> {
+	public constructor(
+		public readonly entries: ReadonlyMap<K, V>,
+		public readonly sourceEndpointId?: string,
+		public readonly destinationEndpointId?: string
+	) {
+		// empty
+	}
+}

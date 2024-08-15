@@ -44,7 +44,11 @@ export type RaftEngineConfig = {
 	onlyFollower: boolean,
 }
 
-interface HamokController extends EventEmitter<HamokEventMap> {
+interface HamokController extends EventEmitter {
+	on<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	once<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	off<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	emit<U extends keyof HamokEventMap>(event: U, ...args: HamokEventMap[U]): boolean;
 	stop(): void;
 }
 
@@ -55,6 +59,7 @@ export class RaftEngine {
 	private _leaderId?: string;
 	public readonly remotePeers = new Set<string>();
 	public readonly transport = new RaftMessageEmitter();
+	private _failedElections = 0;
 
 	public constructor(
 		public readonly config: RaftEngineConfig,
@@ -75,6 +80,10 @@ export class RaftEngine {
 		return this._leaderId;
 	}
 
+	public get failedElections(): number {
+		return this._failedElections;
+	}
+
 	public set leaderId(newLeaderId: string | undefined) {
 		if (this._leaderId === newLeaderId) return;
 		const prevLeaderId = this._leaderId;
@@ -83,6 +92,10 @@ export class RaftEngine {
 
 		logger.info(`%s Leader changed from ${prevLeaderId} to ${newLeaderId}`, this.localPeerId);
 		
+		if (newLeaderId !== undefined) {
+			this._failedElections = 0;
+		}
+
 		this.events.emit('leader-changed', newLeaderId, prevLeaderId);
 	}
 
@@ -99,6 +112,10 @@ export class RaftEngine {
 		
 		logger.debug(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
 		
+		if (prevState.stateName === 'candidate' && newState.stateName === 'follower') {
+			++this._failedElections;
+		}
+
 		newState.init?.();
 
 		this.events.emit('state-changed', newState.stateName);
@@ -106,6 +123,7 @@ export class RaftEngine {
 		switch (newState.stateName) {
 			case 'leader':
 			case 'follower':
+			case 'candidate':
 				this.events.emit(newState.stateName);
 				break;
 		}

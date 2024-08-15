@@ -6,6 +6,10 @@ export interface HamokDecoder<U, R> {
 	decode(data: R): U;
 }
 
+const EMPTY_MAP = new Map();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY_SET = new Set<any>();
+
 export function createHamokCodec<U, R>(encode: (input: U) => R, decode: (input: R) => U): HamokCodec<U, R> {
 	return {
 		encode,
@@ -30,6 +34,14 @@ export function createHamokJsonBinaryCodec<T>(): HamokCodec<T, Uint8Array> {
             
 			return decoded;
 		},
+	};
+}
+
+export function createHamokJsonStringCodec<T>(): HamokCodec<T, string> {
+
+	return {
+		encode: (data: T) => JSON.stringify(data),
+		decode: (data: string) => JSON.parse(data),
 	};
 }
 
@@ -74,10 +86,7 @@ export class FacadedHamokCodec<TIn = any, TOut = any> implements HamokCodec<TIn,
 	}
 }
 
-export function encodeSet<K>(keys: ReadonlySet<K>, keyCodec: HamokCodec<K, Uint8Array>): Uint8Array[] {
-	if (keys.size < 1) {
-		return [];
-	}
+export function encodeCollection<K>(keys: IterableIterator<K>, keyCodec: HamokCodec<K, Uint8Array>): Uint8Array[] {
 	const result: Uint8Array[] = [];
 
 	for (const key of keys) {
@@ -89,22 +98,32 @@ export function encodeSet<K>(keys: ReadonlySet<K>, keyCodec: HamokCodec<K, Uint8
 	return result;
 }
 
-const EMPTY_SET = new Set<any>();
+export function decodeCollection<K>(keys: IterableIterator<Uint8Array>, keyCodec: HamokCodec<K, Uint8Array>): K[] {
+	const result: K[] = [];
+
+	for (const key of keys) {
+		const decodedKey = keyCodec.decode(key);
+
+		result.push(decodedKey);
+	}
+	
+	return result;
+}
+
+export function encodeSet<K>(keys: ReadonlySet<K>, keyCodec: HamokCodec<K, Uint8Array>): Uint8Array[] {
+	if (keys.size < 1) {
+		return [];
+	}
+	
+	return encodeCollection(keys.values(), keyCodec);
+}
 
 export function decodeSet<K>(keys: Uint8Array[], keyCodec: HamokCodec<K, Uint8Array>): ReadonlySet<K> {
 	if (keys.length < 1) {
 		return EMPTY_SET;
 	}
-	const result = new Set<K>();
-
-	for (let i = 0; i < keys.length; ++i) {
-		const key = keys[i];
-		const decodedKey = keyCodec.decode(key);
-
-		result.add(decodedKey);
-	}
 	
-	return result;
+	return new Set(decodeCollection(keys.values(), keyCodec));
 }
 
 export function encodeMap<K, V>(entries: ReadonlyMap<K, V>, keyCodec: HamokCodec<K, Uint8Array>, valueCodec: HamokCodec<V, Uint8Array>): [Uint8Array[], Uint8Array[]] {
@@ -124,8 +143,6 @@ export function encodeMap<K, V>(entries: ReadonlyMap<K, V>, keyCodec: HamokCodec
 	
 	return [ encodedKeys, encodedValues ];
 }
-
-const EMPTY_MAP = new Map();
 
 export function decodeMap<K, V>(keys: Uint8Array[], values: Uint8Array[], keyCodec: HamokCodec<K, Uint8Array>, valueCodec: HamokCodec<V, Uint8Array>): ReadonlyMap<K, V> {
 	if (keys.length < 1 || values.length < 1) {

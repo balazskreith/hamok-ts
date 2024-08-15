@@ -1,4 +1,4 @@
-Here's the combined README for the Hamok library:
+![Logo](assets/logo-readme.png)
 
 # Hamok Library
 
@@ -28,6 +28,7 @@ yarn add hamok
   - [HamokEmitter](#hamokemitter)
   - [HamokRecord](#hamokrecord)
 - [User Manual](#user-manual)
+- [Important Notes](#important-notes)
 - [Contributing](#contributing)
 - [License](#license)
 ## Quick Start

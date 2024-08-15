@@ -1,6 +1,6 @@
 import { setHamokLogLevel } from 'hamok';
 import { run as reelection } from './common-reelection-example';
-import { run as discovery } from './common-discovery-example';
+import { run as discovery } from './common-join-example';
 import { run as mapUpdateIf } from './map-update-if-example';
 import { run as mapInsert } from './map-insert-get-example'
 import { run as queuePushPop } from './queue-push-pop-example';
@@ -33,8 +33,11 @@ async function run() {
         ['commonWaiting', commonWaiting],
         ['reelection', reelection],
         ['discovery', discovery],
-
     ]);
+
+    if (process.argv.includes('--include-redis')) {
+        // empty
+    }
 
     for (const [name, fn] of map) {
         logger.info([

@@ -1,14 +1,15 @@
 import { HamokCodec, encodeMap, decodeMap, encodeSet, decodeSet } from '../common/HamokCodec';
-import { UpdateEntriesNotification, UpdateEntriesRequest, UpdateEntriesResponse } from './messagetypes/UpdateEntries';
+import { EntryUpdatedNotification, UpdateEntriesNotification, UpdateEntriesRequest, UpdateEntriesResponse } from './messagetypes/UpdateEntries';
 import { HamokMessage as Message, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import { ClearEntriesNotification, ClearEntriesRequest, ClearEntriesResponse } from './messagetypes/ClearEntries';
 import { GetEntriesRequest, GetEntriesResponse } from './messagetypes/GetEntries';
 import { GetKeysRequest, GetKeysResponse } from './messagetypes/GetKeys';
 import { DeleteEntriesNotification, DeleteEntriesRequest, DeleteEntriesResponse } from './messagetypes/DeleteEntries';
-import { RemoveEntriesNotification, RemoveEntriesRequest, RemoveEntriesResponse } from './messagetypes/RemoveEntries';
-import { InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
+import { EntriesRemovedNotification, RemoveEntriesNotification, RemoveEntriesRequest, RemoveEntriesResponse } from './messagetypes/RemoveEntries';
+import { EntriesInsertedNotification, InsertEntriesNotification, InsertEntriesRequest, InsertEntriesResponse } from './messagetypes/InsertEntries';
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
 import { createLogger } from '../common/logger';
+import { StorageAppliedCommitNotification } from './messagetypes/StorageAppliedCommit';
 
 const logger = createLogger('StorageCodec');
 
@@ -28,12 +29,16 @@ type Input<K, V> =
     RemoveEntriesNotification<K> |
     RemoveEntriesRequest<K> |
     RemoveEntriesResponse<K, V> |
+    EntriesRemovedNotification<K, V> |
     InsertEntriesNotification<K, V> |
     InsertEntriesRequest<K, V> |
     InsertEntriesResponse<K, V> |
+    EntriesInsertedNotification<K, V> |
     UpdateEntriesNotification<K, V> |
     UpdateEntriesRequest<K, V> |
-    UpdateEntriesResponse<K, V>
+    UpdateEntriesResponse<K, V> | 
+    EntryUpdatedNotification<K, V> |
+    StorageAppliedCommitNotification
     ;
 
 export type StorageCodecMessageMap<K, V> = {
@@ -52,12 +57,16 @@ export type StorageCodecMessageMap<K, V> = {
 	RemoveEntriesRequest: RemoveEntriesRequest<K>;
 	RemoveEntriesResponse: RemoveEntriesResponse<K, V>;
 	RemoveEntriesNotification: RemoveEntriesNotification<K>;
+	EntriesRemovedNotification: EntriesRemovedNotification<K, V>;
 	InsertEntriesRequest: InsertEntriesRequest<K, V>;
 	InsertEntriesResponse: InsertEntriesResponse<K, V>;
 	InsertEntriesNotification: InsertEntriesNotification<K, V>;
+	EntriesInsertedNotification: EntriesInsertedNotification<K, V>;
 	UpdateEntriesRequest: UpdateEntriesRequest<K, V>;
 	UpdateEntriesResponse: UpdateEntriesResponse<K, V>;
 	UpdateEntriesNotification: UpdateEntriesNotification<K, V>;
+	EntryUpdatedNotification: EntryUpdatedNotification<K, V>;
+	StorageAppliedCommitNotification: StorageAppliedCommitNotification;
 }
 
 export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
@@ -123,6 +132,9 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			case RemoveEntriesNotification:
 				result = this.encodeDeleteEntriesNotification(input as RemoveEntriesNotification<K>);
 				break;
+			case EntriesRemovedNotification:
+				result = this.encodeEntriesRemovedNotification(input as EntriesRemovedNotification<K, V>);
+				break;
 
 			case InsertEntriesRequest:
 				result = this.encodeInsertEntriesRequest(input as InsertEntriesRequest<K, V>);
@@ -133,6 +145,9 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			case InsertEntriesNotification:
 				result = this.encodeInsertEntriesNotification(input as InsertEntriesNotification<K, V>);
 				break;
+			case EntriesInsertedNotification:
+				result = this.encodeEntriesInsertedNotification(input as EntriesInsertedNotification<K, V>);
+				break;
 
 			case UpdateEntriesRequest:
 				result = this.encodeUpdateEntriesRequest(input as UpdateEntriesRequest<K, V>);
@@ -142,6 +157,13 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				break;
 			case UpdateEntriesNotification:
 				result = this.encodeUpdateEntriesNotification(input as UpdateEntriesNotification<K, V>);
+				break;
+			case EntryUpdatedNotification:
+				result = this.encodeEntryUpdatedNotification(input as EntryUpdatedNotification<K, V>);
+				break;
+
+			case StorageAppliedCommitNotification:
+				result = this.encodeStorageAppliedCommitNotification(input as StorageAppliedCommitNotification);
 				break;
 
 			default:
@@ -223,6 +245,10 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				type = callback ? 'RemoveEntriesNotification' : undefined;
 				result = this.decodeRemoveEntriesNotification(message);
 				break;
+			case MessageType.ENTRIES_REMOVED_NOTIFICATION:
+				type = callback ? 'EntriesRemovedNotification' : undefined;
+				result = this.decodeEntriesRemovedNotification(message);
+				break;
 			case MessageType.INSERT_ENTRIES_REQUEST:
 				type = callback ? 'InsertEntriesRequest' : undefined;
 				result = this.decodeInsertEntriesRequest(message);
@@ -235,6 +261,10 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				type = callback ? 'InsertEntriesNotification' : undefined;
 				result = this.decodeInsertEntriesNotification(message);
 				break;
+			case MessageType.ENTRIES_INSERTED_NOTIFICATION:
+				type = callback ? 'EntriesInsertedNotification' : undefined;
+				result = this.decodeEntriesInsertedNotification(message);
+				break;
 			case MessageType.UPDATE_ENTRIES_REQUEST:
 				type = callback ? 'UpdateEntriesRequest' : undefined;
 				result = this.decodeUpdateEntriesRequest(message);
@@ -246,6 +276,14 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			case MessageType.UPDATE_ENTRIES_NOTIFICATION:
 				type = callback ? 'UpdateEntriesNotification' : undefined;
 				result = this.decodeUpdateEntriesNotification(message);
+				break;
+			case MessageType.ENTRY_UPDATED_NOTIFICATION:
+				type = callback ? 'EntryUpdatedNotification' : undefined;
+				result = this.decodeEntryUpdatedNotification(message);
+				break;
+			case MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION:
+				type = callback ? 'StorageAppliedCommitNotification' : undefined;
+				result = this.decodeStorageAppliedCommitNotification(message);
 				break;
 		}
 
@@ -595,6 +633,31 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		);
 	}
 
+	public encodeEntriesRemovedNotification(notification: EntriesRemovedNotification<K, V>): Message {
+		const [ keys, values ] = this.encodeEntries(notification.entries);
+		
+		return new Message({
+			type: MessageType.ENTRIES_REMOVED_NOTIFICATION,
+			keys,
+			values,
+			sourceId: notification.sourceEndpointId,
+			destinationId: notification.destinationEndpointId,
+		});
+	}
+
+	public decodeEntriesRemovedNotification(message: Message): EntriesRemovedNotification<K, V> {
+		if (message.type !== MessageType.ENTRIES_REMOVED_NOTIFICATION) {
+			throw new Error('decodeEntriesRemovedNotification(): Message type must be ENTRIES_REMOVED_NOTIFICATION');
+		}
+		const entries = this.decodeEntries(message.keys, message.values);
+		
+		return new EntriesRemovedNotification<K, V>(
+			entries,
+			message.sourceId,
+			message.destinationId,
+		);
+	}
+
 	public encodeInsertEntriesRequest(request: InsertEntriesRequest<K, V>): Message {
 		const [ keys, values ] = this.encodeEntries(request.entries);
         
@@ -670,9 +733,34 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		);
 	}
 
+	public encodeEntriesInsertedNotification(notification: EntriesInsertedNotification<K, V>): Message {
+		const [ keys, values ] = this.encodeEntries(notification.entries);
+		
+		return new Message({
+			type: MessageType.ENTRIES_INSERTED_NOTIFICATION,
+			keys,
+			values,
+			sourceId: notification.sourceEndpointId,
+			destinationId: notification.destinationEndpointId,
+		});
+	}
+
+	public decodeEntriesInsertedNotification(message: Message): EntriesInsertedNotification<K, V> {
+		if (message.type !== MessageType.ENTRIES_INSERTED_NOTIFICATION) {
+			throw new Error('decodeEntriesInsertedNotification(): Message type must be ENTRIES_INSERTED_NOTIFICATION');
+		}
+		const entries = this.decodeEntries(message.keys, message.values);
+		
+		return new EntriesInsertedNotification<K, V>(
+			entries,
+			message.sourceId,
+			message.destinationId,
+		);
+	}
+
 	public encodeUpdateEntriesRequest(request: UpdateEntriesRequest<K, V>): Message {
 		const [ keys, values ] = this.encodeEntries(request.entries);
-        
+		
 		return new Message({
 			type: MessageType.UPDATE_ENTRIES_REQUEST,
 			sourceId: request.sourceEndpointId,
@@ -744,6 +832,60 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			updatedEntries,
 			message.sourceId,
 			message.destinationId,
+		);
+	}
+
+	public encodeEntryUpdatedNotification(notification: EntryUpdatedNotification<K, V>): Message {
+		return new Message({
+			type: MessageType.ENTRY_UPDATED_NOTIFICATION,
+			keys: [ this.keyCodec.encode(notification.key) ],
+			values: [ this.valueCodec.encode(notification.newValue) ],
+			prevValue: this.valueCodec.encode(notification.oldValue),
+			sourceId: notification.sourceEndpointId,
+			destinationId: notification.destinationEndpointId,
+		});
+	}
+
+	public decodeEntryUpdatedNotification(message: Message): EntryUpdatedNotification<K, V> {
+		if (message.type !== MessageType.ENTRY_UPDATED_NOTIFICATION) {
+			throw new Error('decodeEntriesUpdatedNotification(): Message type must be ENTRY_UPDATED_NOTIFICATION');
+		} else if (message.keys.length < 1) {
+			throw new Error('decodeEntriesUpdatedNotification(): Message must have at least one key');
+		} else if (message.values.length < 1) {
+			throw new Error('decodeEntriesUpdatedNotification(): Message must have at least one value');
+		} else if (message.prevValue === undefined) {
+			throw new Error('decodeEntriesUpdatedNotification(): Message must have a prevValue');
+		}
+
+		const key = this.keyCodec.decode(message.keys[0]);
+		const newValue = this.valueCodec.decode(message.values[0]);
+		const oldValue = this.valueCodec.decode(message.prevValue!);
+		
+		return new EntryUpdatedNotification<K, V>(
+			key,
+			newValue,
+			oldValue,
+			message.sourceId,
+			message.destinationId,
+		);
+	}
+
+	public encodeStorageAppliedCommitNotification(notification: StorageAppliedCommitNotification): Message {
+		return new Message({
+			type: MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION,
+			raftCommitIndex: notification.appliedCommitIndex,
+			sourceId: notification.sourceEndpointId,
+		});
+	}
+
+	public decodeStorageAppliedCommitNotification(message: Message): StorageAppliedCommitNotification {
+		if (message.type !== MessageType.STORAGE_APPLIED_COMMIT_NOTIFICATION) {
+			throw new Error('decodeStorageAppliedCommitNotification(): Message type must be STORAGE_APPLIED_COMMIT_NOTIFICATION');
+		}
+		
+		return new StorageAppliedCommitNotification(
+			message.raftCommitIndex!,
+			message.sourceId,
 		);
 	}
 

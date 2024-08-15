@@ -15,7 +15,16 @@ export type MemoryStoredRaftLogsConfig = {
 	memorySizeHighWaterMark: number;
 }
 
-export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEventMap> implements RaftLogs {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export declare interface MemoryStoredRaftLogs {
+	on<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	once<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	off<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, listener: (...args: MemoryStoredRaftLogsEventMap[U]) => void): this;
+	emit<U extends keyof MemoryStoredRaftLogsEventMap>(event: U, ...args: MemoryStoredRaftLogsEventMap[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 
 	/**
 	 * index of highest log entry applied to state
@@ -208,11 +217,25 @@ export class MemoryStoredRaftLogs extends EventEmitter<MemoryStoredRaftLogsEvent
 		return this._entries.get(index);
 	}
 
-	public collectEntries(startIndex: number): HamokMessage[] {
+	public collectEntries(startIndex: number, endIndex?: number): HamokMessage[] {
 		const result: HamokMessage[] = [];
 		let missingEntries = 0;
 
-		for (let logIndex = startIndex; logIndex < this._nextIndex; ++logIndex) {
+		if (endIndex == undefined) {
+			endIndex = this._nextIndex;
+		} else if (endIndex < startIndex) {
+			logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but endIndex is smaller than startIndex.', startIndex);
+			
+			return [];
+		} else if (this._nextIndex < endIndex) {
+			logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but endIndex is higher than the nextIndex.', startIndex, endIndex);
+			
+			endIndex = this._nextIndex;
+		} else {
+			endIndex = Math.min(endIndex, this._nextIndex);
+		}
+
+		for (let logIndex = startIndex; logIndex < endIndex; ++logIndex) {
 			const logEntry = this._entries.get(logIndex);
 
 			if (logEntry == undefined) {

@@ -21,7 +21,16 @@ type EventMap = {
 	RaftAppendEntriesResponse: [response: RaftAppendEntriesResponse]
 };
 
-export class RaftMessageEmitter extends EventEmitter<EventMap> {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export declare interface RaftMessageEmitter {
+	on<U extends keyof EventMap>(event: U, listener: (...args: EventMap[U]) => void): this;
+	once<U extends keyof EventMap>(event: U, listener: (...args: EventMap[U]) => void): this;
+	off<U extends keyof EventMap>(event: U, listener: (...args: EventMap[U]) => void): this;
+	emit<U extends keyof EventMap>(event: U, ...args: EventMap[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class RaftMessageEmitter extends EventEmitter {
 	public constructor() {
 		super();
 		this.setMaxListeners(Infinity);

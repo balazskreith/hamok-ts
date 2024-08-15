@@ -233,6 +233,15 @@ export enum HamokMessage_MessageType {
 
   /**
    * *
+   * Join notification is sent by a new endpoint to every other endpoint
+   * in order to join the grid
+   *
+   * @generated from enum value: JOIN_NOTIFICATION = 4;
+   */
+  JOIN_NOTIFICATION = 4,
+
+  /**
+   * *
    * Raft Vote request is sent by a raccoon made itself a candidate 
    * in order to be a leader of the cluster
    *
@@ -410,6 +419,14 @@ export enum HamokMessage_MessageType {
 
   /**
    * *
+   * Notification about the removed entries
+   *
+   * @generated from enum value: ENTRIES_REMOVED_NOTIFICATION = 47;
+   */
+  ENTRIES_REMOVED_NOTIFICATION = 47,
+
+  /**
+   * *
    * Insert item(s) only if they don't exist. if they
    * exist then it returns with the value associated
    *
@@ -440,6 +457,14 @@ export enum HamokMessage_MessageType {
 
   /**
    * *
+   * Notification about the inserted entries
+   *
+   * @generated from enum value: ENTRIES_INSERTED_NOTIFICATION = 55;
+   */
+  ENTRIES_INSERTED_NOTIFICATION = 55,
+
+  /**
+   * *
    * Request an update from a remote storage
    *
    * @generated from enum value: UPDATE_ENTRIES_REQUEST = 56;
@@ -461,12 +486,29 @@ export enum HamokMessage_MessageType {
    * @generated from enum value: UPDATE_ENTRIES_NOTIFICATION = 58;
    */
   UPDATE_ENTRIES_NOTIFICATION = 58,
+
+  /**
+   * *
+   * Notification about the updated entries
+   *
+   * @generated from enum value: ENTRY_UPDATED_NOTIFICATION = 59;
+   */
+  ENTRY_UPDATED_NOTIFICATION = 59,
+
+  /**
+   * *
+   * Notification about the applied commit
+   *
+   * @generated from enum value: STORAGE_APPLIED_COMMIT_NOTIFICATION = 60;
+   */
+  STORAGE_APPLIED_COMMIT_NOTIFICATION = 60,
 }
 // Retrieve enum metadata with: proto2.getEnumType(HamokMessage_MessageType)
 proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.HamokMessage.MessageType", [
   { no: 1, name: "HELLO_NOTIFICATION" },
   { no: 2, name: "ENDPOINT_STATES_NOTIFICATION" },
   { no: 3, name: "ONGOING_REQUESTS_NOTIFICATION" },
+  { no: 4, name: "JOIN_NOTIFICATION" },
   { no: 12, name: "RAFT_VOTE_REQUEST" },
   { no: 13, name: "RAFT_VOTE_RESPONSE" },
   { no: 16, name: "RAFT_APPEND_ENTRIES_REQUEST_CHUNK" },
@@ -488,12 +530,16 @@ proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.Ha
   { no: 44, name: "REMOVE_ENTRIES_REQUEST" },
   { no: 45, name: "REMOVE_ENTRIES_RESPONSE" },
   { no: 46, name: "REMOVE_ENTRIES_NOTIFICATION" },
+  { no: 47, name: "ENTRIES_REMOVED_NOTIFICATION" },
   { no: 52, name: "INSERT_ENTRIES_REQUEST" },
   { no: 53, name: "INSERT_ENTRIES_RESPONSE" },
   { no: 54, name: "INSERT_ENTRIES_NOTIFICATION" },
+  { no: 55, name: "ENTRIES_INSERTED_NOTIFICATION" },
   { no: 56, name: "UPDATE_ENTRIES_REQUEST" },
   { no: 57, name: "UPDATE_ENTRIES_RESPONSE" },
   { no: 58, name: "UPDATE_ENTRIES_NOTIFICATION" },
+  { no: 59, name: "ENTRY_UPDATED_NOTIFICATION" },
+  { no: 60, name: "STORAGE_APPLIED_COMMIT_NOTIFICATION" },
 ]);
 
 /**

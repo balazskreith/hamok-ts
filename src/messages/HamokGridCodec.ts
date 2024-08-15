@@ -7,11 +7,13 @@ import { OngoingRequestsNotification } from './messagetypes/OngoingRequests';
 import * as Collections from '../common/Collections';
 import { EndpointStatesNotification } from './messagetypes/EndpointNotification';
 import { HelloNotification } from './messagetypes/HelloNotification';
+import { JoinNotification } from './messagetypes/JoinNotification';
 
 const logger = createLogger('GridCodec');
 
 type Input = 
 HelloNotification |
+JoinNotification | 
 EndpointStatesNotification |
 OngoingRequestsNotification |
 StorageSyncRequest | 
@@ -41,6 +43,8 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		switch (input.constructor) {
 			case HelloNotification:
 				return this.encodeHelloNotification(input as HelloNotification);
+			case JoinNotification:
+				return this.encodeJoinNotification(input as JoinNotification);
 			case EndpointStatesNotification:
 				return this.encodeEndpointStateNotification(input as EndpointStatesNotification);
 			case OngoingRequestsNotification:
@@ -58,6 +62,8 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		switch (message.type) {
 			case MessageType.HELLO_NOTIFICATION:
 				return this.decodeHelloNotification(message);
+			case MessageType.JOIN_NOTIFICATION:
+				return this.decodeJoinNotification(message);
 			case MessageType.ENDPOINT_STATES_NOTIFICATION:
 				return this.decodeEndpointStateNotification(message);      
 			case MessageType.ONGOING_REQUESTS_NOTIFICATION:
@@ -94,6 +100,27 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 			message.destinationId,
 			message.raftLeaderId,
 			customData
+		);
+	}
+
+	public encodeJoinNotification(notification: JoinNotification): HamokMessage {
+		return new HamokMessage({
+			// eslint-disable-next-line camelcase
+			protocol: HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL,
+			type: MessageType.JOIN_NOTIFICATION,
+			sourceId: notification.sourcePeerId,
+			destinationId: notification.destinationPeerId,
+		});
+	}
+
+	public decodeJoinNotification(message: HamokMessage): JoinNotification {
+		if (message.type !== MessageType.JOIN_NOTIFICATION) {
+			throw new Error('decodeJoinNotification(): Message type must be JOIN_NOTIFICATION');
+		}
+		
+		return new JoinNotification(
+			message.sourceId!,
+			message.destinationId,
 		);
 	}
 

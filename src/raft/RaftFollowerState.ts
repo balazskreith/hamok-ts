@@ -112,9 +112,9 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			}
 			// // we send success and processed response as the problem is not with the request,
 			// // but we do not change our next index because we cannot process it momentary due to not synced endpoint
-			// const response = requestChunk.createResponse(true, logs.nextIndex, true);
+			const response = requestChunk.createResponse(true, logs.nextIndex, true);
 
-			// return messageEmitter.send(response);
+			return messageEmitter.send(response);
 		}
 
 		// if we arrived in this point we know that the sync is possible.

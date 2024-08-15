@@ -43,3 +43,15 @@ export class UpdateEntriesNotification<K, V> {
 		// empty
 	}
 }
+
+export class EntryUpdatedNotification<K, V> {
+	public constructor(
+		public readonly key: K,
+		public readonly newValue: V,
+		public readonly oldValue: V,
+		public readonly sourceEndpointId?: string,
+		public readonly destinationEndpointId?: string,
+	) {
+		// empty
+	}
+}

@@ -9,7 +9,7 @@ import { RaftStateName } from './raft/RaftState';
 import { HamokMap } from './collections/HamokMap';
 import { HamokConnection } from './collections/HamokConnection';
 import { OngoingRequestsNotifier } from './messages/OngoingRequestsNotifier';
-import { createHamokJsonBinaryCodec, createNumberToUint8ArrayCodec, createStrToUint8ArrayCodec, HamokCodec } from './common/HamokCodec';
+import { createHamokJsonBinaryCodec, createHamokJsonStringCodec, createNumberToUint8ArrayCodec, createStrToUint8ArrayCodec, HamokCodec } from './common/HamokCodec';
 import { StorageCodec } from './messages/StorageCodec';
 import { BaseMap, MemoryBaseMap } from './collections/BaseMap';
 import { createLogger } from './common/logger';
@@ -24,18 +24,72 @@ import { RaftLogs } from './raft/RaftLogs';
 import { HamokRecord, HamokRecordObject } from './collections/HamokRecord';
 import { HelloNotification } from './messages/messagetypes/HelloNotification';
 import { EndpointStatesNotification } from './messages/messagetypes/EndpointNotification';
+import { JoinNotification } from './messages/messagetypes/JoinNotification';
+import { RemoteMap } from './collections/RemoteMap';
+import { HamokRemoteMap } from './collections/HamokRemoteMap';
 
 const logger = createLogger('Hamok');
 
-export type HamokConfig = {
-	// empty
-	raftLogs?: RaftLogs,
+type HamokHelloNotificationCustomRequestType = 'snapshot';
+
+export type HamokJoinProcessParams = {
+
+	/**
+	 * Timeout in milliseconds for fetching the remote peers.
+	 * 
+	 * DEFAULT: 5000
+	 */
+	fetchRemotePeerTimeoutInMs?: number,
+
+	/**
+	 * The maximum number of retries for fetching the remote peers.
+	 * -1 - means infinite retries
+	 * 0 - means no retries
+	 * 
+	 * DEFAULT: 3
+	 */
+	maxRetry?: number;
+	
+	/**
+	 * Indicate if the remote peers automatically should be removed if no heartbeat is received.
+	 * 
+	 * DEFAULT: true
+	 */
+	removeRemotePeersOnNoHeartbeat?: boolean,
+
+	/**
+	 * indicates if the snapshot should be requested from the remote peers, 
+	 * and if it is provided then it is used in local
+	 * 
+	 * DEFAULT: true
+	 */
+	requestSnapshot?: boolean,
+
+	/**
+	 * indicates if the start() method should be called automatically after the join process is completed
+	 * 
+	 * DEFAULT: false
+	 */
+	startAfterJoin?: boolean,
+}
+
+export type HamokConfig<AppData extends Record<string, unknown> = Record<string, unknown>> = {
+
+	/**
+	 * Indicate if the Hamok should stop automatically when there are no remote peers.
+	 */
+	autoStopOnNoRemotePeers?: boolean,
+
+	/**
+	 * A custom appData object to be used by the application utilizes Hamok.
+	 */
+	appData: AppData,
 }
 
 /**
  * Configuration settings for the Hamok constructor, extending RaftEngineConfig and HamokConfig.
  */
-export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
+export type HamokConstructorConfig<AppData extends Record<string, unknown> = Record<string, unknown>> = RaftEngineConfig & HamokConfig<AppData> & {
 
 	/**
 	 * Optional. The expiration time in milliseconds for log entries.
@@ -57,6 +111,18 @@ export type HamokConstructorConfig = RaftEngineConfig & HamokConfig & {
 	 * automatically stopping notifications for explicitly postponed requests.
 	 */
 	ongoingRequestsSendingPeriodInMs: number;
+
+	/**
+	 * Optional. A custom implementation of RaftLogs to store log entries.
+	 */
+	raftLogs?: RaftLogs,
+
+	/**
+	 * Optional. In case snapshots are requested by a join operation this is the codec to encode and decode the snapshot.
+	 * 
+	 * DEFAULT: JSON codec
+	 */
+	snapshotCodec?: HamokCodec<HamokSnapshot, string>,
 }
 
 /**
@@ -162,6 +228,25 @@ export type HamokMapBuilderConfig<K, V> = {
 }
 
 /**
+ * Configuration settings for building a Hamok remote map.
+ */
+export type HamokRemoteMapBuilderConfig<K, V> = Omit<HamokMapBuilderConfig<K, V>, 'baseMap'> & {
+
+	/**
+	 * The remote map to be used to store the data.
+	 */
+	remoteMap: RemoteMap<K, V>,	
+
+	/**
+	 * Flag indicate if the events should be emitted by the event emitter or not.
+	 * It also reduces the communication overhead if not needed, as for emitting events
+	 * the leader should send a message to all followers to emit an event.
+	 * In such case when it's not necessary (like cache maintenance) it can be disabled.
+	 */
+	noEvents?: boolean,
+}
+
+/**
  * Configuration settings for building a Hamok queue.
  */
 export type HamokQueueBuilderConfig<T> = {
@@ -256,6 +341,7 @@ export type HamokEventMap = {
 	started: [],
 	stopped: [],
 	follower: [],
+	candidate: [],
 	leader: [],
 	message: [message: HamokMessage]
 	'remote-peer-joined': [peerId: string],
@@ -265,15 +351,23 @@ export type HamokEventMap = {
 	commit: [commitIndex: number, message: HamokMessage],
 	heartbeat: [],
 	error: [error: Error],
-	'hello-notification': [remotePeerId: string, request: {
-		customData: string,
-		callback: (response: string) => void,
-	} | undefined],
+	// 'hello-notification': [remotePeerId: string, request: {
+	// 	customData: string,
+	// 	callback: (response: string) => void,
+	// } | undefined],
 	'no-heartbeat-from': [remotePeerId: string],
 }
 
-export class Hamok extends EventEmitter<HamokEventMap> {
-	public readonly config: HamokConfig;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export declare interface Hamok {
+	on<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	once<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
+	emit<U extends keyof HamokEventMap>(event: U, ...args: HamokEventMap[U]): boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class Hamok<AppData extends Record<string, unknown> = Record<string, unknown>> extends EventEmitter {
+	public readonly config: HamokConfig<AppData>;
 	public readonly raft: RaftEngine;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public readonly records = new Map<string, HamokRecord<any>>();
@@ -283,14 +377,19 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	public readonly queues = new Map<string, HamokQueue<any>>();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public readonly emitters = new Map<string, HamokEmitter<any>>();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	public readonly remoteMaps = new Map<string, HamokRemoteMap<any, any>>();
 
+	private _joining?: Promise<void>;
 	private _raftTimer?: ReturnType<typeof setInterval>;
 	private _remoteStateRequest?: { timer: ReturnType<typeof setTimeout>, responses: EndpointStatesNotification[] };
 	private readonly _remoteHeartbeats = new Map<string, ReturnType<typeof setTimeout>>();
 	private readonly _codec = new HamokGridCodec();
 	public readonly grid: HamokGrid;
 
-	public constructor(providedConfig?: Partial<HamokConstructorConfig>) {
+	private readonly _snapshotCodec: HamokCodec<HamokSnapshot, string>;
+
+	public constructor(providedConfig?: Partial<HamokConstructorConfig<AppData>>) {
 		super();
 		this.setMaxListeners(Infinity);
 		this._emitMessage = this._emitMessage.bind(this);
@@ -298,8 +397,10 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		this._acceptCommit = this._acceptCommit.bind(this);
 		this._emitRemotePeerRemoved = this._emitRemotePeerRemoved.bind(this);
 
+		this._snapshotCodec = providedConfig?.snapshotCodec ?? createHamokJsonStringCodec();
+
 		const raftLogs = providedConfig?.raftLogs ?? new MemoryStoredRaftLogs({
-			expirationTimeInMs: 0,
+			expirationTimeInMs: providedConfig?.logEntriesExpirationTimeInMs ?? 0,
 			memorySizeHighWaterMark: 0,
 		});
 
@@ -316,6 +417,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		);
 
 		this.config = {
+			appData: providedConfig?.appData ?? ({} as AppData),
 		};
 
 		this.grid = new HamokGrid(
@@ -332,6 +434,10 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			() => this.raft.localPeerId,
 			() => this.raft.leaderId
 		);
+	}
+
+	public get appData(): AppData {
+		return this.config.appData;
 	}
 
 	public get localPeerId(): string {
@@ -356,7 +462,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 	public start(): void {
 		if (this._raftTimer) {
-			return;
+			return logger.debug('Hamok is already running');
 		}
 		const raftEngine = this.raft;
 
@@ -376,7 +482,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 		this.emit('started');
 	}
-    
+
 	public stop() {
 		if (!this._raftTimer) {
 			return;
@@ -401,8 +507,43 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		this.emit('stopped');
 	}
 
+	public get stats() {
+		const numberOfPendingRequests = this.grid.pendingRequests.size;
+		const numberOfOngoingRequests = this.grid.ongoingRequestsNotifier.activeOngoingRequests.size;
+		const numberOfRemotePeers = this.raft.remotePeers.size;
+		const numberOfPendingResponses = this.grid.pendingResponses.size;
+		const raftLogsBytesInMemory = this.raft.logs.bytesInMemory;
+
+		return {
+			/**
+			 * Number of requests sent out from the grid, but waiting for response from remote peer
+			 */
+			numberOfPendingRequests,
+
+			/**
+			 * Number of requests received by this peer and queued for processing (for example requests to be waited to be committed by the leader)
+			 */
+			numberOfOngoingRequests,
+
+			/**
+			 * Number of responses received by this peer and queued for processing as the response were chunked
+			 */
+			numberOfPendingResponses,
+
+			/**
+			 * Number of remote peers this peer is connected to
+			 */
+			numberOfRemotePeers,
+
+			/**
+			 * Number of bytes used by the raft logs in memory
+			 */
+			raftLogsBytesInMemory,
+		};
+	}
+
 	private _acceptCommit(commitIndex: number, message: HamokMessage): void {
-		logger.debug('%s accepted committed message %o', this.localPeerId, message);
+		logger.trace('%s accepted committed message %o', this.localPeerId, message);
 		
 		// if we put this request to hold when we accepted the submit request we remove the ongoing request notification
 		// so from this moment it is up to the storage / pubsub to accomplish the request
@@ -411,10 +552,13 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 
 			logger.trace('%s Request %s is removed ongoing requests', this.localPeerId, message.requestId);
 		}
-		this.accept(message);
+		this.accept(message, commitIndex);
 	}
 
 	public addRemotePeerId(remoteEndpointId: string): void {
+		if (remoteEndpointId === this.localPeerId) return;
+		if (this.raft.remotePeers.has(remoteEndpointId)) return;
+
 		this.raft.remotePeers.add(remoteEndpointId);
 
 		logger.debug('%s added remote peer %s', this.localPeerId, remoteEndpointId);
@@ -423,11 +567,17 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 	}
 
 	public removeRemotePeerId(remoteEndpointId: string): void {
-		this.raft.remotePeers.delete(remoteEndpointId);
+		if (!this.raft.remotePeers.delete(remoteEndpointId)) return;
 
 		logger.debug('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
 
 		this.emit('remote-peer-left', remoteEndpointId);
+
+		if (this.remotePeerIds.size === 0) {
+			if (this.config.autoStopOnNoRemotePeers) {
+				this.stop();
+			}
+		}
 	}
 
 	public export(): HamokSnapshot {
@@ -442,6 +592,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			maps: [ ...this.maps.values() ].map((storage) => storage.export()),
 			queues: [ ...this.queues.values() ].map((queue) => queue.export()),
 			emitters: [ ...this.emitters.values() ].map((emitter) => emitter.export()),
+			remoteMaps: [ ...this.remoteMaps.values() ].map((storage) => storage.export()),
 		};
 
 		for (const storage of this.maps.values()) {
@@ -498,6 +649,17 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			}
 
 			emitter.import(emitterSnapshot);
+		}
+
+		for (const remoteMapSnapshot of snapshot.remoteMaps) {
+			const remoteMap = this.remoteMaps.get(remoteMapSnapshot.mapId);
+
+			if (!remoteMap) {
+				logger.warn('Cannot import remote map snapshot, because remote map %s is not found. snapshot: %o', remoteMapSnapshot.mapId, remoteMapSnapshot);
+				continue;
+			}
+
+			remoteMap.import(remoteMapSnapshot);
 		}
 
 		const oldTerm = this.raft.props.currentTerm;
@@ -581,6 +743,57 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		connection.on('message', messageListener);
 		
 		this.maps.set(storage.id, storage);
+
+		return storage;
+	}
+
+	public createRemoteMap<K, V>(options: HamokRemoteMapBuilderConfig<K, V>): HamokRemoteMap<K, V> {
+		if (this.remoteMaps.has(options.mapId)) {
+			throw new Error(`RemoteMap with id ${options.mapId} already exists`);
+		}
+
+		const storageCodec = new StorageCodec<K, V>(
+			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
+			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
+		);
+		const connection = new HamokConnection<K, V>(
+			{
+				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
+				storageId: options.mapId,
+				neededResponse: 0,
+				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
+				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
+				maxMessageWaitingTimeInMs: options.maxMessageWaitingTimeInMs,
+				submitting: new Set([
+					HamokMessageType.CLEAR_ENTRIES_REQUEST,
+					HamokMessageType.INSERT_ENTRIES_REQUEST,
+					HamokMessageType.DELETE_ENTRIES_REQUEST,
+					HamokMessageType.REMOVE_ENTRIES_REQUEST,
+					HamokMessageType.UPDATE_ENTRIES_REQUEST,
+				])
+			}, 
+			storageCodec, 
+			this.grid,         
+		);
+		const messageListener = (message: HamokMessage, submitting: boolean) => {
+			if (submitting) return this.submit(message);
+			else this.emit('message', message);
+		};
+		const storage = new HamokRemoteMap<K, V>(
+			connection,
+			options.remoteMap,
+			options.equalValues,
+		);
+
+		storage.emitEvents = options.noEvents ?? true;
+
+		connection.once('close', () => {
+			connection.off('message', messageListener);
+			this.maps.delete(storage.id);
+		});
+		connection.on('message', messageListener);
+		
+		this.remoteMaps.set(storage.id, storage);
 
 		return storage;
 	}
@@ -783,7 +996,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	public accept(message: HamokMessage) {
+	public accept(message: HamokMessage, commitIndex?: number): void {
 		if (message.destinationId && message.destinationId !== this.localPeerId) {
 			return logger.trace('%s Received message address is not matching with the local peer %o', this.localPeerId, message);
 		}
@@ -812,7 +1025,9 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				switch (message.type) {
 					case HamokMessageType.RAFT_APPEND_ENTRIES_REQUEST_CHUNK:
 					case HamokMessageType.RAFT_APPEND_ENTRIES_RESPONSE:
-						this._acceptAppendRequestResponse(message);
+					case HamokMessageType.RAFT_VOTE_REQUEST:
+					case HamokMessageType.RAFT_VOTE_RESPONSE:
+						this._acceptKeepAliveHamokMessage(message);
 						break;
 				}
 				this.raft.transport.receive(message);
@@ -825,6 +1040,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 				const storage = (
 					this.records.get(message.storageId ?? '') ??
 					this.maps.get(message.storageId ?? '') ??
+					this.remoteMaps.get(message.storageId ?? '') ??
 					this.queues.get(message.storageId ?? '') ??
 					this.emitters.get(message.storageId ?? '')
 				);
@@ -833,7 +1049,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 					return logger.trace('Received message for unknown collection %s', message.storageId);
 				}
 				
-				return storage.connection.accept(message);
+				return storage.connection.accept(message, commitIndex);
 			}
 			// case HamokMessageProtocol.PUBSUB_COMMUNICATION_PROTOCOL:
 			// 	this._dispatchToPubSub(message);
@@ -842,8 +1058,117 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	public async fetchRemotePeers(options?: { customRequest?: string, timeoutInMs?: number }): Promise<HamokFetchRemotePeersResponse> {
-		const helloMsg = this._codec.encodeHelloNotification(new HelloNotification(this.localPeerId, this.raft.leaderId));
+	public async join(params?: HamokJoinProcessParams): Promise<void> {
+		if (this._joining) return this._joining;
+		try {
+			this._joining = this._join({
+				startAfterJoin: params?.startAfterJoin ?? true,
+				fetchRemotePeerTimeoutInMs: params?.fetchRemotePeerTimeoutInMs ?? 5000,
+				requestSnapshot: params?.requestSnapshot ?? true,
+				maxRetry: params?.maxRetry ?? 3,
+				removeRemotePeersOnNoHeartbeat: params?.removeRemotePeersOnNoHeartbeat ?? true,
+			});
+
+			await this._joining;
+		} finally {
+			this._joining = undefined;
+		}
+	}
+
+	private async _join(params: Required<HamokJoinProcessParams>, retried = 0): Promise<void> {
+		const {
+			startAfterJoin,
+			fetchRemotePeerTimeoutInMs,
+			requestSnapshot,
+			maxRetry,
+			removeRemotePeersOnNoHeartbeat,
+		} = params ?? {};
+
+		logger.debug('Joining the network. startAfterJoin: %s, fetchRemotePeerTimeoutInMs: %s, requestSnapshot: %s, maxRetry: %s, removeRemotePeersOnNoHeartbeat: %s',
+			startAfterJoin, fetchRemotePeerTimeoutInMs, requestSnapshot, maxRetry, removeRemotePeersOnNoHeartbeat
+		);
+
+		const { remotePeers, customResponses } = await this.fetchRemotePeers(
+			fetchRemotePeerTimeoutInMs,
+			requestSnapshot ? 'snapshot' : undefined
+		);
+		let bestSnapshot: HamokSnapshot | undefined;
+
+		if (remotePeers.length < 1) {
+			if (0 <= maxRetry && maxRetry <= retried) throw new Error('No remote peers found');
+
+			logger.warn('No remote peers found, retrying %s/%s', retried, maxRetry < 0 ? '∞' : maxRetry);
+
+			return this._join(params, retried + 1);
+		}
+
+		logger.debug('Remote peers found %o', remotePeers);
+
+		if (requestSnapshot) {
+			for (const serializedSnapshot of customResponses ?? []) {
+				try {
+					const snapshot = this._snapshotCodec.decode(serializedSnapshot);
+	
+					if (!bestSnapshot) bestSnapshot = snapshot;
+	
+					if (bestSnapshot.term < snapshot.term || bestSnapshot.commitIndex < snapshot.commitIndex) {
+						bestSnapshot = snapshot;
+					}
+				} catch (err) {
+					logger.error('Failed to parse snapshot %o', err);
+				}
+			}
+		}
+
+		logger.debug('Best snapshot %o', bestSnapshot);
+
+		if (bestSnapshot) {
+			try {
+				this.import(bestSnapshot);
+			} catch (err) {
+				logger.error('Failed to import snapshot %o', err);
+			}
+		}
+
+		if (removeRemotePeersOnNoHeartbeat) {
+			const noHeartbeatListener = (remotePeerId: string) => this.removeRemotePeerId(remotePeerId);
+
+			this.once('stopped', () => {
+				this.off('no-heartbeat-from', noHeartbeatListener);
+			});
+			this.on('no-heartbeat-from', noHeartbeatListener);
+		}
+
+		const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId));
+
+		// this will trigger the remote endpoint to add this endpoint
+		this._emitMessage(joinMsg);
+
+		if (startAfterJoin) {
+			let leaderElected: () => void | undefined;
+			let noMoreRemotePeers: () => void | undefined;
+			
+			return new Promise<void>((resolve, reject) => {
+				leaderElected = () => (this.raft.leaderId !== undefined ? resolve() : void 0);
+				noMoreRemotePeers = () => (this.remotePeerIds.size === 0 ? reject(new Error('No remote peers')) : void 0);
+
+				this.on('leader-changed', leaderElected);
+				this.on('remote-peer-left', noMoreRemotePeers);
+				this.start();
+				
+			}).finally(() => {
+				this.off('leader-changed', leaderElected);
+				this.off('remote-peer-left', noMoreRemotePeers);
+			});
+		}
+	}
+
+	public async fetchRemotePeers(timeout?: number, customRequest?: HamokHelloNotificationCustomRequestType): Promise<HamokFetchRemotePeersResponse> {
+		const helloMsg = this._codec.encodeHelloNotification(new HelloNotification(
+			this.localPeerId, 
+			this.raft.leaderId,
+			customRequest
+		));
 		
 		return new Promise((resolve) => {
 			const remotePeerIds = new Set<string>();
@@ -865,7 +1190,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 					remotePeers: [ ...remotePeerIds ],
 					customResponses: 0 < customResponses.length ? customResponses : undefined,
 				});
-			}, options?.timeoutInMs ?? 3000);
+			}, timeout ?? 5000);
 	
 			this._remoteStateRequest = {
 				timer,
@@ -880,35 +1205,38 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		switch (message.type) {
 			case HamokMessageType.HELLO_NOTIFICATION: {
 				const hello = this._codec.decodeHelloNotification(message);
-				const customRequest = hello.customData;
-				let replying: Promise<string | undefined> | undefined;
+				let customResponse: string | undefined;
 
-				if (customRequest) {
-					replying = new Promise((resolve) => {
-						if (!this.emit('hello-notification', hello.sourcePeerId, {
-							customData: customRequest,
-							callback: (response) => resolve(response),
-						})) {
-							logger.warn('%s Received hello notification with custom data but no listener is registered %o', this.localPeerId, hello);
-							resolve(undefined);
-						}
-					});
-				} else this.emit('hello-notification', hello.sourcePeerId, undefined);
+				switch (hello.customData as HamokHelloNotificationCustomRequestType) {
+					case 'snapshot': {
+						const snapshot = this.export();
 
-				(replying ?? Promise.resolve(undefined)).then((customResponse) => {
-					const notification = this._codec.encodeEndpointStateNotification(new EndpointStatesNotification(
-						this.localPeerId,
-						hello.sourcePeerId,
-						this.raft.props.currentTerm,
-						this.raft.logs.commitIndex,
-						this.leader ? this.raft.logs.nextIndex : -1,
-						this.raft.logs.size,
-						this.raft.remotePeers,
-						customResponse
-					));
+						customResponse = this._snapshotCodec.encode(snapshot);
+					}
+				}
 
-					this.emit('message', notification);
-				});
+				const notification = this._codec.encodeEndpointStateNotification(new EndpointStatesNotification(
+					this.localPeerId,
+					hello.sourcePeerId,
+					this.raft.props.currentTerm,
+					this.raft.logs.commitIndex,
+					this.leader ? this.raft.logs.nextIndex : -1,
+					this.raft.logs.size,
+					this.raft.remotePeers,
+					customResponse
+				));
+
+				this.emit('message', notification);
+				break;
+			}
+			case HamokMessageType.JOIN_NOTIFICATION: {
+				const notification = this._codec.decodeJoinNotification(message);
+
+				if (notification.sourcePeerId !== this.localPeerId) {
+					this.addRemotePeerId(notification.sourcePeerId);	
+				} else {
+					logger.warn('%s Received join notification from itself %o', this.localPeerId, notification);
+				}
 				
 				break;
 			}
@@ -969,6 +1297,7 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 			this.maps.values(), 
 			this.queues.values(), 
 			this.emitters.values(),
+			this.remoteMaps.values(),
 		]) {
 			for (const collection of iterator) {
 				collection.connection.emit('leader-changed', leaderId);
@@ -1043,15 +1372,27 @@ export class Hamok extends EventEmitter<HamokEventMap> {
 		}
 	}
 
-	private _acceptAppendRequestResponse(message: HamokMessage) {
+	private _acceptKeepAliveHamokMessage(message: HamokMessage) {
 		if (!message.sourceId || message.sourceId === this.localPeerId) return;
 		const remotePeerId = message.sourceId;
 		
-		clearTimeout(this._remoteHeartbeats.get(message.sourceId));
+		this._addNoHeartbeatTimer(remotePeerId);
+	}
 
-		this._remoteHeartbeats.set(remotePeerId, setTimeout(() => {
+	private _addNoHeartbeatTimer(remotePeerId: string) {
+		clearTimeout(this._remoteHeartbeats.get(remotePeerId));
+		
+		logger.trace('%s Add no heartbeat timeout for %s', this.localPeerId, remotePeerId);
+
+		const timer = setTimeout(() => {
 			this._remoteHeartbeats.delete(remotePeerId);
+
+			if (this._joining) {
+				return this._addNoHeartbeatTimer(remotePeerId);
+			}
 			this.emit('no-heartbeat-from', remotePeerId);
-		}, this.raft.config.followerMaxIdleInMs));
+		}, this.raft.config.electionTimeoutInMs);
+
+		this._remoteHeartbeats.set(remotePeerId, timer);
 	}
 }

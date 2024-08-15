@@ -1,6 +1,6 @@
 {
 	"name": "hamok-example",
-	"version": "2.2.0",
+	"version": "2.3.0",
 	"description": "Example for Hamok",
 	"main": "main.js",
 	"scripts": {
@@ -18,8 +18,11 @@
 		"dev:queue:2": "nodemon -x ts-node src/queue-push-pop-example.ts | pino-pretty",
 		"dev:common:1": "nodemon -x ts-node src/common-waiting-example.ts | pino-pretty",
 		"dev:common:2": "nodemon -x ts-node src/common-import-export-example.ts | pino-pretty",
-		"dev:common:3": "nodemon -x ts-node src/common-discovery-example.ts | pino-pretty",
+		"dev:common:3": "nodemon -x ts-node src/common-join-example.ts | pino-pretty",
 		"dev:common:4": "nodemon -x ts-node src/common-reelection-example.ts | pino-pretty",
+		"dev:common:5": "nodemon -x ts-node src/common-waiting-example-2.ts | pino-pretty",
+
+		"dev:redis:1": "nodemon -x ts-node src/redis-remote-map-example.ts | pino-pretty",
 		"build": "tsc",
 		"test": "jest --config jest.config.js",
 		"lint": "eslint --ext .ts src"
@@ -45,6 +48,7 @@
 	"homepage": "https://github.com/hamok-dev/hamok-ts#readme",
 	"dependencies": {
 		"pino": "^9.3.2",
+		"ioredis": "^5.4.1",
 		"hamok": "file:../"
 	},
 	"devDependencies": {
