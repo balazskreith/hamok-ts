@@ -218,11 +218,12 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		return result;
 	}
 
-	public notify<K extends keyof T>(event: K, ...args: T[K]): void {
+	public notify<K extends keyof T>(event: K, ...args: T[K]): boolean {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
 
 		const remotePeerIds = this._subscriptions.get(event);
 		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
+		let delivered = false;
 
 		for (const remotePeerId of remotePeerIds ?? []) {
 			if (remotePeerId === this.connection.grid.localPeerId) continue;
@@ -231,11 +232,14 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				new Map([ entry ]),
 				remotePeerId
 			);
+			delivered = true;
 		}
 
 		if (remotePeerIds?.has(this.connection.grid.localPeerId)) {
-			this._emitter.emit(event as string, ...args);
+			delivered ||= this._emitter.emit(event as string, ...args);
 		}
+
+		return delivered;
 	}
 
 	public export(): HamokEmitterSnapshot {
