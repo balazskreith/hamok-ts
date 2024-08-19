@@ -31,6 +31,7 @@ yarn add hamok
 - [Important Notes](#important-notes)
 - [Contributing](#contributing)
 - [License](#license)
+
 ## Quick Start
 
 ```javascript
@@ -39,28 +40,22 @@ import { Hamok } from 'hamok';
 (async () => {
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
-	
+
 	server_1.on('message', server_2.accept.bind(server_2));
 	server_2.on('message', server_1.accept.bind(server_1));
-	
-	server_1.addRemotePeerId(server_2.localPeerId);
-	server_2.addRemotePeerId(server_1.localPeerId);
-	
-	server_1.start();
-	server_2.start();
-	
+
 	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
+		server_1.join(),
+		server_2.join()
 	]);
-	
+
 	const storage_1 = server_1.createMap<string, number>({
 		mapId: 'my-replicated-storage',
 	});
 	const storage_2 = server_2.createMap<string, number>({
 		mapId: 'my-replicated-storage',
 	});
-	
+
 	console.log('Setting value in storage on server_1 for key-1 to 1');
 	console.log('Setting value in storage on server_2 for key-2 to 2');
 
@@ -72,7 +67,7 @@ import { Hamok } from 'hamok';
 		server_1.waitUntilCommitHead(),
 		server_2.waitUntilCommitHead(),
 	])
-	
+
 	console.log('value for key-2 by server_1:', storage_1.get('key-2'));
 	console.log('value for key-1 by server_2:', storage_1.get('key-1'));
 
@@ -89,11 +84,11 @@ Hamok is a lightweight, distributed object storage library developed using the [
 
 [Raft](https://raft.github.io/) is a consensus algorithm designed to manage a replicated log across a distributed system. Its primary goal is to ensure that multiple servers agree on a sequence of state transitions, providing consistency and fault tolerance in distributed systems. RAFT breaks down the consensus problem into three subproblems:
 
- - **Leader Election:** Ensures that one server acts as the leader, which is responsible for managing the log replication. 
+- **Leader Election:** Ensures that one server acts as the leader, which is responsible for managing the log replication.
 
- - **Log Replication:** The leader receives log entries from clients and replicates them to follower servers. The leader waits for a majority of followers to acknowledge the entries before considering them committed.
+- **Log Replication:** The leader receives log entries from clients and replicates them to follower servers. The leader waits for a majority of followers to acknowledge the entries before considering them committed.
 
- - **Safety:** RAFT guarantees that committed log entries are durable and will not be lost, even in the presence of server failures. It ensures that no two leaders can be elected for the same term and that logs are consistent across servers.
+- **Safety:** RAFT guarantees that committed log entries are durable and will not be lost, even in the presence of server failures. It ensures that no two leaders can be elected for the same term and that logs are consistent across servers.
 
 Overall, RAFT is designed to be understandable and easy to implement while providing strong consistency and reliability in distributed systems.
 
@@ -104,7 +99,6 @@ Hamok uses Raft to manage the shared storage across multiple instances.
 - **Raft-based Consensus:** Ensures consistent data replication across nodes.
 - **Distributed Data Structures:** Provides maps, queues, records, and emitters.
 - **Event-driven Architecture:** Emits events for state changes, errors, and communication.
-
 
 ## Collections
 
@@ -124,11 +118,9 @@ HamokEmitter is an event emitter designed for distributed systems. It allows ser
 
 HamokRecord is a feature that provides distributed storage for individual record objects. Each record can be accessed and updated by multiple service instances, with RAFT ensuring that all updates are consistently applied and persisted across the system.
 
-
 ## User Manual
 
 You can find detailed user manuals [here](https://balazskreith.github.io/hamok-ts/)
-
 
 ## Contributing
 

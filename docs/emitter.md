@@ -1,16 +1,17 @@
 ## User Manual
-[Hamok](./index.md) | HamokEmitter | [HamokMap](./map.md) | [HamokQueue](./queue.md) | [HamokRecord](./record.md)
+
+[Hamok](./index.md) / HamokEmitter / [HamokMap](./map.md) / [HamokQueue](./record.md) / [HamokRecord](./remoteMap.md) / [HamokRemoteMap](./remoteMap.md)
 
 ## Table of Contents
-* [Overview](#overview)
-* [Configuration](#configuration)
-* [API Reference](#api-reference)
-	* [Properties](#properties)
-	* [Events](#events)
-	* [Methods](#methods)
-* [Examples](#examples)
-* [FAQ](#faq)
 
+- [Overview](#overview)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+  - [Properties](#properties)
+  - [Events](#events)
+  - [Methods](#methods)
+- [Examples](#examples)
+- [FAQ](#faq)
 
 ## Overview
 
@@ -22,7 +23,7 @@ To create a `HamokEmitter` instance, you need a `Hamok` instance. Here is how yo
 
 ```typescript
 const emitter = hamok.createEmitter<MyEventMap>({
-	emitterId: 'exampleEmitter',
+  emitterId: "exampleEmitter",
 });
 ```
 
@@ -30,51 +31,56 @@ const emitter = hamok.createEmitter<MyEventMap>({
 
 ```typescript
 type MyEventMap = {
-	myEvent: [string, number];
+  myEvent: [string, number];
 };
 const emitter = hamok.createEmitter<MyEventMap>({
+  /**
+   * The unique identifier for the emitter.
+   */
+  emitterId: "exampleEmitter",
 
-	/**
-	 * The unique identifier for the emitter.
-	 */
-	emitterId: 'exampleEmitter',
+  /**
+   * Optional. The timeout duration in milliseconds for requests.
+   *
+   * DEFAULT: 5000
+   */
+  requestTimeoutInMs: 5000,
 
-	/**
-	 * Optional. The timeout duration in milliseconds for requests.
-	 * 
-	 * DEFAULT: 5000
-	 */
-	requestTimeoutInMs: 5000,
+  /**
+   * Optional. The maximum waiting time in milliseconds for a message to be sent.
+   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
+   *
+   * DEFAULT: 10x requestTimeoutInMs
+   */
+  maxMessageWaitingTimeInMs: 50000,
 
-	/**
-	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
-	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-	 * 
-	 * DEFAULT: 10x requestTimeoutInMs
-	 */
-	maxMessageWaitingTimeInMs: 50000,
-	
-	/**
-	 * Optional. The maximum number of keys allowed in request or response messages.
-	 * 
-	 * DEFAULT: 0 means infinity
-	 */
-	maxOutboundMessageKeys: 1000,
+  /**
+   * Optional. The maximum number of keys allowed in request or response messages.
+   *
+   * DEFAULT: 0 means infinity
+   */
+  maxOutboundMessageKeys: 1000,
 
-	/**
-	 * Optional. The maximum number of values allowed in request or response messages.
-	 * 
-	 * DEFAULT: 0 means infinity
-	 */
-	maxOutboundMessageValues: 100,
+  /**
+   * Optional. The maximum number of values allowed in request or response messages.
+   *
+   * DEFAULT: 0 means infinity
+   */
+  maxOutboundMessageValues: 100,
 
-	/**
-	 * Optional. A map of payload codecs for encoding and decoding event payloads.
-	 * The key is an event type, and the value is a codec for that event type.
-	 * 
-	 * DEFAULT: JSON codec
-	 */
-	payloadsCodec?: Map<keyof MyEventMap, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
+  /**
+   * Optional. A map of payload codecs for encoding and decoding event payloads.
+   * The key is an event type, and the value is a codec for that event type.
+   *
+   * DEFAULT: JSON codec
+   */
+  payloadsCodec: Map<
+    keyof MyEventMap,
+    {
+      encode: (...args: unknown[]) => string;
+      decode: (data: string) => unknown[];
+    }
+  >,
 });
 ```
 
@@ -117,15 +123,15 @@ A class for managing events and subscriptions in a distributed system.
 ```typescript
 const emitter = new HamokEmitter(connection, payloadsCodec);
 
-emitter.subscribe('event', (data) => {
+emitter.subscribe("event", (data) => {
   console.log(`Received data: ${data}`);
 });
 
-emitter.publish('event', 'sample data').then((peerIds) => {
+emitter.publish("event", "sample data").then((peerIds) => {
   console.log(`Event published to peers: ${peerIds}`);
 });
 
-emitter.unsubscribe('event', (data) => {
+emitter.unsubscribe("event", (data) => {
   console.log(`Unsubscribed from event`);
 });
 
@@ -134,7 +140,7 @@ emitter.close();
 
 ## Examples
 
- - [simple distributed emitter](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/emitter-example.ts)
+- [simple distributed emitter](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/emitter-example.ts)
 
 ## FAQ
 
@@ -143,7 +149,7 @@ emitter.close();
 To create a `HamokEmitter` instance, you need a `HamokConnection`. Here is an example:
 
 ```typescript
-const connection = new HamokConnection('my-storage-id');
+const connection = new HamokConnection("my-storage-id");
 const emitter = new HamokEmitter<MyEventMap>(connection);
 ```
 
@@ -160,7 +166,7 @@ When creating a `HamokEmitter` instance, you can optionally pass a `payloadsCode
 You can listen to `HamokEmitter` events using the `on` method. Here is an example:
 
 ```typescript
-emitter.on('myEvent', (message, count) => {
+emitter.on("myEvent", (message, count) => {
   console.log(`Received: ${message} - ${count}`);
 });
 ```
@@ -191,7 +197,7 @@ emitter.clear();
 To subscribe to an event, use the `subscribe` method:
 
 ```typescript
-await emitter.subscribe('myEvent', (message, count) => {
+await emitter.subscribe("myEvent", (message, count) => {
   console.log(`Received: ${message} - ${count}`);
 });
 ```
@@ -201,7 +207,7 @@ await emitter.subscribe('myEvent', (message, count) => {
 To unsubscribe from an event, use the `unsubscribe` method:
 
 ```typescript
-await emitter.unsubscribe('myEvent', (message, count) => {
+await emitter.unsubscribe("myEvent", (message, count) => {
   console.log(`Received: ${message} - ${count}`);
 });
 ```
@@ -211,7 +217,7 @@ await emitter.unsubscribe('myEvent', (message, count) => {
 To publish an event, use the `publish` method:
 
 ```typescript
-emitter.publish('myEvent', 'Hello, world!', 42);
+emitter.publish("myEvent", "Hello, world!", 42);
 ```
 
 ### What is the difference between the `publish` and `notify` methods?
