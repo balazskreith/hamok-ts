@@ -266,7 +266,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				new Map([ entry ]),
 				[ ...remotePeerIds ].filter((peerId) => peerId !== this.connection.grid.localPeerId)
 			),
-			Promise.resolve(this._emitter.emit(event as string, ...args))
+			Promise.resolve(remotePeerIds.has(this.connection.grid.localPeerId) ? this._emitter.emit(event as string, ...args) : false)
 		]);
 		const result = [ ...respondedRemotePeerIds.keys() ];
 

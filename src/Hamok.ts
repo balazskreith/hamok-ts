@@ -83,7 +83,7 @@ export type HamokConfig<AppData extends Record<string, unknown> = Record<string,
 	/**
 	 * A custom appData object to be used by the application utilizes Hamok.
 	 */
-	appData: AppData,
+	appData?: AppData,
 }
 
 /**
@@ -437,7 +437,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	public get appData(): AppData {
-		return this.config.appData;
+		return this.config.appData ?? {} as AppData;
 	}
 
 	public get localPeerId(): string {
