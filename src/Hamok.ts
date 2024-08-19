@@ -915,6 +915,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
 					HamokMessageType.REMOVE_ENTRIES_REQUEST,
+					HamokMessageType.DELETE_ENTRIES_REQUEST,
 				])
 			}, 
 			storageCodec, 

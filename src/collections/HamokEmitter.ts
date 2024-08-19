@@ -13,6 +13,7 @@ export interface HamokEmitterEventMap extends Record<string, unknown[]> {
 export class HamokEmitter<T extends HamokEmitterEventMap> {
 	private readonly _subscriptions = new Map<keyof T, Set<string>>();
 	private readonly _emitter = new EventEmitter();
+	private _removedPeerIdsBuffer: string[] = [];
 	private _closed = false;
     
 	public constructor(
@@ -52,6 +53,16 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 						request.sourceEndpointId
 					);
 				}
+			})
+			.on('DeleteEntriesRequest', (request) => {
+				const removedPeerIds = [ ...request.keys ];
+
+				for (const subscribedPeerIds of this._subscriptions.values()) {
+					for (const removedPeerId of removedPeerIds) {
+						subscribedPeerIds.delete(removedPeerId);
+					}
+				}
+				logger.info('DeleteEntriesRequest is received, %o is removed from the subscription list for %s', removedPeerIds, this.id);
 			})
 			.on('RemoveEntriesRequest', (request) => {
 				// this is for the subscription to manage, and to remove the source endpoint from the list
@@ -150,10 +161,49 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				}
 			})
 			.on('remote-peer-removed', (remotePeerId) => {
-				for (const subscribedPeerIds of this._subscriptions.values()) {
-					subscribedPeerIds.delete(remotePeerId);
+				if (this.connection.grid.leaderId !== this.connection.localPeerId) {
+					if (this.connection.grid.leaderId === undefined) {
+						this._removedPeerIdsBuffer.push(remotePeerId);
+					}
+					
+					return;
 				}
-				logger.debug('%s remote-peer-removed is received, %s is removed from the subscription list for all events in emitter %s', this.connection.localPeerId, remotePeerId, this.id);
+				let retried = 0;
+				const process = async (): Promise<unknown> => {
+					if (this.connection.grid.leaderId === undefined) {
+						return Promise.resolve(this._removedPeerIdsBuffer.push(remotePeerId));
+					} else if (this.connection.grid.leaderId !== this.connection.localPeerId) {
+						// not our problem.
+						return Promise.resolve();
+					}
+					try {
+						return this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
+					} catch (err) {
+						logger.warn('Error while requesting to remove endpoint %s, from subscriptions in emitter %s, error: %o', remotePeerId, this.id, err);
+
+						if (++retried < 10) {
+							return process();
+						}
+					}
+				};
+				
+				process().catch(() => void 0);
+			})
+			.on('leader-changed', (leaderId) => {
+				if (leaderId !== this.connection.grid.localPeerId) {
+					if (leaderId !== undefined) {
+						this._removedPeerIdsBuffer = [];
+					}
+					
+					return;
+				}
+				if (0 < this._removedPeerIdsBuffer.length) {
+					this.connection.requestDeleteEntries(new Set(this._removedPeerIdsBuffer))
+						.then(() => (this._removedPeerIdsBuffer = []))
+						.catch(() => {
+							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s', this._removedPeerIdsBuffer, this.id);
+						});
+				}
 			})
 			.once('close', () => this.close())
 		;
@@ -200,18 +250,27 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
 
 		const remotePeerIds = this._subscriptions.get(event);
+
+		if (!remotePeerIds || remotePeerIds.size < 1) {
+			return [];
+		} else if (remotePeerIds.size === 1 && remotePeerIds.has(this.connection.grid.localPeerId)) {
+			return (this._emitter.emit(event as string, ...args), [ this.connection.grid.localPeerId ]);
+		}
+
 		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
+		const [
+			respondedRemotePeerIds,
+			isLocalPeerSubscribed
+		] = await Promise.all([
+			this.connection.requestUpdateEntries(
+				new Map([ entry ]),
+				[ ...remotePeerIds ].filter((peerId) => peerId !== this.connection.grid.localPeerId)
+			),
+			Promise.resolve(this._emitter.emit(event as string, ...args))
+		]);
+		const result = [ ...respondedRemotePeerIds.keys() ];
 
-		if (!remotePeerIds || remotePeerIds.size < 1) return [];
-
-		const respondedPeerIds = await this.connection.requestUpdateEntries(
-			new Map([ entry ]),
-			[ ...remotePeerIds ].filter((peerId) => peerId !== this.connection.grid.localPeerId)
-		);
-		const result = [ ...respondedPeerIds.keys() ];
-
-		if (remotePeerIds?.has(this.connection.grid.localPeerId)) {
-			this._emitter.emit(event as string, ...args);
+		if (isLocalPeerSubscribed) {
 			result.push(this.connection.grid.localPeerId);
 		}
 
@@ -222,24 +281,29 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
 
 		const remotePeerIds = this._subscriptions.get(event);
+
+		if (!remotePeerIds || remotePeerIds.size < 1) {
+			return false;
+		} else if (remotePeerIds.size === 1 && remotePeerIds.has(this.connection.grid.localPeerId)) {
+			return this._emitter.emit(event as string, ...args);
+		}
+
 		const entry = [ event as string, this.payloadsCodec?.get(event)?.encode(...args) ?? JSON.stringify(args) ] as [string, string];
-		let delivered = false;
 
 		for (const remotePeerId of remotePeerIds ?? []) {
-			if (remotePeerId === this.connection.grid.localPeerId) continue;
+			if (remotePeerId === this.connection.grid.localPeerId) {
+				this._emitter.emit(event as string, ...args);
+
+				continue;
+			}
 			
 			this.connection.notifyUpdateEntries(
 				new Map([ entry ]),
 				remotePeerId
 			);
-			delivered = true;
 		}
 
-		if (remotePeerIds?.has(this.connection.grid.localPeerId)) {
-			delivered ||= this._emitter.emit(event as string, ...args);
-		}
-
-		return delivered;
+		return true;
 	}
 
 	public export(): HamokEmitterSnapshot {
