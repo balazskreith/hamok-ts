@@ -229,6 +229,13 @@ The `notify` method notifies all subscribed listeners of an event without waitin
 
 In short use notify for fire and forget messages, and use publish for messages that need to be checked if it is delivered to the target remote peers.
 
+### How many subscribers can a HamokEmitter have for one event?
+
+A `HamokEmitter` can have an unlimited number of subscribers for each event on any peer. 
+The underlying `EventEmitter` implementation used in `HamokEmitter` has no limit on the number of listeners for an event.
+To distribute the event to the remote peers subscribed to the event, the `HamokEmitter` uses the Raft consensus algorithm 
+to ensure that the subscription is consistent across all peers.
+
 ### What is the payloadsCodec for?
 
 The `payloadsCodec` is a map of payload codecs for encoding and decoding event payloads. The key is an event type, and the value is a codec for that event type. This is useful for customizing the encoding and decoding of event payloads, if you are for example unsatisfied with the default JSON encoding/decoding.

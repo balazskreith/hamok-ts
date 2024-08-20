@@ -13,6 +13,7 @@ export class HamokGrid {
 	public constructor(
 		public readonly sendMessage: (message: HamokMessage, targetPeerIds?: ReadonlySet<string> | string[] | string) => void,
 		public readonly submit: (message: HamokMessage) => Promise<void>,
+		public readonly waitUntilCommitHead: () => Promise<void>,
 		public readonly ongoingRequestsNotifier: OngoingRequestsNotifier,
 		public readonly remotePeerIds: ReadonlySet<string>,
 		private _getLocalPeerId: () => string,

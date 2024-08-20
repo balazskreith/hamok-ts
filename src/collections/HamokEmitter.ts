@@ -57,9 +57,13 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			.on('DeleteEntriesRequest', (request) => {
 				const removedPeerIds = [ ...request.keys ];
 
-				for (const subscribedPeerIds of this._subscriptions.values()) {
+				for (const subscribedPeerIds of [ ...this._subscriptions.values() ]) {
 					for (const removedPeerId of removedPeerIds) {
 						subscribedPeerIds.delete(removedPeerId);
+
+						if (subscribedPeerIds.size < 1) {
+							this._subscriptions.delete(removedPeerId);
+						}
 					}
 				}
 				logger.info('DeleteEntriesRequest is received, %o is removed from the subscription list for %s', removedPeerIds, this.id);
@@ -225,8 +229,25 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		this._emitter.removeAllListeners();
 	}
 
+	public async hasSubscribers<K extends keyof T>(event: K, filterByLocalNode = false): Promise<boolean> {
+		if (this._closed) throw new Error('Cannot check subscribers on a closed emitter');
+
+		await this.connection.grid.waitUntilCommitHead();
+
+		const remotePeerIds = this._subscriptions.get(event);
+
+		if (!remotePeerIds) return false;
+		else if (!filterByLocalNode) return true;
+		else return remotePeerIds.has(this.connection.grid.localPeerId);
+	}
+
 	public async subscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._closed) throw new Error('Cannot subscribe on a closed emitter');
+
+		// if we already have a listener, we don't need to subscribe in the raft
+		if (this._emitter.listenerCount(event as string)) {
+			return (this._emitter.on(event as string, listener), void 0);
+		}
 		
 		await this.connection.requestInsertEntries(new Map([ [ event as string, 'empty' ] ]));
 		this._emitter.on(event as string, listener);
@@ -234,11 +255,15 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 	public async unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._closed) throw new Error('Cannot unsubscribe on a closed emitter');
+		
+		this._emitter.off(event as string, listener);
 
+		// if we still have a listener, we don't need to unsubscribe in the raft
+		if (this._emitter.listenerCount(event as string)) return;
+		
 		await this.connection.requestRemoveEntries(
 			Collections.setOf(event as string)
 		);
-		this._emitter.off(event as string, listener);
 	}
 
 	public clear() {
