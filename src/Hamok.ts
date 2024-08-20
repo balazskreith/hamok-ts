@@ -423,6 +423,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this.grid = new HamokGrid(
 			this._emitMessage.bind(this),
 			this.submit.bind(this),
+			this.waitUntilCommitHead.bind(this),
 			new OngoingRequestsNotifier(
 				providedConfig?.ongoingRequestsSendingPeriodInMs ?? 1000,
 				(msg) => this._emitMessage(
