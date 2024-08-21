@@ -282,10 +282,6 @@ Hamok emits various events that can be listened to for handling specific actions
 
 ## Use cases
 
-Here is a revised version of your text with improvements for clarity, grammar, and consistency:
-
----
-
 ### Joining the Grid Using the `join()` Method
 
 Hamok provides an automated process to join a network of instances by connecting to remote peers. This feature simplifies integrating a new Hamok instance into an existing network.
