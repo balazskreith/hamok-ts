@@ -27,6 +27,9 @@ export {
 	HamokConnection
 } from './collections/HamokConnection';
 export {
+	HamokRecord
+} from './collections/HamokRecord';
+export {
 	RaftLogs
 } from './raft/RaftLogs';
 export {
