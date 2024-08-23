@@ -748,6 +748,18 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return storage;
 	}
 
+	public getOrCreateMap<K, V>(options: HamokMapBuilderConfig<K, V>, callback?: (alreadyExisted: boolean) => void): HamokMap<K, V> {
+		const existing = this.maps.get(options.mapId);
+
+		try {
+			if (existing) return existing;
+
+			return this.createMap(options);
+		} finally {
+			callback?.(Boolean(existing));
+		}
+	}
+
 	public createRemoteMap<K, V>(options: HamokRemoteMapBuilderConfig<K, V>): HamokRemoteMap<K, V> {
 		if (this.remoteMaps.has(options.mapId)) {
 			throw new Error(`RemoteMap with id ${options.mapId} already exists`);
@@ -799,8 +811,20 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return storage;
 	}
 
+	public getOrCreateRemoteMap(options: HamokRemoteMapBuilderConfig<unknown, unknown>, callback?: (alreadyExisted: boolean) => void): HamokRemoteMap<unknown, unknown> {
+		const existing = this.remoteMaps.get(options.mapId);
+
+		try {
+			if (existing) return existing;
+
+			return this.createRemoteMap(options);
+		} finally {
+			callback?.(Boolean(existing));
+		}
+	}
+
 	public createRecord<T extends HamokRecordObject>(options: HamokRecordBuilderConfig<T>): HamokRecord<T> {
-		if (this.maps.has(options.recordId)) {
+		if (this.records.has(options.recordId)) {
 			throw new Error(`Record with id ${options.recordId} already exists`);
 		}
 
@@ -850,6 +874,18 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return record;
 	}
 
+	public getOrCreateRecord<T extends HamokRecordObject>(options: HamokRecordBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokRecord<T> {
+		const existing = this.records.get(options.recordId);
+
+		try {
+			if (existing) return existing;
+
+			return this.createRecord(options);
+		} finally {
+			callback?.(Boolean(existing));
+		}
+	}
+
 	public createQueue<T>(options: HamokQueueBuilderConfig<T>): HamokQueue<T> {
 		if (this.queues.has(options.queueId)) {
 			throw new Error(`Queue with id ${options.queueId} already exists`);
@@ -893,6 +929,18 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this.queues.set(queue.id, queue);
 
 		return queue;
+	}
+
+	public getOrCreateQueue<T>(options: HamokQueueBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokQueue<T> {
+		const existing = this.queues.get(options.queueId);
+
+		try {
+			if (existing) return existing;
+
+			return this.createQueue(options);
+		} finally {
+			callback?.(Boolean(existing));
+		}
 	}
 
 	public createEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T> {
@@ -995,6 +1043,18 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
         
 		if (!response?.success) {
 			throw new Error('Failed to submit message');
+		}
+	}
+
+	public getOrCreateEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokEmitter<T> {
+		const existing = this.emitters.get(options.emitterId);
+
+		try {
+			if (existing) return existing;
+
+			return this.createEmitter(options);
+		} finally {
+			callback?.(Boolean(existing));
 		}
 	}
 
