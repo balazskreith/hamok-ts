@@ -265,6 +265,26 @@ Hamok emits various events that can be listened to for handling specific actions
 
   - Creates a new emitter with the provided options.
 
+- **getOrCreateMap**<`K, V`>(`options: HamokMapBuilderConfig<K, V>`, `callback?: (exists: boolean) => void`): `HamokMap<K, V>`
+
+  - Gets an existing map or creates a new map with the provided options.
+
+- **getOrCreateEmitter**<`T extends HamokEmitterEventMap`>(`options: HamokEmitterBuilderConfig<T>`, `callback?: (exists: boolean) => void`): `HamokEmitter<T>`
+
+  - Gets an existing emitter or creates a new emitter with the provided options.
+
+- **getOrCreateRemoteMap**<`K, V`>(`options: HamokRemoteMapBuilderConfig<K, V>`, `callback?: (exists: boolean) => void`): `HamokRemoteMap<K, V>`
+
+  - Gets an existing remote map or creates a new remote map with the provided options.
+
+- **getOrCreateQueue**<`T`>(`options: HamokQueueBuilderConfig<T>`, `callback?: (exists: boolean) => void`): `HamokQueue<T>`
+
+  - Gets an existing queue or creates a new queue with the provided options.
+
+- **getOrCreateRecord**<`T extends HamokRecordObject`>(`options: HamokRecordBuilderConfig<T>`, `callback?: (exists: boolean) => void`): `HamokRecord<T>`
+
+  - Gets an existing record or creates a new record with the provided options.
+
 - **submit**(`entry: HamokMessage`): `Promise<void>`
 
   - Submits a message to the Raft engine.
@@ -492,8 +512,6 @@ If you encounter issues with Hamok, consider the following steps:
 - Review logs for any error messages or warnings.
 - Consult the Hamok documentation and community forums for additional support.
 
-Here is the updated markdown compatibility table for the `HamokMessage` schema with version 2.0.0 removed:
-
 ## `HamokMessage` compatibility Table
 
 | Version | 2.1.0 | 2.2.0 | 2.3.0 |
@@ -625,3 +643,7 @@ const hamok = new Hamok({
 
 console.log("foo is", hamok.appData.foo);
 ```
+
+### How can I check if a Map/Record/Emitter/Queue I want to create already exists?
+
+`Hamok` exposes the created objects via the `maps`, `records`, `emitters`, `remoteMaps`, and `queues` properties. You can check if an object already exists by using a command like `if (hamok.maps.has(mapId))`. Alternatively, you can use the `getOrCreate` method (`getOrCreateMap`, `getOrCreateEmitter`, `getOrCreateRecord`, `getOrCreateRemoteMap`, `getOrCreateQueue`) to either retrieve an existing object or create a new one if it doesn't already exist.
