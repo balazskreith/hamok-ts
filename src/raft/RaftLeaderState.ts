@@ -159,7 +159,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 		messageEmitter.off('RaftAppendEntriesRequestChunk', appendEntriesRequestListener);
 		messageEmitter.off('RaftAppendEntriesResponse', appendEntriesResponseListener);
 
-		logger.debug('%s is closed', localPeerId);
+		logger.debug('%s LeaderState is closed', localPeerId);
 	};
 
 	messageEmitter.on('RaftVoteRequest', voteRequestListener);

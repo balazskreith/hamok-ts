@@ -314,6 +314,8 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 			// infinite
 			return;
 		}
+		logger.trace('Expiring logs %o', this.config);
+
 		const thresholdInMs = Date.now() - this.config.expirationTimeInMs;
 		let expiredLogIndex = -1;
 
@@ -329,14 +331,18 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 				this._firstIndex = index + 1;
 				continue;
 			}
+			logger.trace('Log %d created at %d, elapsedMs %d threshold %d', index, logEntry.timestamp, Date.now() - logEntry.timestamp, thresholdInMs);
 			if (thresholdInMs <= logEntry.timestamp) {
 				break;
 			}
 			expiredLogIndex = index;
 		}
+
+		logger.trace('Expired log index is %d', expiredLogIndex);
 		if (expiredLogIndex < 0) {
 			return;
 		}
+		logger.trace('nextIndex %d, expiredLogIndex %d, firstIndex %d', this._nextIndex, expiredLogIndex, this._firstIndex);
 		if (this._nextIndex <= expiredLogIndex || expiredLogIndex < this._firstIndex) {
 			return;
 		}
@@ -356,6 +362,7 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 					this._memoryEstimateBytesLength -= logEntry.entry.values.length + logEntry.entry.keys.length;
 					
 					this.emit('expired', index, logEntry.entry);
+					this.emit('removed', index, logEntry.entry);
 				}
 				
 			}

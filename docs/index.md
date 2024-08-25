@@ -644,6 +644,11 @@ const hamok = new Hamok({
 console.log("foo is", hamok.appData.foo);
 ```
 
-### How can I check if a Map/Record/Emitter/Queue I want to create already exists?
+### How can I check if a Map/Record/Emitter/Queue already exists?
 
 `Hamok` exposes the created objects via the `maps`, `records`, `emitters`, `remoteMaps`, and `queues` properties. You can check if an object already exists by using a command like `if (hamok.maps.has(mapId))`. Alternatively, you can use the `getOrCreate` method (`getOrCreateMap`, `getOrCreateEmitter`, `getOrCreateRecord`, `getOrCreateRemoteMap`, `getOrCreateQueue`) to either retrieve an existing object or create a new one if it doesn't already exist.
+
+### Can I use `undefined` as a value for a key or value?
+
+There are no type restrictions for the generic types you can use in a Map, Record, Queue, or Emitter. However,
+it is strongly advised to use `null` if you want to indicate that something is uninitialized but still exists.

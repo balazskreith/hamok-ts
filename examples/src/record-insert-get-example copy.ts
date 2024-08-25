@@ -21,11 +21,15 @@ export async function run() {
 	server_1.addRemotePeerId(server_2.localPeerId);
 	server_2.addRemotePeerId(server_1.localPeerId);
 	
+	server_1.start();
+	server_2.start();
 
 	await Promise.all([
-		server_1.join(),
-		server_2.join(),
+		new Promise(resolve => server_1.once('leader-changed', resolve)),
+		new Promise(resolve => server_2.once('leader-changed', resolve)),
 	]);
+
+	logger.info('Leader changed');
 
 	const storage_1 = server_1.createRecord<MySharedConfig>({
 		recordId: 'my-replicated-record',

@@ -1,4 +1,4 @@
-import { HamokCodec, encodeMap, decodeMap, encodeSet, decodeSet } from '../common/HamokCodec';
+import { HamokCodec, encodeMap, decodeMap, encodeSet, decodeSet, createStrToUint8ArrayCodec } from '../common/HamokCodec';
 import { EntryUpdatedNotification, UpdateEntriesNotification, UpdateEntriesRequest, UpdateEntriesResponse } from './messagetypes/UpdateEntries';
 import { HamokMessage as Message, HamokMessage_MessageType as MessageType } from './HamokMessage';
 import { ClearEntriesNotification, ClearEntriesRequest, ClearEntriesResponse } from './messagetypes/ClearEntries';
@@ -10,6 +10,8 @@ import { EntriesInsertedNotification, InsertEntriesNotification, InsertEntriesRe
 import { GetSizeRequest, GetSizeResponse } from './messagetypes/GetSize';
 import { createLogger } from '../common/logger';
 import { StorageAppliedCommitNotification } from './messagetypes/StorageAppliedCommit';
+import { StorageHelloNotification } from './messagetypes/StorageHelloNotification';
+import { StorageStateNotification } from './messagetypes/StorageStateNotification';
 
 const logger = createLogger('StorageCodec');
 
@@ -38,7 +40,9 @@ type Input<K, V> =
     UpdateEntriesRequest<K, V> |
     UpdateEntriesResponse<K, V> | 
     EntryUpdatedNotification<K, V> |
-    StorageAppliedCommitNotification
+    StorageAppliedCommitNotification |
+    StorageHelloNotification |
+    StorageStateNotification 
     ;
 
 export type StorageCodecMessageMap<K, V> = {
@@ -67,9 +71,13 @@ export type StorageCodecMessageMap<K, V> = {
 	UpdateEntriesNotification: UpdateEntriesNotification<K, V>;
 	EntryUpdatedNotification: EntryUpdatedNotification<K, V>;
 	StorageAppliedCommitNotification: StorageAppliedCommitNotification;
+	StorageHelloNotification: StorageHelloNotification;
+	StorageStateNotification: StorageStateNotification;
 }
 
 export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
+
+	private static readonly strCodec = createStrToUint8ArrayCodec();
 
 	public constructor(
 		public readonly keyCodec: HamokCodec<K, Uint8Array>,
@@ -164,6 +172,14 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 
 			case StorageAppliedCommitNotification:
 				result = this.encodeStorageAppliedCommitNotification(input as StorageAppliedCommitNotification);
+				break;
+
+			case StorageHelloNotification:
+				result = this.encodeStorageHelloNotification(input as StorageHelloNotification);
+				break;
+			
+			case StorageStateNotification:
+				result = this.encodeStorageStateNotification(input as StorageStateNotification);
 				break;
 
 			default:
@@ -285,6 +301,15 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 				type = callback ? 'StorageAppliedCommitNotification' : undefined;
 				result = this.decodeStorageAppliedCommitNotification(message);
 				break;
+			case MessageType.STORAGE_HELLO_NOTIFICATION:
+				type = callback ? 'StorageHelloNotification' : undefined;
+				result = this.decodeStorageHelloNotification(message);
+				break;
+			case MessageType.STORAGE_STATE_NOTIFICATION:
+				type = callback ? 'StorageStateNotification' : undefined;
+				result = this.decodeStorageStateNotification(message);
+				break;
+			
 		}
 
 		logger.trace('Decoded message %o', message);
@@ -297,6 +322,44 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		}
 		
 		return result;
+	}
+
+	public encodeStorageHelloNotification(notification: StorageHelloNotification): Message {
+		return new Message({
+			type: MessageType.STORAGE_HELLO_NOTIFICATION,
+			sourceId: notification.sourceEndpointId,
+		});
+	}
+
+	public decodeStorageHelloNotification(message: Message): StorageHelloNotification {
+		if (message.type !== MessageType.STORAGE_HELLO_NOTIFICATION) {
+			throw new Error('decodeStorageCreatedNotification(): Message type must be STORAGE_HELLO_NOTIFICATION');
+		}
+		
+		return new StorageHelloNotification(
+			message.sourceId!,
+		);
+	}
+
+	public encodeStorageStateNotification(storageState: StorageStateNotification): Message {
+		return new Message({
+			type: MessageType.STORAGE_STATE_NOTIFICATION,
+			sourceId: storageState.sourceEndpointId,
+			snapshot: StorageCodec.strCodec.encode(storageState.serializedStorageSnapshot),
+			raftCommitIndex: storageState.commitIndex,
+		});
+	}
+
+	public decodeStorageStateNotification(message: Message): StorageStateNotification {
+		if (message.type !== MessageType.STORAGE_STATE_NOTIFICATION) {
+			throw new Error('decodeStorageSnapshot(): Message type must be STORAGE_STATE_NOTIFICATION');
+		}
+		
+		return new StorageStateNotification(
+			message.sourceId!,
+			StorageCodec.strCodec.decode(message.snapshot!),
+			message.raftCommitIndex!,
+		);
 	}
 
 	public encodeClearEntriesRequest(request: ClearEntriesRequest): Message {

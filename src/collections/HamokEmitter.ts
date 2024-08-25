@@ -13,6 +13,7 @@ export interface HamokEmitterEventMap extends Record<string, unknown[]> {
 export class HamokEmitter<T extends HamokEmitterEventMap> {
 	private readonly _subscriptions = new Map<keyof T, Set<string>>();
 	private readonly _emitter = new EventEmitter();
+	private _initializing?: Promise<void>;
 	private _removedPeerIdsBuffer: string[] = [];
 	private _closed = false;
     
@@ -209,12 +210,55 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 						});
 				}
 			})
+			.on('StorageHelloNotification', (notification) => {
+				// every storage needs to respond with its snapshot and the highest applied index they have
+				try {
+					const snapshot = this.export();
+					const serializedSnapshot = JSON.stringify(snapshot);
+	
+					this.connection.notifyStorageState(
+						serializedSnapshot,
+						this.connection.highestSeenCommitIndex,
+						notification.sourceEndpointId, 
+					);
+				} catch (err) {
+					logger.error('Failed to send snapshot', err);
+				}
+			})
+			.on('remote-snapshot', (serializedSnapshot, done) => {
+				try {
+					const snapshot = JSON.parse(serializedSnapshot) as HamokEmitterSnapshot;
+
+					this._import(snapshot);
+				} catch (err) {
+					logger.error('Failed to load snapshot', err);
+				} finally {
+					done();
+				}
+			})
 			.once('close', () => this.close())
 		;
+
+		logger.trace('Queue %s is created', this.id);
+
+		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
+			.then(() => this.connection.join())
+			.catch((err) => logger.error('Error while initializing queue', err))
+			.finally(() => (this._initializing = undefined))
+		;
+		
 	}
 
 	public get id(): string {
 		return this.connection.config.storageId;
+	}
+
+	public get empty() {
+		return this._subscriptions.size < 1;
+	}
+
+	public get initializing() {
+		return this._initializing;
 	}
 
 	public get closed() {
@@ -232,6 +276,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	public async hasSubscribers<K extends keyof T>(event: K, filterByLocalNode = false): Promise<boolean> {
 		if (this._closed) throw new Error('Cannot check subscribers on a closed emitter');
 
+		await this._initializing;
+
 		await this.connection.grid.waitUntilCommitHead();
 
 		const remotePeerIds = this._subscriptions.get(event);
@@ -243,6 +289,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 	public async subscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._closed) throw new Error('Cannot subscribe on a closed emitter');
+
+		await this._initializing;
 
 		// if we already have a listener, we don't need to subscribe in the raft
 		if (this._emitter.listenerCount(event as string)) {
@@ -256,6 +304,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	public async unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._closed) throw new Error('Cannot unsubscribe on a closed emitter');
 		
+		await this._initializing;
+
 		this._emitter.off(event as string, listener);
 
 		// if we still have a listener, we don't need to unsubscribe in the raft
@@ -273,6 +323,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 	public async publish<K extends keyof T>(event: K, ...args: T[K]): Promise<string[]> {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
+
+		await this._initializing;
 
 		const remotePeerIds = this._subscriptions.get(event);
 
@@ -356,6 +408,10 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			throw new Error('Cannot import data while connected');
 		}
 
+		this._import(snapshot);
+	}
+
+	private _import(snapshot: HamokEmitterSnapshot): void {
 		for (let i = 0; i < snapshot.events.length; i++) {
 			const event = snapshot.events[i];
 			const peerIds = snapshot.subscribers[i] ?? [];

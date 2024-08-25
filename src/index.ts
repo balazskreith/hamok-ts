@@ -1,7 +1,7 @@
 export { 
 	Hamok, 
-	HamokConfig, 
-	HamokConstructorConfig,
+	HamokObjectConfig, 
+	HamokConfig,
 	HamokEmitterBuilderConfig,
 	HamokQueueBuilderConfig,
 	HamokRecordBuilderConfig,

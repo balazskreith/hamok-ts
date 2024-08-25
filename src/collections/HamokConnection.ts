@@ -21,6 +21,8 @@ import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
 import { WaitingQueue } from '../common/WaitingQueue';
 import { StorageAppliedCommitNotification } from '../messages/messagetypes/StorageAppliedCommit';
+import { StorageHelloNotification } from '../messages/messagetypes/StorageHelloNotification';
+import { StorageStateNotification } from '../messages/messagetypes/StorageStateNotification';
 
 const logger = createLogger('HamokConnection');
 
@@ -64,6 +66,12 @@ export type HamokConnectionConfig = {
 	 */
 	maxMessageWaitingTimeInMs?: number,
 
+	/**
+	 * The maximum time in milliseconds to wait for storage state notification from a remote peer.
+	 * 
+	 * DEFAULT: 1000
+	 */
+	remoteStorageStateWaitingTimeoutInMs: number,
 }
 
 export type HamokConnectionEventMap<K, V> = {
@@ -92,6 +100,9 @@ export type HamokConnectionEventMap<K, V> = {
 	UpdateEntriesNotification: [UpdateEntriesNotification<K, V>];
 	EntryUpdatedNotification: [EntryUpdatedNotification<K, V>];
 	StorageAppliedCommitNotification: [StorageAppliedCommitNotification];
+	StorageHelloNotification: [StorageHelloNotification];
+	StorageStateNotification: [StorageStateNotification];
+	'remote-snapshot': [serializedSnapshot: string, done: () => void];
 }
 
 export type HamokConnectionResponseMap<K, V> = {
@@ -118,7 +129,11 @@ export class HamokConnection<K, V> extends EventEmitter {
 	private _waitingQueue?: WaitingQueue;
 	private _closed = false;
 	private _connected: boolean;
-
+	private _joined = false;
+	private _appliedCommitIndex = -1;
+	private _joining?: Promise<void>;
+	private _bufferedMessages: [ HamokMessage, number | undefined ][] = [];
+	
 	public constructor(
 		public readonly config: HamokConnectionConfig,
 		public readonly codec: StorageCodec<K, V>,
@@ -149,6 +164,10 @@ export class HamokConnection<K, V> extends EventEmitter {
 		return this._connected;
 	}
 
+	public get highestSeenCommitIndex() {
+		return this._appliedCommitIndex;
+	}
+
 	public close() {
 		if (this._closed) return;
 		this._closed = true;
@@ -175,7 +194,61 @@ export class HamokConnection<K, V> extends EventEmitter {
 		this.removeAllListeners();
 	}
 
+	public async join() {
+		if (this._joined) return;
+		if (this._joining) return this._joining;
+
+		this._joining = this._join().then(() => {
+			this._joining = undefined;
+			logger.debug('%s Connection for storage %s is joined', this.localPeerId, this.config.storageId);
+		});
+
+		return this._joining;
+	}
+
 	public accept(message: HamokMessage, commitIndex?: number) {
+		if (this._closed) {
+			return logger.warn('Connection for storage %s is closed, cannot accept message %o', this.config.storageId, message);
+		}
+		if (!this._joined) {
+			switch (message.type) {
+				case HamokMessageType.STORAGE_HELLO_NOTIFICATION: {
+					const hello = this.codec.decodeStorageHelloNotification(message);
+
+					if (hello.sourceEndpointId === this.grid.localPeerId) {
+						return;
+					}
+
+					this.emit('StorageHelloNotification', hello);
+					break;
+				}
+					
+				case HamokMessageType.STORAGE_STATE_NOTIFICATION: {
+					const state = this.codec.decodeStorageStateNotification(message);
+
+					if (state.sourceEndpointId === this.grid.localPeerId) {
+						return;
+					}
+
+					this.emit('StorageStateNotification', state);
+					break;
+				}
+				default:
+					logger.info('Buffering message %o until the connection is joined %o', message);
+					this._bufferedMessages.push([ message, commitIndex ]);
+					break;
+			}
+
+			return;
+		}
+
+		if (commitIndex !== undefined) {
+			if (commitIndex < this._appliedCommitIndex) {
+				return logger.warn('Received message with commit index %d is older than the last applied commit index %d', commitIndex, this._appliedCommitIndex);
+			}
+			this._appliedCommitIndex = commitIndex;
+		}
+
 		switch (message.type) {
 			case HamokMessageType.CLEAR_ENTRIES_REQUEST:
 				this.emit(
@@ -284,13 +357,47 @@ export class HamokConnection<K, V> extends EventEmitter {
 					this.codec.decodeStorageAppliedCommitNotification(message),
 				);
 				break;
+			case HamokMessageType.STORAGE_HELLO_NOTIFICATION:
+				message.sourceId !== this.grid.localPeerId && this.emit(
+					'StorageHelloNotification',
+					this.codec.decodeStorageHelloNotification(message),
+				);
+				break;
+			case HamokMessageType.STORAGE_STATE_NOTIFICATION:
+				this.emit(
+					'StorageStateNotification',
+					this.codec.decodeStorageStateNotification(message),
+				);
+				break;
 		}
+	}
+
+	public notifyStorageHello(targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyStorageHello(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
+		logger.debug('%s Sending storage hello notification to %s', this.localPeerId, targetPeerIds);
+		
+		return this._sendMessage(this.codec.encodeStorageHelloNotification(new StorageHelloNotification(
+			this.grid.localPeerId,
+		)), targetPeerIds);
+	}
+
+	public notifyStorageState(serializedStorageSnapshot: string, appliedCommitIndex: number, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		const message = new StorageStateNotification(
+			this.grid.localPeerId,
+			serializedStorageSnapshot,
+			appliedCommitIndex,
+		);
+
+		return this._sendMessage(this.codec.encodeStorageStateNotification(message), targetPeerIds);
 	}
 
 	public async requestGetEntries(
 		keys: ReadonlySet<K>,
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`requestGetEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Map<K, V>();
 		const responseMessages = await Promise.all(
 			Collections.splitSet<K>(
@@ -321,6 +428,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	public async requestGetKeys(
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlySet<K>> {
+		if (this._closed) throw new Error(`requestGetKeys(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Set<K>();
 
 		(await this._request({
@@ -343,6 +452,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	public async requestClearEntries(
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<void> {
+		if (this._closed) throw new Error(`requestClearEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		return this._request({
 			message: this.codec.encodeClearEntriesRequest(
 				new ClearEntriesRequest(
@@ -354,6 +465,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyClearEntries(targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyClearEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		this._sendMessage(this.codec.encodeClearEntriesNotification(new ClearEntriesNotification()), targetPeerIds);
 	}
 
@@ -361,6 +474,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 		keys: ReadonlySet<K>,
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlySet<K>> {
+		if (this._closed) throw new Error(`requestDeleteEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Set<K>();
 
 		const responseMessages = await Promise.all(
@@ -392,6 +507,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyDeleteEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyDeleteEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitSet<K>(
 			keys,
 			this.config.maxOutboundKeys ?? 0,
@@ -405,6 +522,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 		keys: ReadonlySet<K>,
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`requestRemoveEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Map<K, V>();
 
 		const responseMessages = await Promise.all(
@@ -434,6 +553,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyRemoveEntries(keys: ReadonlySet<K>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyRemoveEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitSet<K>(
 			keys,
 			this.config.maxOutboundKeys ?? 0,
@@ -444,6 +565,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyEntriesRemoved(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyEntriesRemoved(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -457,6 +580,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 		entries: ReadonlyMap<K, V>,
 		targetPeerIds?: ReadonlySet<string> | string[]
 	): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`requestInsertEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Map<K, V>();
 
 		const responseMessages = await Promise.all(
@@ -486,6 +611,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyInsertEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyInsertEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -496,6 +623,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyEntriesInserted(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyEntriesInserted(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -510,6 +639,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 		targetPeerIds?: ReadonlySet<string> | string[] | string,
 		prevValue?: V
 	): Promise<ReadonlyMap<K, V>> {
+		if (this._closed) throw new Error(`requestUpdateEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const result = new Map<K, V>();
 
 		const responseMessages = await Promise.all(
@@ -541,6 +672,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyUpdateEntries(entries: ReadonlyMap<K, V>, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyUpdateEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		Collections.splitMap<K, V>(
 			entries,
 			Math.max(this.config.maxOutboundKeys ?? 0, this.config.maxOutboundValues ?? 0),
@@ -551,6 +684,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyEntryUpdated(key: K, oldValue: V, newValue: V, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyEntryUpdated(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const message = this.codec.encodeEntryUpdatedNotification(
 			new EntryUpdatedNotification(key, newValue, oldValue)
 		);
@@ -559,6 +694,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	}
 
 	public notifyStorageAppliedCommit(commitIndex: number, targetPeerIds?: ReadonlySet<string> | string[] | string) {
+		if (this._closed) throw new Error(`notifyStorageAppliedCommit(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
+
 		const message = this.codec.encodeStorageAppliedCommitNotification(
 			new StorageAppliedCommitNotification(commitIndex)
 		);
@@ -609,19 +746,22 @@ export class HamokConnection<K, V> extends EventEmitter {
 		options.message.storageId = this.config.storageId;
 		options.message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 
-		if (!this.grid.connected) {
-			if (!this._waitingQueue) {
-				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
+		// if (!this.grid.connected) {
+		// 	if (!this._waitingQueue) {
+		// 		const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
 
-				this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
-					this._waitingQueue = undefined;
-				});
-			}
+		// 		this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
+		// 			this._waitingQueue = undefined;
+		// 		});
+		// 	}
 			
-			return this._waitingQueue.wait(() => this._request(options));
-		} else if (this._waitingQueue) {
-			this._waitingQueue.flush();
-		}
+		// 	return this._waitingQueue.wait(() => this._request(options));
+		// } else if (this._waitingQueue) {
+		// 	this._waitingQueue.flush();
+		// }
+
+		// if there is a join process ongoing we wait until it is finished
+		await this._joining;
 		
 		return this.grid.request({
 			message: options.message,
@@ -636,31 +776,147 @@ export class HamokConnection<K, V> extends EventEmitter {
 		message.storageId = this.config.storageId;
 		message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 
-		if (!this.grid.connected) {
-			if (!this._waitingQueue) {
-				const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 10;
+		if (this._joining) {
+			// we only send storage hello or state notification during the join phase
+			if (
+				message.type !== HamokMessageType.STORAGE_HELLO_NOTIFICATION &&
+				message.type !== HamokMessageType.STORAGE_STATE_NOTIFICATION
+			) {
+				logger.debug('%s Buffering message %s until the connection is joined', this.localPeerId, message.type);
+				this._joining.then(() => this._sendMessage(message, targetPeerIds));
 
-				this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
-					this._waitingQueue = undefined;
-				});
+				return;
 			}
-
-			return this._waitingQueue.add(() => this._sendMessage(message, targetPeerIds));
-		} else if (this._waitingQueue) {
-			this._waitingQueue.flush();
 		}
 
+		// if (!this.grid.connected) {
+		// 	if (!this._waitingQueue) {
+		// 		const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 10;
+
+		// 		this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
+		// 			this._waitingQueue = undefined;
+		// 		});
+		// 	}
+
+		// 	return this._waitingQueue.add(() => this._sendMessage(message, targetPeerIds));
+		// } else if (this._waitingQueue) {
+		// 	this._waitingQueue.flush();
+		// }
 		this.grid.sendMessage(message, targetPeerIds);
+	}
+
+	private async _join(retried = 0): Promise<void> {
+		// we must buffer all messages received during join process (except state notification)
+		this._joined = false;
+		const stateNotification = await this._fetchStorageState();
+		
+		// if we have a state notification we need to apply it
+		if (stateNotification) {
+			// restart if tdisconnect happens while this!
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const disconnected = () => reject('disconnected');
+					const done = () => {
+						this.off('disconnected', disconnected);
+						resolve();
+					};
+	
+					this.once('disconnected', disconnected);
+					this.emit('remote-snapshot', stateNotification.serializedStorageSnapshot, done);
+				});
+			} catch (err) {
+				logger.warn('Failed to join the storage connection %s. retried: %d', err, retried);
+
+				// we restart the process until we are able to be joined or max retry count is reached
+				return this._join(retried + 1);
+			}
+
+			// we set the applied commit index to the received one
+			logger.info('Storage %s processed a remote snapshot and change it\'s applied commitIndex from %d to %d', 
+				this.config.storageId, 
+				this._appliedCommitIndex,
+				stateNotification.commitIndex
+			);
+			this._appliedCommitIndex = stateNotification.commitIndex;
+		}
+
+		const bufferedMessages = this._bufferedMessages;
+
+		this._bufferedMessages = [];
+		
+		// now we can accept messages
+		this._joined = true;
+
+		for (const [ message, commitIndex ] of bufferedMessages) {
+			if (commitIndex !== undefined && commitIndex < this._appliedCommitIndex) continue;
+			logger.debug('%s Processing buffered message %o', this.localPeerId, message);
+			this.accept(message);
+		}
+		
+	}
+
+	private async _fetchStorageState(retried = 0): Promise<StorageStateNotification | undefined> {
+		try {
+			if (!this.connected) {
+				await new Promise<void>((resolve, reject) => {
+					const connected = () => {
+						resolve();
+						this.off('disconnected', disconnected);
+					};
+					const disconnected = () => {
+						reject('disconnected');
+						this.off('connected', connected);
+					};
+	
+					this.once('connected', connected);
+					this.once('disconnected', disconnected);
+				});
+			}
+		} catch (err) {
+			logger.warn('Failed to join the storage connection %s', err);
+
+			// we restart the process until we are able to be joined or max retry count is reached
+			return this._fetchStorageState(retried + 1);
+		}
+	
+		// if the connection got disconnected during the join phase it will automatically fails as no response is received
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				this.off('StorageStateNotification', receiveStorageStateNotification);
+				logger.debug('%s no response received for storage state notification, most likely the storage %s is alone', this.localPeerId, this.config.storageId);
+				resolve(undefined);
+			}, this.config.remoteStorageStateWaitingTimeoutInMs ?? 1000);
+		
+			const receiveStorageStateNotification = (notification: StorageStateNotification) => {
+				clearTimeout(timer);
+				this.off('StorageStateNotification', receiveStorageStateNotification);
+					
+				resolve(notification);
+			};
+	
+			this.once('StorageStateNotification', receiveStorageStateNotification);
+			this.notifyStorageHello();
+		});
+		
 	}
 
 	private _leaderChangedListener(leaderId?: string) {
 		if (this._connected && leaderId === undefined) {
 			this._connected = false;
 			
-			return this.emit('disconnected');
+			// this will automatically restarts the joining process if there is any ongoing
+			this.emit('disconnected');
+
+			if (!this._joining) {
+				// if there is no join process ongoing we must initiate one
+				logger.warn('%s storage %s is disconnected, starting join process', this.localPeerId, this.config.storageId);
+				this.join().catch((err) => logger.warn('Failed to join the storage connection %s', err));
+			}
 		} 
 		if (!this._connected && leaderId !== undefined) {
 			this._connected = true;
+
+			// We don't need this if join works
 			this._waitingQueue?.flush();
 			
 			return this.emit('connected');

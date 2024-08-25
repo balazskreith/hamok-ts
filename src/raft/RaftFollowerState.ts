@@ -106,7 +106,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			const message = `The next index is ${logs.nextIndex}, and the leader index is ${request.leaderNextIndex}, the provided entries are: ${request.entries?.length}. It is insufficient to close the gap in log entries. Import a snapshot or increase the expiration for the logs.`;
 			const error = new Error(message);
 
-			raftEngine.events.stop();
+			// raftEngine.events.stop();
 			if (!raftEngine.events.emit('error', error)) {
 				throw error;
 			}
@@ -147,6 +147,10 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
 		logger.trace('%s Received a vote request %o, votedFor: %s', localPeerId, request, props.votedFor);
+		if (raftEngine.leaderId !== undefined) {
+			// if we know the leader, we should not vote for anyone else, until the leader is alive
+			return messageEmitter.send(request.createResponse(false));
+		}
 		if (request.term <= props.currentTerm) {
 			// someone requested a vote from a previous or equal term.
 			return messageEmitter.send(request.createResponse(false));
@@ -201,7 +205,8 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		raftEngine.leaderId = undefined;
 		if (raftEngine.remotePeers.size < 1) {
 			// if we are alone, there is no point to start an election
-			return;
+			// so we just restart the timer
+			return (updated = now);
 		}
 
 		logger.debug(`${localPeerId} is timed out to wait for append logs request (maxIdle: ${config.followerMaxIdleInMs}, elapsed: ${elapsedInMs}) extraWaitingTime: ${context.extraWaitingTime}`);

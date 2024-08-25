@@ -34,9 +34,9 @@ export type HamokSnapshot = {
 	},
 	commitIndex: number;
 	term: number;
-	records: HamokRecordSnapshot[];
-	maps: HamokMapSnapshot[];
-	queues: HamokQueueSnapshot[];
-	emitters: HamokEmitterSnapshot[];
-	remoteMaps: HamokRemoteMapSnapshot[];
+	// records: HamokRecordSnapshot[];
+	// maps: HamokMapSnapshot[];
+	// queues: HamokQueueSnapshot[];
+	// emitters: HamokEmitterSnapshot[];
+	// remoteMaps: HamokRemoteMapSnapshot[];
 }
