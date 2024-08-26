@@ -29,7 +29,7 @@ export declare interface HamokMap<K, V> {
 export class HamokMap<K, V> extends EventEmitter {
 	private _closed = false;
 	public equalValues: (a: V, b: V) => boolean;
-	private _initializing?: Promise<void>;
+	private _initializing?: Promise<this>;
 
 	public constructor(
 		public readonly connection: HamokConnection<K, V>,
@@ -181,7 +181,7 @@ export class HamokMap<K, V> extends EventEmitter {
 						Boolean(this._initializing),
 					);
 				} catch (err) {
-					logger.error('Failed to load snapshot', err);
+					logger.error(`Failed to import to map ${this.id}. Error: ${err}`);
 				} finally {
 					done();
 				}
@@ -201,14 +201,18 @@ export class HamokMap<K, V> extends EventEmitter {
 
 				logger.debug('%s Initializing record %d', this.connection.localPeerId, this.id);
 
-				if (entries.size < 1) return;
+				if (entries.size < 1) return this;
 
 				await this.connection.requestInsertEntries(entries).then(() => void 0);
 
 				logger.debug('%s Initialization for record %d is complete', this.connection.localPeerId, this.id);
+
+				return this;
 			})
 			.catch((err) => {
 				logger.error('Failed to initialize record %s %o', this.id, err);
+
+				return this;
 			})
 			.finally(() => {
 				this._initializing = undefined;
@@ -219,8 +223,8 @@ export class HamokMap<K, V> extends EventEmitter {
 		return this.connection.config.storageId;
 	}
 
-	public get initializing() {
-		return this._initializing;
+	public get initializing(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
 	}
 
 	public get closed() {

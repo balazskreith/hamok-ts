@@ -4,6 +4,7 @@ import { HamokQueueSnapshot } from '../HamokSnapshot';
 import { EventEmitter } from 'events';
 import { createLogger } from '../common/logger';
 import * as Collections from '../common/Collections';
+import { createHamokCodec } from '../common/HamokCodec';
 
 const logger = createLogger('HamokQueue');
 
@@ -46,7 +47,7 @@ export class HamokQueue<T> extends EventEmitter {
 	private _head = 0;
 	private _tail = 0;
 	private _closed = false;
-	private _initializing?: Promise<void>;
+	private _initializing?: Promise<this>;
 	
 	public constructor(
 		public readonly connection: HamokConnection<number, T>,
@@ -74,6 +75,8 @@ export class HamokQueue<T> extends EventEmitter {
 			})
 			.on('InsertEntriesRequest', (request) => {
 				const wasEmpty = this.empty;
+
+				logger.trace('%s Inserting entries %o', this.connection.localPeerId, [ ...request.entries ].map(([ key, value ]) => `${key}:${value}`).join(', '));
 
 				for (const value of request.entries.values()) {
 					this.baseMap.set(this._tail, value);
@@ -141,7 +144,7 @@ export class HamokQueue<T> extends EventEmitter {
 			})
 			.on('remote-snapshot', (serializedSnapshot, done) => {
 				try {
-					const snapshot = JSON.parse(serializedSnapshot) as HamokQueueSnapshot;
+					const snapshot = JSON.parse(serializedSnapshot);
 
 					this._import(
 						snapshot, 
@@ -150,7 +153,7 @@ export class HamokQueue<T> extends EventEmitter {
 						Boolean(this._initializing),
 					);
 				} catch (err) {
-					logger.error('Failed to load snapshot', err);
+					logger.error(`Failed to import to queue ${this.id}. Error: ${err}, snapshot: ${serializedSnapshot}`);
 				} finally {
 					done();
 				}
@@ -162,7 +165,12 @@ export class HamokQueue<T> extends EventEmitter {
 
 		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
 			.then(() => this.connection.join())
-			.catch((err) => logger.error('Error while initializing queue', err))
+			.then(() => this)
+			.catch((err) => {
+				logger.error('Error while initializing queue', err);
+
+				return this;
+			})
 			.finally(() => (this._initializing = undefined))
 		;
 	}
@@ -183,8 +191,8 @@ export class HamokQueue<T> extends EventEmitter {
 		return this._closed;
 	}
 
-	public get initializing() {
-		return this._initializing;
+	public get initializing(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
 	}
 
 	public async push(...values: T[]): Promise<void> {
@@ -249,14 +257,16 @@ export class HamokQueue<T> extends EventEmitter {
 		if (this._closed) throw new Error('Cannot export data on a closed queue');
 
 		const sortedEntries = [ ...this.baseMap ].sort(([ a ], [ b ]) => a - b);
+
+		logger.trace('Queue %s exporting entries: %o', this.id, sortedEntries);
 		const [ keys, values ] = this.connection.codec.encodeEntries(
 			new Map(sortedEntries)
 		);
-        
+		
 		return {
 			queueId: this.id,
-			keys,
-			values,
+			keys: HamokQueue.uint8ArrayToStringCodec.encode(keys),
+			values: HamokQueue.uint8ArrayToStringCodec.encode(values),
 		};
 	}
 
@@ -274,8 +284,18 @@ export class HamokQueue<T> extends EventEmitter {
 
 	private _import(snapshot: HamokQueueSnapshot, eventing = false): void {
 		this.baseMap.clear();
-		
-		const entries = this.connection.codec.decodeEntries(snapshot.keys, snapshot.values);
+
+		logger.trace('Queue %s importing entries keys: %o, \n values: %o', this.id, snapshot.keys.constructor.name, snapshot.keys, snapshot.values);
+
+		const entries = this.connection.codec.decodeEntries(
+			HamokQueue.uint8ArrayToStringCodec.decode(snapshot.keys),
+			HamokQueue.uint8ArrayToStringCodec.decode(snapshot.values),
+		);
+
+		logger.trace('Queue %s decoded entries: %o', 
+			this.id, 
+			[ ...entries ].map(([ key, value ]) => `${key}:${value}`).join(', ')
+		);
 
 		this.baseMap.setAll(entries, (updateResult) => {
 			if (eventing) {
@@ -284,19 +304,30 @@ export class HamokQueue<T> extends EventEmitter {
 			}
 		});
 
-		this._head = 0;
-		this._tail = 0;
+		let newHead: undefined | number;
+		let newTail: undefined | number;
+
 		for (const key of entries.keys()) {
-			if (this._head === 0 || key < this._head) {
-				this._head = key;
+			if (newHead === undefined || key < newHead) {
+				newHead = key;
 			}
-			if (this._tail === 0 || this._tail < key) {
-				this._tail = key;
+			if (newTail === undefined || newTail < key) {
+				newTail = key;
 			}
 		}
+		this._head = newHead ?? 0;
+		this._tail = newTail ?? 0;
 		if (this._head !== this._tail) {
 			++this._tail;
 		}
+
+		logger.info('Queue %s imported entries: %d. new head: %d, new tail: %d', 
+			this.id, 
+			this.baseMap.size,
+			this._head,
+			this._tail,
+		);
+		logger.debug('Imported entries for queue %s: %o', this.id, [ ...this.baseMap ].map(([ key, value ]) => `${key}:${value}`).join(', '));
 	}
 
 	private _pop(): T | undefined {
@@ -314,4 +345,13 @@ export class HamokQueue<T> extends EventEmitter {
 		
 		return value;
 	}
+
+	public static uint8ArrayToStringCodec = createHamokCodec<Uint8Array[], string[]>(
+		(array) => {
+			return array.map((item) => Buffer.from(item).toString('utf8'));	
+		},
+		(array) => {
+			return array.map((item) => Buffer.from(item, 'utf8'));
+		}
+	);
 }

@@ -17,8 +17,8 @@ export type HamokRemoteMapSnapshot = {
 
 export type HamokQueueSnapshot = {
 	queueId: string;
-	keys: Uint8Array[];
-	values: Uint8Array[];
+	keys: string[];
+	values: string[];
 }
 
 export type HamokEmitterSnapshot = {

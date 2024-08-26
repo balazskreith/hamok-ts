@@ -60,5 +60,4 @@ export {
 export { 
 	HamokCodec, 
 	createHamokJsonBinaryCodec, 
-	createNumberToUint8ArrayCodec 
 } from './common/HamokCodec';

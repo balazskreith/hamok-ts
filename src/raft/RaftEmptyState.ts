@@ -49,10 +49,14 @@ export function createRaftEmptyState(context: RaftCandidateStateContext): RaftSt
 	const run = () => {
 		
 	};
+	const init = () => {
+		raftEngine.leaderId = undefined;
+	};
 
 	return {
 		stateName: 'empty' as const,
 		run,
 		close,
+		init,
 	};
 }

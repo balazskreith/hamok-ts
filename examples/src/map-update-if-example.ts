@@ -1,5 +1,6 @@
 import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
+import { HamokMessageHub } from './utils/HamokMessageHub';
 
 const logger = pino.pino({
 	name: 'map-update-if-example',
@@ -16,23 +17,7 @@ export async function run() {
 
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
-	
-	server_1.on('message', server_2.accept.bind(server_2));
-	server_2.on('message', server_1.accept.bind(server_1));
-	
-	server_1.addRemotePeerId(server_2.localPeerId);
-	server_2.addRemotePeerId(server_1.localPeerId);
-	
-	server_1.start();
-	server_2.start();
-
-	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
-	]);
-
-	logger.info('Leader changed');
-	
+	const messageHub = new HamokMessageHub();
 	const jobId = 'myJob';
 	const storage_1 = server_1.createMap<string, Job>({
 		mapId: 'my-replicated-storage',
@@ -42,9 +27,11 @@ export async function run() {
 		mapId: 'my-replicated-storage',
 		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
-	// const storage_3 = server_3.createReplicatedStorage<string, number>({
-	// 	storageId: 'my-replicated-storage',
-	// });
+
+	Promise.all([
+		server_1.join(),
+		server_2.join(),
+	]);
 	
 	logger.debug('Setting value in storage for key to 0');	
 	await storage_1.set(jobId, { id: jobId, state: 'pending' });
@@ -63,6 +50,9 @@ export async function run() {
 	logger.debug('%s job entry is updated by server_2: %o', jobId, changedByServer_2);
 
 	logger.debug('Getting value for %s from storage: %o', jobId, storage_1.get(jobId));
+
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

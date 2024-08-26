@@ -8,7 +8,9 @@ const logger = pino.pino({
 
 export async function run() {
 
-	const server_1 = new Hamok();
+	const server_1 = new Hamok({
+		onlyFollower: true,
+	});
 	const server_2 = new Hamok();
 
 	logger.info('server 1 is %s', server_1.localPeerId);
@@ -44,21 +46,28 @@ export async function run() {
 	logger.info('Server 3 joined, let\'s stop server_1 %s', server_1.localPeerId);
 	
 	await Promise.all([
-		new Promise<void>(resolve => server_2.once('no-heartbeat-from', peerId => (logger.info('Server_2 no-heartbeat-from %s', peerId), resolve()))),
-		new Promise<void>(resolve => server_3.once('no-heartbeat-from', peerId => (logger.info('Server_3 no-heartbeat-from %s', peerId), resolve()))),
+		new Promise<void>(resolve => server_2.once('remote-peer-left', peerId => (logger.info('Server_2 has remote-peer-left event for %s', peerId), resolve()))),
+		new Promise<void>(resolve => server_3.once('remote-peer-left', peerId => (logger.info('Server_3 has remote-peer-left event for %s', peerId), resolve()))),
 		server_1.leave()
 	]);
+
+	logger.info('Server 1 left, make sure server_2 and server_3 have a leader');
+
+	await Promise.all([
+		server_2.waitUntilLeader(), // or you use server_2.joining
+		server_3.waitUntilLeader(), // or you use server_3.joining
+	])
 
 	logger.info('Server 1 left, let\'s wait for 5s if everything is ok');
 
 	await new Promise(resolve => setTimeout(resolve, 5000));
 
-	logger.info('Let\'s join server_2 %s', server_2.localPeerId);
+	logger.info('Let\'s join server_1 %s', server_1.localPeerId);
 
 	await Promise.all([
-		new Promise<void>(resolve => server_1.once('remote-peer-joined', peerId => (logger.info('Server_1 %s joined', peerId), resolve()))),
-		new Promise<void>(resolve => server_3.once('remote-peer-joined', peerId => (logger.info('Server_3 %s joined', peerId), resolve()))),
-		server_2.join()
+		new Promise<void>(resolve => server_2.once('remote-peer-joined', peerId => (logger.info('Server_1 has remote-peer-joined event for %s ', peerId), resolve()))),
+		new Promise<void>(resolve => server_3.once('remote-peer-joined', peerId => (logger.info('Server_3 has remote-peer-joined event for %s', peerId), resolve()))),
+		server_1.join()
 	]);
 
 	await new Promise(resolve => setTimeout(resolve, 5000));
@@ -92,6 +101,6 @@ export async function run() {
 
 if (require.main === module) {
 	logger.info('Running from module file');
-	setHamokLogLevel('warn');
+	setHamokLogLevel('debug');
 	run();
 }

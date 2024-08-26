@@ -250,7 +250,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 						currentTerm,
 						sequence,
 						sequence == entries.length - 1,
-						entry,
+						entry.entry,
 					);
 					//                    logger.info("Sending", request);
 

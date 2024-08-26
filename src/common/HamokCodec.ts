@@ -172,41 +172,6 @@ export function encodeNumber(value: number): Uint8Array {
 	return new Uint8Array(buffer);
 }
 
-export function createNumberToUint8ArrayCodec(length: 2 | 4 | 8 = 4): HamokCodec<number, Uint8Array> {
-	return {
-		encode: (data: number) => {
-			const buffer = new ArrayBuffer(length);
-			const view = new DataView(buffer);
-
-			switch (length) {
-				case 2:
-					view.setInt16(0, data);
-					break;
-				case 4:
-					view.setInt32(0, data);
-					break;
-				case 8:
-					view.setBigInt64(0, BigInt(data));
-					break;
-			}
-			
-			return new Uint8Array(buffer);
-		},
-		decode: (data: Uint8Array) => {
-			const view = new DataView(data.buffer);
-			
-			switch (length) {
-				case 2:
-					return view.getInt16(0);
-				case 4:
-					return view.getInt32(0);
-				case 8:
-					return Number(view.getBigInt64(0));
-			}
-		},
-	};
-}
-
 export function createStrToUint8ArrayCodec(encoding: BufferEncoding = 'utf-8'): HamokCodec<string, Uint8Array> {
 	return {
 		encode: (data: string) => Buffer.from(data, encoding),

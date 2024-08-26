@@ -44,7 +44,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	private _closed = false;
 	public equalValues: <K extends keyof T>(a: T[K], b: T[K]) => boolean;
 	private _object: Partial<T>;
-	private _initializing?: Promise<void>;
+	private _initializing?: Promise<this>;
 
 	public constructor(
 		public readonly connection: HamokConnection<string, string>, 
@@ -211,7 +211,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 						Boolean(this._initializing),
 					);
 				} catch (err) {
-					logger.error('Failed to load snapshot', err);
+					logger.error(`Failed to import to record ${this.id}. Error: ${err}`);
 				} finally {
 					done();
 				}
@@ -222,7 +222,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
 			.then(() => this.connection.join())
 			.then(async () => {
-				if (setup?.initalObject === undefined) return;
+				if (setup?.initalObject === undefined) return this;
 				const initalObject = setup.initalObject;
 
 				logger.debug('%s Initializing record %d', this.connection.localPeerId, this.id);
@@ -236,9 +236,13 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 				await this.connection.requestInsertEntries(entries).then(() => void 0);
 
 				logger.debug('%s Initialization for record %d is complete', this.connection.localPeerId, this.id);
+
+				return this;
 			})
 			.catch((err) => {
 				logger.error('Failed to initialize record %s %o', this.id, err);
+
+				return this;
 			})
 			.finally(() => {
 				this._initializing = undefined;
@@ -249,8 +253,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		return this.connection.config.storageId;
 	}
 
-	public get initializing(): Promise<void> | undefined {
-		return this._initializing;
+	public get initializing(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
 	}
 
 	public get closed() {
@@ -391,7 +395,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 				});
 			}
 		} catch (err) {
-			logger.error('Failed to load snapshot', err);
+			logger.error(`Failed to import to record ${this.id}. Error: ${err}`);
 		}
 		
 	}

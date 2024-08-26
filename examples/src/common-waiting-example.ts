@@ -22,40 +22,32 @@ export async function run() {
 	server_1.addRemotePeerId(server_2.localPeerId);
 	server_2.addRemotePeerId(server_1.localPeerId);
 	
-	server_1.start();
+	server_1.join();
 	// server_2.start();
 
 	const emitter_1 = server_1.createEmitter<ExampleEventMap>({
 		emitterId: 'my-distributed-emitter',
-		maxMessageWaitingTimeInMs: 20000,
+	});
+	const emitter_2 = server_2.createEmitter<ExampleEventMap>({
+		emitterId: 'my-distributed-emitter',
 	});
 
 	logger.debug('Subscribing to event-1 on server_1, but server2 is not started');
 
-	await new Promise((resolve, reject) => emitter_1.subscribe('event-1', () => void 0)
-		.then(() => reject('Should not subscribe to a not connected Hamok'))
-		.catch(resolve))
+	emitter_1.notify('event-1', 1, 'hello', true);
 
 	logger.info('Starting server_2after 5s of waiting');
-	await new Promise((resolve, reject) => {
-		setTimeout(() => {
-			logger.info('Starting server_2');
-			server_2.start();
-		}, 5000);
-		emitter_1.subscribe('event-1', () => void 0).then(resolve).catch(reject);
+	
+	emitter_2.subscribe('event-1', (a, b, c) => {
+		logger.info('Server_2 received event-1 with %d, %s, %s', a, b, c);
 	});
 
-	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
-	]);
+	await server_2.join();
+	await emitter_1.initializing;
+	await emitter_2.initializing;
 
-	logger.info('Leader changed');
-
-	await emitter_1.subscribe('event-1', () => void 0);
-
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

@@ -9,10 +9,9 @@ const logger = pino.pino({
 const publisher = new Redis();
 const subscriber = new Redis();
 
-type MySharedConfig = {
-	foo: string;
-	bar: number;
-	something?: number,
+type RoomSession = {
+	lock: boolean | null;
+	roomName: string;
 }
 
 const hamokConfig: Partial<HamokConfig> = {
@@ -24,7 +23,9 @@ export async function run() {
 	const server_1 = new Hamok(hamokConfig);
 	const server_2 = new Hamok(hamokConfig);
 	const server_3 = new Hamok(hamokConfig);
-	
+	const sessionId = Math.random().toString(36).substring(7);
+	const roomName = `room ${sessionId}`;
+
 	await subscriber.subscribe('hamok-channel');
 
 	subscriber.on('messageBuffer', (channel, buffer) => {
@@ -37,25 +38,16 @@ export async function run() {
 	server_2.on('message', message => publisher.publish('hamok-channel', Buffer.from(message.toBinary())));
 	server_3.on('message', message => publisher.publish('hamok-channel', Buffer.from(message.toBinary())));
 
-	server_1.raft.logs.on('removed', (commitIndex) => {
-		logger.warn('Server_1 Removed log entry at index %d', commitIndex);
-	});
-	server_2.raft.logs.on('removed', (commitIndex) => {
-		logger.warn('Server_2 Removed log entry at index %d', commitIndex);
-	});
-	server_3.raft.logs.on('removed', (commitIndex) => {
-		logger.warn('Server_3 Removed log entry at index %d', commitIndex);
-	});
+	logger.info('Creating a Room Record on server_1 and initializing it with { lock: null, clients: []" }');
 
-	logger.info('Creating a record on server_1 and initializing it with { bar: 0, foo: "initial-1" }');
-
-	const storage_1 = server_1.createRecord<MySharedConfig>({
-		recordId: 'my-replicated-record',
+	const roomConfig_1 = server_1.createRecord<RoomSession>({
+		recordId: sessionId,
 		initialObject: {
-			bar: 0,
-			foo: 'initial-1',
+			lock: null,
+			roomName,
 		}
 	});
+	roomConfig_1.on('update', ({key, oldValue, newValue}) => logger.debug('roomConfig_1: %s changed from %s to %s', key, oldValue, newValue));
 
 	await Promise.all([
 		server_1.join(),
@@ -63,58 +55,55 @@ export async function run() {
 		server_3.join(),
 	]);
 
-	logger.debug('Setting bar property on server_1 to 1');
+	logger.debug('Locking the room by server_1, and server_2 has a request to share the room');
 
-	await storage_1.set('bar', 1);
+	const [, roomConfig_2 ] = await Promise.all([
+		roomConfig_1.set('lock', true),
+		server_2.createRecord<RoomSession>({
+			recordId: sessionId,
+			initialObject: {
+				lock: null,
+				roomName,
+			}
+		}).initializing,
+	]);
+
+	roomConfig_2.on('update', ({key, oldValue, newValue}) => logger.debug('roomConfig_2: %s changed from %s to %s', key, oldValue, newValue));
 	
-	logger.debug('Waiting 5s so the expiration of the logs will be triggered');
-	await new Promise(resolve => setTimeout(resolve, 5000));
+	logger.debug('The roomconfig on server_2 is initialized, and it has { lock: %s, roomName: %s }', roomConfig_2.get('lock'), roomConfig_2.get('roomName'));
 
-	logger.debug('Setting bar property on server_1 to 2');
-	await storage_1.set('bar', 2);
+	logger.info('Let\s see if two servers wants to change the roomName');
+	let [ server1_success, server2_success ] = await Promise.all([
+		roomConfig_1.updateIf('roomName', 'roomName chosed by server_1', roomConfig_1.get('roomName') ?? roomName),
+		roomConfig_2.updateIf('roomName', 'roomName chosed by server_2', roomConfig_2.get('roomName') ?? roomName),
+	]);
 
-	logger.debug('Creating a record on server_3 and initializing it with { bar: 0, foo: "initial-3" }');
+	logger.info('server_1 %s has %s to change the roomName', server_1.localPeerId, server1_success ? 'succeeded' : 'failed');
+	logger.info('server_2 %s has %s to change the roomName', server_2.localPeerId, server2_success ? 'succeeded' : 'failed');
+	logger.info('The room name is %s', roomConfig_1.get('roomName'));
 
-	const storage_3 = server_3.createRecord<MySharedConfig>({
-		recordId: 'my-replicated-record',
-		initialObject: {
-			bar: 0,
-			foo: 'initial-3',
-		}
-	});
+	const [, roomConfig_3] = await Promise.all([
+		roomConfig_2.set('lock', false),
+		server_3.createRecord<RoomSession>({
+			recordId: sessionId,
+			initialObject: {
+				lock: null,
+				roomName,
+			}
+		}).initializing,
+	]);
+	
+	logger.debug('The roomconfig on server_3 is initialized, and it has { lock: %s, roomName: %s }', roomConfig_3.get('lock'), roomConfig_3.get('roomName'));
 
-	// we can wait explicitly the initialization of the record
-	// await storage_3.initializing;
+	roomConfig_3.on('update', ({key, oldValue, newValue}) => logger.debug('roomConfig_3: %s changed from %s to %s', key, oldValue, newValue));
 
-	// or we can just simply trying to set a value and wait for the promise
-	await storage_3.set('something', 3);
+	logger.debug(`Getting record from server3: { lock: %s, roomName: %s }`, roomConfig_3.get('lock'), roomConfig_3.get('roomName'));
 
-	logger.debug(`Getting record from server3: { bar: %d, foo: %s, something: %d }`, storage_3.get('bar'), storage_3.get('foo'), storage_3.get('something'));
+	await roomConfig_3.set('roomName', 'roomName chosed by server_3');
 
-	logger.debug('record on server_1 has no use any more');
-	storage_1.close();
-
-	logger.debug('Waiting 2s');
-	await new Promise(resolve => setTimeout(resolve, 2000));
-
-	logger.debug('Server_2 needs the record, so it will be initialized with the latest value');
-
-	const storage_2 = server_2.createRecord<MySharedConfig>({
-		recordId: 'my-replicated-record',
-		initialObject: {
-			bar: 0,
-			foo: 'initial-2',
-		}
-	});
-
-	logger.debug('Setting something property on server_2 to 5');
-	await storage_2.insert('something', 5);
-
-	logger.debug(`Getting record from server2: { bar: %d, foo: %s, something: %d }`, storage_2.get('bar'), storage_2.get('foo'), storage_2.get('something'));
-
-	server_1.stop();
-	server_2.stop();
-	server_3.stop();
+	server_1.close();
+	server_2.close();
+	server_3.close();
 }
 
 if (require.main === module) {

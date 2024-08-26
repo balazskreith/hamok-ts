@@ -13,7 +13,7 @@ export interface HamokEmitterEventMap extends Record<string, unknown[]> {
 export class HamokEmitter<T extends HamokEmitterEventMap> {
 	private readonly _subscriptions = new Map<keyof T, Set<string>>();
 	private readonly _emitter = new EventEmitter();
-	private _initializing?: Promise<void>;
+	private _initializing?: Promise<this>;
 	private _removedPeerIdsBuffer: string[] = [];
 	private _closed = false;
     
@@ -231,7 +231,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 					this._import(snapshot);
 				} catch (err) {
-					logger.error('Failed to load snapshot', err);
+					logger.error(`Failed to import to emitter ${this.id}. Error: ${err}`);
 				} finally {
 					done();
 				}
@@ -243,7 +243,12 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
 			.then(() => this.connection.join())
-			.catch((err) => logger.error('Error while initializing queue', err))
+			.then(() => this)
+			.catch((err) => {
+				logger.error('Error while initializing queue', err);
+
+				return this;
+			})
 			.finally(() => (this._initializing = undefined))
 		;
 		
@@ -257,8 +262,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 		return this._subscriptions.size < 1;
 	}
 
-	public get initializing() {
-		return this._initializing;
+	public get initializing(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
 	}
 
 	public get closed() {

@@ -234,7 +234,7 @@ export class HamokConnection<K, V> extends EventEmitter {
 					break;
 				}
 				default:
-					logger.info('Buffering message %o until the connection is joined %o', message);
+					logger.debug('Buffering message %o until the connection is joined. commitIndex: %d', message, commitIndex);
 					this._bufferedMessages.push([ message, commitIndex ]);
 					break;
 			}
@@ -243,9 +243,19 @@ export class HamokConnection<K, V> extends EventEmitter {
 		}
 
 		if (commitIndex !== undefined) {
-			if (commitIndex < this._appliedCommitIndex) {
-				return logger.warn('Received message with commit index %d is older than the last applied commit index %d', commitIndex, this._appliedCommitIndex);
+			// logger.info('%s Received message with commit index %d -> %d, %d', 
+			// 	this.localPeerId, 
+			// 	commitIndex, 
+			// 	message.type,
+			// 	message.type === HamokMessageType.INSERT_ENTRIES_REQUEST ? this.codec.valueCodec.decode(message.values[0]) : -1
+			// );
+			if (commitIndex <= this._appliedCommitIndex) {
+				return logger.warn('Received message with commit index %d is older or equal than the last applied commit index %d', commitIndex, this._appliedCommitIndex);
 			}
+			// only in test purposes
+			// if (this._appliedCommitIndex + 1 !== commitIndex) {
+			// 	logger.warn('Received message with commit index %d is not the next commit index after the last applied commit index %d', commitIndex, this._appliedCommitIndex);
+			// }
 			this._appliedCommitIndex = commitIndex;
 		}
 
@@ -840,19 +850,42 @@ export class HamokConnection<K, V> extends EventEmitter {
 			this._appliedCommitIndex = stateNotification.commitIndex;
 		}
 
+		if (this._appliedCommitIndex < this.grid.logs.commitIndex) {
+			const entries = this.grid.logs.collectEntries(this._appliedCommitIndex, Math.min(
+				this.grid.logs.commitIndex + 1, // we need the commit index as well
+				this.grid.logs.nextIndex
+			));
+
+			logger.debug('Buffering messages %d until the connection is joined', entries.length);
+
+			for (const logEntry of entries) {
+				if (logEntry.entry.storageId !== this.config.storageId) continue;
+
+				logger.debug('Processing buffered message %d', logEntry.index);
+				// it should goes to the buffered messages
+				this.accept(logEntry.entry, logEntry.index);
+			}
+		}
+
 		const bufferedMessages = this._bufferedMessages;
 
 		this._bufferedMessages = [];
+
+		logger.trace('Buffered messages %o, appliedCommitIndex: %d, commitIndex: %d, nextIndex: %d', 
+			bufferedMessages, 
+			this._appliedCommitIndex, 
+			this.grid.logs.commitIndex,
+			this.grid.logs.nextIndex,
+		);
 		
 		// now we can accept messages
 		this._joined = true;
 
 		for (const [ message, commitIndex ] of bufferedMessages) {
 			if (commitIndex !== undefined && commitIndex < this._appliedCommitIndex) continue;
-			logger.debug('%s Processing buffered message %o', this.localPeerId, message);
-			this.accept(message);
+			logger.trace('%s Processing buffered message %d', this.localPeerId, commitIndex);
+			this.accept(message, commitIndex);
 		}
-		
 	}
 
 	private async _fetchStorageState(retried = 0): Promise<StorageStateNotification | undefined> {
