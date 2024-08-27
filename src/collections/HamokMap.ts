@@ -101,6 +101,23 @@ export class HamokMap<K, V> extends EventEmitter {
 				request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', k, v));
 			})
 			.on('RemoveEntriesRequest', (request) => {
+				if (request.prevValue !== undefined) {
+					// this is a conditional remove
+					if (request.keys.size !== 1) {
+						// we let the request to timeout
+						return logger.warn('Conditional remove request must have only one entry: %o', request);
+					}
+					const key = [ ...request.keys ][0];
+
+					const existingValue = this.baseMap.get(key);
+
+					logger.trace('Conditional remove request: %s, %s, %s', key, existingValue, request.prevValue);
+
+					if (!existingValue || !this.equalValues(existingValue, request.prevValue as V)) {
+						return;
+					}
+				}
+
 				const removedEntries = this.baseMap.removeAll(request.keys.values());
 
 				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
@@ -223,8 +240,12 @@ export class HamokMap<K, V> extends EventEmitter {
 		return this.connection.config.storageId;
 	}
 
-	public get initializing(): Promise<this> {
+	public get ready(): Promise<this> {
 		return this._initializing ?? Promise.resolve(this);
+	}
+
+	public async sync(): Promise<this> {
+		return this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
@@ -341,6 +362,20 @@ export class HamokMap<K, V> extends EventEmitter {
 		}
 		
 		return this.connection.requestDeleteEntries(keys);
+	}
+
+	public async removeIf(key: K, oldValue: V): Promise<boolean> {
+		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
+
+		logger.trace('%s RemoveIf: %s, %s, %s', this.connection.grid.localPeerId, key, oldValue, oldValue);
+		
+		return (await this.connection.requestRemoveEntries(
+			Collections.setOf(key),
+			undefined,
+			oldValue,
+		)).get(key) !== undefined;
 	}
 
 	public async remove(key: K): Promise<boolean> {

@@ -273,6 +273,9 @@ export type HamokEventMap = {
 	close: [],
 }
 
+export type HamokStorageType = 'record' | 'map' | 'remoteMap' | 'emitter' | 'queue';
+export type HamokSharedStorageMap = HamokMap<string, { type: HamokStorageType, count: number }>;
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface Hamok {
 	on<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
@@ -285,15 +288,21 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	public readonly config: HamokObjectConfig<AppData>;
 	public readonly raft: RaftEngine;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly records = new Map<string, HamokRecord<any>>();
+	public readonly storages = new Map<string, HamokRecord<any> | HamokMap<any, any> | HamokQueue<any> | HamokRemoteMap<any, any> | HamokEmitter<any>>();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly maps = new Map<string, HamokMap<any, any>>();
+	// public readonly records = new Map<string, HamokRecord<any>>();
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly queues = new Map<string, HamokQueue<any>>();
+	// public readonly maps = new Map<string, HamokMap<any, any>>();
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly emitters = new Map<string, HamokEmitter<any>>();
+	// public readonly queues = new Map<string, HamokQueue<any>>();
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly remoteMaps = new Map<string, HamokRemoteMap<any, any>>();
+	// public readonly emitters = new Map<string, HamokEmitter<any>>();
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// public readonly remoteMaps = new Map<string, HamokRemoteMap<any, any>>();
 
 	private _closed = false;
 	private _run = false;
@@ -413,6 +422,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 		this._stopRaftEngine();
 		this.remotePeerIds.forEach((peerId) => this.removeRemotePeerId(peerId));
+		this.storages.forEach((storage) => storage.close());
 
 		this.emit('close');
 
@@ -539,167 +549,115 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 	public createMap<K, V>(options: HamokMapBuilderConfig<K, V>): HamokMap<K, V> {
 		if (this._closed) throw new Error('Cannot create map on a closed Hamok instance');
+		if (this.storages.has(options.mapId)) throw new Error(`Map with id ${options.mapId} already exists`);
 
-		if (this.maps.has(options.mapId)) {
-			throw new Error(`Map with id ${options.mapId} already exists`);
-		}
-
-		const storageCodec = new StorageCodec<K, V>(
-			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
-			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
-		);
-		const connection = new HamokConnection<K, V>(
+		const connection = this._createStorageConnection(
 			{
-				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
-				storageId: options.mapId,
-				neededResponse: 0,
-				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
-				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
-				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				...options,
+				keyCodec: options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
+				valueCodec: options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
 					HamokMessageType.DELETE_ENTRIES_REQUEST,
 					HamokMessageType.REMOVE_ENTRIES_REQUEST,
 					HamokMessageType.UPDATE_ENTRIES_REQUEST,
-				])
-			}, 
-			storageCodec, 
-			this.grid,         
+				]),
+				storageId: options.mapId,
+			},
 		);
-		const messageListener = (message: HamokMessage, submitting: boolean) => {
-			if (submitting) return this.submit(message);
-			else this.emit('message', message);
-		};
+
 		const storage = new HamokMap<K, V>(
 			connection,
 			options.baseMap ?? new MemoryBaseMap<K, V>(),
 			options.equalValues,
 		);
 
-		connection.once('close', () => {
-			connection.off('message', messageListener);
-			this.maps.delete(storage.id);
+		storage.once('close', () => {
+			this.storages.delete(storage.id);
 		});
-		connection.on('message', messageListener);
 		
-		this.maps.set(storage.id, storage);
+		this.storages.set(storage.id, storage);
 
 		return storage;
 	}
 
 	public getOrCreateMap<K, V>(options: HamokMapBuilderConfig<K, V>, callback?: (alreadyExisted: boolean) => void): HamokMap<K, V> {
-		const existing = this.maps.get(options.mapId);
+		const storage = this.storages.get(options.mapId) as HamokMap<K, V>;
 
-		try {
-			if (existing) return existing;
+		if (!storage) return this.createMap(options);
 
-			return this.createMap(options);
-		} finally {
-			callback?.(Boolean(existing));
-		}
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public createRemoteMap<K, V>(options: HamokRemoteMapBuilderConfig<K, V>): HamokRemoteMap<K, V> {
 		if (this._closed) throw new Error('Cannot create remote map on a closed Hamok instance');
+		if (this.storages.has(options.mapId)) throw new Error(`Remote map with id ${options.mapId} already exists`);
 
-		if (this.remoteMaps.has(options.mapId)) {
-			throw new Error(`RemoteMap with id ${options.mapId} already exists`);
-		}
-
-		const storageCodec = new StorageCodec<K, V>(
-			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
-			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
-		);
-		const connection = new HamokConnection<K, V>(
+		const connection = this._createStorageConnection<K, V>( 
 			{
-				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
-				storageId: options.mapId,
-				neededResponse: 0,
-				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
-				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
-				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				...options,
+				keyCodec: options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
+				valueCodec: options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
 					HamokMessageType.DELETE_ENTRIES_REQUEST,
 					HamokMessageType.REMOVE_ENTRIES_REQUEST,
 					HamokMessageType.UPDATE_ENTRIES_REQUEST,
-				])
-			}, 
-			storageCodec, 
-			this.grid,         
+				]),
+				storageId: options.mapId,
+			},
 		);
-		const messageListener = (message: HamokMessage, submitting: boolean) => {
-			if (submitting) return this.submit(message);
-			else this.emit('message', message);
-		};
+
 		const storage = new HamokRemoteMap<K, V>(
 			connection,
 			options.remoteMap,
 			options.equalValues,
 		);
 
-		storage.emitEvents = options.noEvents ?? true;
-
-		connection.once('close', () => {
-			connection.off('message', messageListener);
-			this.maps.delete(storage.id);
+		storage.once('close', () => {
+			this.storages.delete(storage.id);
 		});
-		connection.on('message', messageListener);
 		
-		this.remoteMaps.set(storage.id, storage);
+		this.storages.set(storage.id, storage);
 
 		return storage;
 	}
 
 	public getOrCreateRemoteMap(options: HamokRemoteMapBuilderConfig<unknown, unknown>, callback?: (alreadyExisted: boolean) => void): HamokRemoteMap<unknown, unknown> {
-		const existing = this.remoteMaps.get(options.mapId);
+		const storage = this.storages.get(options.mapId) as HamokRemoteMap<unknown, unknown>;
 
-		try {
-			if (existing) return existing;
+		if (!storage) return this.createRemoteMap(options);
 
-			return this.createRemoteMap(options);
-		} finally {
-			callback?.(Boolean(existing));
-		}
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public createRecord<T extends HamokRecordObject>(options: HamokRecordBuilderConfig<T>): HamokRecord<T> {
 		if (this._closed) throw new Error('Cannot create record on a closed Hamok instance');
+		if (this.storages.has(options.recordId)) throw new Error(`Record with id ${options.recordId} already exists`);
 
-		if (this.records.has(options.recordId)) {
-			throw new Error(`Record with id ${options.recordId} already exists`);
-		}
-
-		const storageCodec = new StorageCodec<string, string>(
-			createStrToUint8ArrayCodec(),
-			createStrToUint8ArrayCodec(),
-		);
-		const connection = new HamokConnection<string, string>(
+		const connection = this._createStorageConnection( 
 			{
-				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
-				storageId: options.recordId,
-				neededResponse: 0,
-				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
-				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
-				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				...options,
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
 					HamokMessageType.DELETE_ENTRIES_REQUEST,
 					HamokMessageType.REMOVE_ENTRIES_REQUEST,
 					HamokMessageType.UPDATE_ENTRIES_REQUEST,
-				])
-			}, 
-			storageCodec, 
-			this.grid,         
+				]),
+				storageId: options.recordId,
+				keyCodec: createStrToUint8ArrayCodec(),
+				valueCodec: createStrToUint8ArrayCodec(),
+			},
 		);
-		const messageListener = (message: HamokMessage, submitting: boolean) => {
-			if (submitting) return this.submit(message);
-			else this.emit('message', message);
-		};
-		const record = new HamokRecord<T>(
+
+		const storage = new HamokRecord<T>(
 			connection, {
 				equalValues: options.equalValues,
 				payloadsCodec: options.payloadCodecs,
@@ -707,146 +665,106 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			}
 		);
 
-		connection.once('close', () => {
-			connection.off('message', messageListener);
-			this.records.delete(record.id);
+		storage.once('close', () => {
+			this.storages.delete(storage.id);
 		});
-		connection.on('message', messageListener);
 		
-		this.records.set(record.id, record);
+		this.storages.set(storage.id, storage);
 
-		return record;
+		return storage;
 	}
 
 	public getOrCreateRecord<T extends HamokRecordObject>(options: HamokRecordBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokRecord<T> {
-		const existing = this.records.get(options.recordId);
+		const storage = this.storages.get(options.recordId) as HamokRecord<T>;
 
-		try {
-			if (existing) return existing;
+		if (!storage) return this.createRecord(options);
 
-			return this.createRecord(options);
-		} finally {
-			callback?.(Boolean(existing));
-		}
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public createQueue<T>(options: HamokQueueBuilderConfig<T>): HamokQueue<T> {
 		if (this._closed) throw new Error('Cannot create queue on a closed Hamok instance');
 
-		if (this.queues.has(options.queueId)) {
-			throw new Error(`Queue with id ${options.queueId} already exists`);
-		}
-
-		const storageCodec = new StorageCodec<number, T>(
-			createHamokJsonBinaryCodec<number>(),
-			options.codec ?? createHamokJsonBinaryCodec<T>(),
-		);
-		const connection = new HamokConnection<number, T>(
+		const connection = this._createStorageConnection( 
 			{
-				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
-				storageId: options.queueId,
-				neededResponse: 0,
-				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
-				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
-				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				...options,
+				keyCodec: createHamokJsonBinaryCodec<number>(),
+				valueCodec: options.codec ?? createHamokJsonBinaryCodec<T>(),
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
 					HamokMessageType.REMOVE_ENTRIES_REQUEST,
-				])
-			}, 
-			storageCodec, 
-			this.grid,         
+				]),
+				storageId: options.queueId,
+			},
 		);
-		const messageListener = (message: HamokMessage, submitting: boolean) => {
-			if (submitting) return this.submit(message);
-			else this.emit('message', message);
-		};
-		const queue = new HamokQueue<T>(
+
+		const storage = new HamokQueue<T>(
 			connection,
 			options.baseMap ?? new MemoryBaseMap<number, T>(),
 		);
 
-		connection.once('close', () => {
-			connection.off('message', messageListener);
-			this.queues.delete(queue.id);
+		storage.once('close', () => {
+			this.storages.delete(storage.id);
 		});
-		connection.on('message', messageListener);
-		this.queues.set(queue.id, queue);
+		
+		this.storages.set(storage.id, storage);
 
-		return queue;
+		return storage;
 	}
 
 	public getOrCreateQueue<T>(options: HamokQueueBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokQueue<T> {
-		const existing = this.queues.get(options.queueId);
+		const storage = this.storages.get(options.queueId) as HamokQueue<T>;
 
-		try {
-			if (existing) return existing;
+		if (!storage) return this.createQueue(options);
 
-			return this.createQueue(options);
-		} finally {
-			callback?.(Boolean(existing));
-		}
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public createEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T> {
 		if (this._closed) throw new Error('Cannot create emitter on a closed Hamok instance');
 
-		if (this.emitters.has(options.emitterId)) {
-			throw new Error(`Emitter with id ${options.emitterId} already exists`);
-		}
-
-		const storageCodec = new StorageCodec<string, string>(
-			createStrToUint8ArrayCodec(),
-			createStrToUint8ArrayCodec(),
-		);
-		const connection = new HamokConnection<string, string>(
+		const connection = this._createStorageConnection<string, string>( 
 			{
-				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
-				storageId: options.emitterId,
-				neededResponse: 0,
-				maxOutboundKeys: options.maxOutboundMessageKeys ?? 0,
-				maxOutboundValues: options.maxOutboundMessageValues ?? 0,
-				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				...options,
 				submitting: new Set([
 					HamokMessageType.CLEAR_ENTRIES_REQUEST,
 					HamokMessageType.INSERT_ENTRIES_REQUEST,
-					HamokMessageType.REMOVE_ENTRIES_REQUEST,
 					HamokMessageType.DELETE_ENTRIES_REQUEST,
-				])
-			}, 
-			storageCodec, 
-			this.grid,         
+					HamokMessageType.REMOVE_ENTRIES_REQUEST,
+				]),
+				storageId: options.emitterId,
+				keyCodec: createStrToUint8ArrayCodec(),
+				valueCodec: createStrToUint8ArrayCodec(),
+			},
 		);
-		const messageListener = (message: HamokMessage, submitting: boolean) => {
-			if (submitting) return this.submit(message);
-			else this.emit('message', message);
-		};
-		const emitter = new HamokEmitter<T>(
+
+		const storage = new HamokEmitter<T>(
 			connection,
 			options.payloadsCodec,
 		);
 
 		connection.once('close', () => {
-			connection.off('message', messageListener);
-			this.emitters.delete(emitter.id);
+			this.storages.delete(storage.id);
 		});
-		connection.on('message', messageListener);
-		this.emitters.set(emitter.id, emitter);
+		
+		this.storages.set(storage.id, storage);
 
-		return emitter;
+		return storage;
 	}
 
 	public getOrCreateEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>, callback?: (alreadyExisted: boolean) => void): HamokEmitter<T> {
-		const existing = this.emitters.get(options.emitterId);
+		const storage = this.storages.get(options.emitterId) as HamokEmitter<T>;
 
-		try {
-			if (existing) return existing;
+		if (!storage) return this.createEmitter(options);
 
-			return this.createEmitter(options);
-		} finally {
-			callback?.(Boolean(existing));
-		}
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public async submit(entry: HamokMessage): Promise<void> {
@@ -947,15 +865,22 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				this._acceptGridMessage(message);
 				break;
 			case HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL: {
-				const storage = (
-					this.records.get(message.storageId ?? '') ??
-					this.maps.get(message.storageId ?? '') ??
-					this.remoteMaps.get(message.storageId ?? '') ??
-					this.queues.get(message.storageId ?? '') ??
-					this.emitters.get(message.storageId ?? '')
-				);
+				const storage = this.storages.get(message.storageId ?? '');
 
 				if (!storage) {
+					if (message.type === HamokMessageType.STORAGE_HELLO_NOTIFICATION) {
+						// we reply to this in any case
+
+						return (this._emitMessage(new HamokMessage({
+							protocol: HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL,
+							type: HamokMessageType.STORAGE_STATE_NOTIFICATION,
+							sourceId: this.localPeerId,
+							destinationId: message.sourceId,
+							storageId: message.storageId,
+							raftCommitIndex: -1,
+						})), void 0);
+					}
+					
 					return logger.trace('Received message for unknown collection %s', message.storageId);
 				}
 				
@@ -1011,6 +936,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			});
 
 			await this._joining;
+
 		} finally {
 			this._joining = undefined;
 		}
@@ -1333,16 +1259,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	private _acceptLeaderChanged(leaderId: string | undefined): void {
-		for (const iterator of [ 
-			this.records.values(),
-			this.maps.values(), 
-			this.queues.values(), 
-			this.emitters.values(),
-			this.remoteMaps.values(),
-		]) {
-			for (const collection of iterator) {
-				collection.connection.emit('leader-changed', leaderId);
-			}
+		for (const collection of this.storages.values()) {
+			collection.connection.emit('leader-changed', leaderId);
 		}
 
 		if (this.localPeerId === leaderId) {
@@ -1360,15 +1278,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	private _emitRemotePeerRemoved(remotePeerId: string): void {
-		for (const iterator of [ 
-			this.records.values(),
-			this.maps.values(), 
-			this.queues.values(), 
-			this.emitters.values(),
-		]) {
-			for (const collection of iterator) {
-				collection.connection.emit('remote-peer-removed', remotePeerId);
-			}
+		for (const collection of this.storages.values()) {
+			collection.connection.emit('remote-peer-removed', remotePeerId);
 		}
 	}
 
@@ -1431,6 +1342,41 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				destinationId
 			}));
 		}
+	}
+
+	private _createStorageConnection<K, V>(
+		options: Partial<HamokConnectionConfig> & { storageId: string, keyCodec?: HamokCodec<K, Uint8Array>, valueCodec?: HamokCodec<V, Uint8Array>}
+	): HamokConnection<K, V> {
+
+		const storageCodec = new StorageCodec<K, V>(
+			options.keyCodec ?? createHamokJsonBinaryCodec<K>(),
+			options.valueCodec ?? createHamokJsonBinaryCodec<V>(),
+		);
+		const connection = new HamokConnection<K, V>(
+			{
+				requestTimeoutInMs: options.requestTimeoutInMs ?? 5000,
+				storageId: options.storageId,
+				neededResponse: 0,
+				maxOutboundKeys: options.maxOutboundKeys ?? 0,
+				maxOutboundValues: options.maxOutboundKeys ?? 0,
+				remoteStorageStateWaitingTimeoutInMs: options.remoteStorageStateWaitingTimeoutInMs ?? 1000,
+				submitting: options.submitting,
+			}, 
+			storageCodec, 
+			this.grid,         
+			this.waitUntilCommitHead.bind(this),
+		);
+		const messageListener = (message: HamokMessage, submitting: boolean) => {
+			if (submitting) return this.submit(message);
+			else this.emit('message', message);
+		};
+
+		connection.once('close', () => {
+			connection.off('message', messageListener);
+		});
+		connection.on('message', messageListener);
+		
+		return connection;
 	}
 
 	private async _checkRemotePeers(): Promise<void> {

@@ -27,7 +27,7 @@ const publisher = new Redis();
 const subscriber = new Redis();
 
 
-async function main() {
+export async function run() {
 	const server_1 = new Hamok<AppData>({
 		appData: {
 			busy: false,
@@ -255,6 +255,6 @@ process.on('unhandledRejection', (reason, promise) => {
 if (require.main === module) {
 	logger.info('Running from module file');
 	setHamokLogLevel('info');
-	main();
+	run();
 }
 

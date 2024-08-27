@@ -77,13 +77,13 @@ export async function run() {
 	// queue_3.on('add', value => logger.info('Queue_3 added %d', value));
 	// queue_3.on('remove', value => logger.info('Queue_3 removed %d', value));
 
-	await queue_3.initializing;
+	await queue_3.ready;
 
 	logger.info('Server 3 joined the cluster, creating queue_2');
 
 	queue_2 = await server_2.createQueue<number>({
 		queueId: 'my-distributed-queue',
-	}).initializing;
+	}).ready;
 
 	logger.info('Server 3 joined the cluster');
 

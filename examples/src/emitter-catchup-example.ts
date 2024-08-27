@@ -48,8 +48,8 @@ export async function run() {
 
 	logger.info('Servers are joined');
 
-	await emitter_1.initializing;
-	await emitter_2.initializing;
+	await emitter_1.ready;
+	await emitter_2.ready;
 
 	logger.info('We wait 10s for expiring original logs')
 	await new Promise(resolve => setTimeout(resolve, 10000));

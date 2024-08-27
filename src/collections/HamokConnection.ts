@@ -130,6 +130,7 @@ export class HamokConnection<K, V> extends EventEmitter {
 		public readonly config: HamokConnectionConfig,
 		public readonly codec: StorageCodec<K, V>,
 		public readonly grid: HamokGrid,
+		public readonly waitUntilCommitHead: () => Promise<void>,
 	) {
 		super();
 		this.setMaxListeners(Infinity);
@@ -394,8 +395,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 	public notifyStorageState(serializedStorageSnapshot: string, appliedCommitIndex: number, targetPeerIds?: ReadonlySet<string> | string[] | string) {
 		const message = new StorageStateNotification(
 			this.grid.localPeerId,
-			serializedStorageSnapshot,
 			appliedCommitIndex,
+			serializedStorageSnapshot,
 		);
 
 		return this._sendMessage(this.codec.encodeStorageStateNotification(message), targetPeerIds);
@@ -529,7 +530,8 @@ export class HamokConnection<K, V> extends EventEmitter {
 
 	public async requestRemoveEntries(
 		keys: ReadonlySet<K>,
-		targetPeerIds?: ReadonlySet<string> | string[]
+		targetPeerIds?: ReadonlySet<string> | string[],
+		prevValue?: V
 	): Promise<ReadonlyMap<K, V>> {
 		if (this._closed) throw new Error(`requestRemoveEntries(): Cannot send message on a closed connection for storage ${this.config.storageId}`);
 
@@ -545,6 +547,7 @@ export class HamokConnection<K, V> extends EventEmitter {
 					new RemoveEntriesRequest(
 						uuid(),
 						batchedEntries,
+						prevValue,
 					)
 				),
 				targetPeerIds
@@ -821,9 +824,9 @@ export class HamokConnection<K, V> extends EventEmitter {
 			logger.info('Storage %s processed a remote snapshot and change it\'s applied commitIndex from %d to %d', 
 				this.config.storageId, 
 				this._appliedCommitIndex,
-				stateNotification.commitIndex
+				stateNotification.remoteAppliedCommitIndex
 			);
-			this._appliedCommitIndex = stateNotification.commitIndex;
+			this._appliedCommitIndex = stateNotification.remoteAppliedCommitIndex;
 		}
 
 		// the funny thing here is that if the remote peer committed logs meanwhile the snapshot is created and and sent it back (few heartbeats),
@@ -867,7 +870,7 @@ export class HamokConnection<K, V> extends EventEmitter {
 		}
 	}
 
-	private async _fetchStorageState(retried = 0): Promise<StorageStateNotification | undefined> {
+	private async _fetchStorageState(retried = 0): Promise<{ remoteAppliedCommitIndex: number, serializedStorageSnapshot: string } | undefined> {
 		try {
 			if (!this.connected) {
 				await new Promise<void>((resolve, reject) => {
@@ -899,8 +902,10 @@ export class HamokConnection<K, V> extends EventEmitter {
 			return this._fetchStorageState(retried + 1);
 		}
 	
-		// if the connection got disconnected during the join phase it will automatically fails as no response is received
+		const actualRemotePeerIds = new Set([ ...this.grid.remotePeerIds ]);
+		
 		return new Promise((resolve) => {
+
 			const timer = setTimeout(() => {
 				this.off('StorageStateNotification', receiveStorageStateNotification);
 				logger.debug('%s no response received for storage state notification, most likely the storage %s is alone', this.localPeerId, this.config.storageId);
@@ -908,16 +913,24 @@ export class HamokConnection<K, V> extends EventEmitter {
 			}, this.config.remoteStorageStateWaitingTimeoutInMs ?? 1000);
 		
 			const receiveStorageStateNotification = (notification: StorageStateNotification) => {
+				actualRemotePeerIds.delete(notification.sourceEndpointId);
+				if (!notification.serializedStorageSnapshot) {
+					// we can still receive a snapshot
+					if (0 < actualRemotePeerIds.size) return;
+				}
+				
 				clearTimeout(timer);
 				this.off('StorageStateNotification', receiveStorageStateNotification);
-					
-				resolve(notification);
+				if (notification.serializedStorageSnapshot) {
+					resolve({ remoteAppliedCommitIndex: notification.commitIndex, serializedStorageSnapshot: notification.serializedStorageSnapshot });
+				} else {
+					resolve(undefined);
+				}
 			};
 	
-			this.once('StorageStateNotification', receiveStorageStateNotification);
+			this.on('StorageStateNotification', receiveStorageStateNotification);
 			this.notifyStorageHello();
 		});
-		
 	}
 
 	private _leaderChangedListener(leaderId?: string) {

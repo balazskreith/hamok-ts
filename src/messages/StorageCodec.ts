@@ -345,7 +345,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		return new Message({
 			type: MessageType.STORAGE_STATE_NOTIFICATION,
 			sourceId: storageState.sourceEndpointId,
-			snapshot: StorageCodec.strCodec.encode(storageState.serializedStorageSnapshot),
+			snapshot: storageState.serializedStorageSnapshot ? StorageCodec.strCodec.encode(storageState.serializedStorageSnapshot) : undefined,
 			raftCommitIndex: storageState.commitIndex,
 		});
 	}
@@ -357,8 +357,8 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		
 		return new StorageStateNotification(
 			message.sourceId!,
-			StorageCodec.strCodec.decode(message.snapshot!),
 			message.raftCommitIndex!,
+			message.snapshot ? StorageCodec.strCodec.decode(message.snapshot) : undefined,
 		);
 	}
 
@@ -630,7 +630,8 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			type: MessageType.REMOVE_ENTRIES_REQUEST,
 			requestId: request.requestId,
 			keys,
-			sourceId: request.sourceEndpointId
+			sourceId: request.sourceEndpointId,
+			prevValue: request.prevValue !== undefined ? this.valueCodec.encode(request.prevValue as V) : undefined,
 		});
 	}
 
@@ -643,6 +644,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 		return new RemoveEntriesRequest<K>(
 			message.requestId!,
 			keys,
+			message.prevValue !== undefined ? this.valueCodec.decode(message.prevValue) : undefined,
 			message.sourceId,
 		);
 	}

@@ -21,7 +21,6 @@ export async function run() {
 	server_1.addRemotePeerId(server_2.localPeerId);
 	server_2.addRemotePeerId(server_1.localPeerId);
 	
-
 	await Promise.all([
 		server_1.join(),
 		server_2.join(),
@@ -69,8 +68,8 @@ export async function run() {
 	logger.debug(`After deleted getting value from server1: ${storage_1.get('bar')}`);
 	logger.debug(`After deleted getting value from server2: ${storage_2.get('bar')}`);
 
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

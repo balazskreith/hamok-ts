@@ -29,10 +29,10 @@ export async function run() {
 
 	const emitter_1 = await server_1.createEmitter<ExampleEventMap>({
 		emitterId: 'my-distributed-emitter',
-	}).initializing;
+	}).ready;
 	const emitter_2 = await server_2.createEmitter<ExampleEventMap>({
 		emitterId: 'my-distributed-emitter',
-	}).initializing;
+	}).ready;
 
 	const listener = (number: number, string: string, boolean: boolean) => {
 		logger.debug('Event-1 received by server_1: %s, %s, %s', number, string, boolean);

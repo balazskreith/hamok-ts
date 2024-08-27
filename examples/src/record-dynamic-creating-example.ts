@@ -50,7 +50,7 @@ export async function run() {
 	});
 
 	logger.debug('Waiting for storage_2 to be initialized');
-	await storage_2.initializing;
+	await storage_2.ready;
 
 	logger.debug(`Getting record from server2: { bar: %d, foo: %s }`, storage_2.get('bar'), storage_2.get('foo'));
 

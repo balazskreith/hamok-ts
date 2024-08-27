@@ -31,7 +31,7 @@ const servers = new Map<string, Hamok<AppData>>();
 const pickServerToStart = () => [...servers.values()].find(server => server.appData.start)?.appData.start;
 const pickServerToStop = () => [...servers.values()].find(server => server.appData.stop)?.appData.stop;
 
-async function main() {
+export async function run() {
 	
 	await subscriber.subscribe('hamok-channel', (err, count) => {
 		if (err) {
@@ -266,6 +266,6 @@ process.on('unhandledRejection', (reason, promise) => {
 if (require.main === module) {
 	logger.info('Running from module file');
 	setHamokLogLevel('info');
-	main();
+	run();
 }
 

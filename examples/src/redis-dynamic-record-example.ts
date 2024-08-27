@@ -62,10 +62,10 @@ export async function run() {
 		server_2.createRecord<RoomSession>({
 			recordId: sessionId,
 			initialObject: {
-				lock: null,
+				lock: true,
 				roomName,
 			}
-		}).initializing,
+		}).ready,
 	]);
 
 	roomConfig_2.on('update', ({key, oldValue, newValue}) => logger.debug('roomConfig_2: %s changed from %s to %s', key, oldValue, newValue));
@@ -90,7 +90,7 @@ export async function run() {
 				lock: null,
 				roomName,
 			}
-		}).initializing,
+		}).ready,
 	]);
 	
 	logger.debug('The roomconfig on server_3 is initialized, and it has { lock: %s, roomName: %s }', roomConfig_3.get('lock'), roomConfig_3.get('roomName'));

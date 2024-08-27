@@ -5,7 +5,8 @@ export class RemoveEntriesRequest<K> {
 	public constructor(
 		requetId: string,
 		keys: ReadonlySet<K>,
-		sourceEndpointId?: string
+		public readonly prevValue?: unknown,
+		sourceEndpointId?: string,
 	) {
 		this.requestId = requetId;
 		this.keys = keys;

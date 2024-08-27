@@ -252,8 +252,12 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		return this.connection.config.storageId;
 	}
 
-	public get initializing(): Promise<this> {
+	public get ready(): Promise<this> {
 		return this._initializing ?? Promise.resolve(this);
+	}
+
+	public async sync(): Promise<this> {
+		return this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {

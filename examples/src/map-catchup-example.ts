@@ -36,7 +36,7 @@ export async function run() {
 	// creating a new storage on server_2
 	const storage_2 = await server_2.createMap<string, number>({
 		mapId: 'my-replicated-storage',
-	}).initializing;	
+	}).ready;	
 	
 	logger.debug('Getting record from server2: { key: %d }', storage_2.get('key'));
 	

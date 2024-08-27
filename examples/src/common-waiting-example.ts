@@ -43,8 +43,8 @@ export async function run() {
 	});
 
 	await server_2.join();
-	await emitter_1.initializing;
-	await emitter_2.initializing;
+	await emitter_1.ready;
+	await emitter_2.ready;
 
 	server_1.close();
 	server_2.close();
