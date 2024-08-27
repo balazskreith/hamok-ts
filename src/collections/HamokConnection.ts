@@ -19,7 +19,6 @@ import { UpdateEntriesRequest, UpdateEntriesNotification, UpdateEntriesResponse,
 import { createResponseChunker, ResponseChunker } from '../messages/ResponseChunker';
 import * as Collections from '../common/Collections';
 import { HamokGrid } from '../HamokGrid';
-import { WaitingQueue } from '../common/WaitingQueue';
 import { StorageAppliedCommitNotification } from '../messages/messagetypes/StorageAppliedCommit';
 import { StorageHelloNotification } from '../messages/messagetypes/StorageHelloNotification';
 import { StorageStateNotification } from '../messages/messagetypes/StorageStateNotification';
@@ -59,12 +58,6 @@ export type HamokConnectionConfig = {
      * The maximum number of values a response can contain.
      */
 	maxOutboundValues?: number,
-
-	/**
-	 * The maximum time in milliseconds to wait for a message to be sent 
-	 * if the connection is not connected.
-	 */
-	maxMessageWaitingTimeInMs?: number,
 
 	/**
 	 * The maximum time in milliseconds to wait for storage state notification from a remote peer.
@@ -126,7 +119,6 @@ export declare interface HamokConnection<K, V> {
 export class HamokConnection<K, V> extends EventEmitter {
 	private readonly _responseChunker: ResponseChunker;
 
-	private _waitingQueue?: WaitingQueue;
 	private _closed = false;
 	private _connected: boolean;
 	private _joined = false;
@@ -194,16 +186,23 @@ export class HamokConnection<K, V> extends EventEmitter {
 		this.removeAllListeners();
 	}
 
-	public async join() {
+	public async join(): Promise<void> {
 		if (this._joined) return;
 		if (this._joining) return this._joining;
-
-		this._joining = this._join().then(() => {
+		
+		try {
+			this._joining = this._join();
+			await this._joining;
 			this._joining = undefined;
 			logger.debug('%s Connection for storage %s is joined', this.localPeerId, this.config.storageId);
-		});
-
-		return this._joining;
+		} catch (err) {
+			logger.error('Failed to join connection, retrying', err);
+			this._joining = undefined;
+			
+			if (this._closed) return;
+			
+			return this.join();
+		}
 	}
 
 	public accept(message: HamokMessage, commitIndex?: number) {
@@ -756,20 +755,6 @@ export class HamokConnection<K, V> extends EventEmitter {
 		options.message.storageId = this.config.storageId;
 		options.message.protocol = HamokMessageProtocol.STORAGE_COMMUNICATION_PROTOCOL;
 
-		// if (!this.grid.connected) {
-		// 	if (!this._waitingQueue) {
-		// 		const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 30;
-
-		// 		this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
-		// 			this._waitingQueue = undefined;
-		// 		});
-		// 	}
-			
-		// 	return this._waitingQueue.wait(() => this._request(options));
-		// } else if (this._waitingQueue) {
-		// 	this._waitingQueue.flush();
-		// }
-
 		// if there is a join process ongoing we wait until it is finished
 		await this._joining;
 		
@@ -799,39 +784,30 @@ export class HamokConnection<K, V> extends EventEmitter {
 			}
 		}
 
-		// if (!this.grid.connected) {
-		// 	if (!this._waitingQueue) {
-		// 		const waitingTimeInMs = this.config.maxMessageWaitingTimeInMs ?? this.config.requestTimeoutInMs * 10;
-
-		// 		this._waitingQueue = new WaitingQueue(waitingTimeInMs, () => {
-		// 			this._waitingQueue = undefined;
-		// 		});
-		// 	}
-
-		// 	return this._waitingQueue.add(() => this._sendMessage(message, targetPeerIds));
-		// } else if (this._waitingQueue) {
-		// 	this._waitingQueue.flush();
-		// }
 		this.grid.sendMessage(message, targetPeerIds);
 	}
 
 	private async _join(retried = 0): Promise<void> {
+
 		// we must buffer all messages received during join process (except state notification)
 		this._joined = false;
 		const stateNotification = await this._fetchStorageState();
-		
+
 		// if we have a state notification we need to apply it
 		if (stateNotification) {
 			// restart if tdisconnect happens while this!
 			try {
 				await new Promise<void>((resolve, reject) => {
 					const disconnected = () => reject('disconnected');
+					const closed = () => reject('closed');
 					const done = () => {
 						this.off('disconnected', disconnected);
+						this.off('close', closed);
 						resolve();
 					};
 	
 					this.once('disconnected', disconnected);
+					this.once('close', closed);
 					this.emit('remote-snapshot', stateNotification.serializedStorageSnapshot, done);
 				});
 			} catch (err) {
@@ -850,6 +826,9 @@ export class HamokConnection<K, V> extends EventEmitter {
 			this._appliedCommitIndex = stateNotification.commitIndex;
 		}
 
+		// the funny thing here is that if the remote peer committed logs meanwhile the snapshot is created and and sent it back (few heartbeats),
+		// and those commits are related to this storage, and those are already emitted, then the commit index of the RAFT logs is higher than the commit index 
+		// the snapshot is applied on, so we need to collect those messages and replay them
 		if (this._appliedCommitIndex < this.grid.logs.commitIndex) {
 			const entries = this.grid.logs.collectEntries(this._appliedCommitIndex, Math.min(
 				this.grid.logs.commitIndex + 1, // we need the commit index as well
@@ -895,14 +874,22 @@ export class HamokConnection<K, V> extends EventEmitter {
 					const connected = () => {
 						resolve();
 						this.off('disconnected', disconnected);
+						this.off('close', closed);
 					};
 					const disconnected = () => {
 						reject('disconnected');
 						this.off('connected', connected);
+						this.off('close', closed);
+					};
+					const closed = () => {
+						reject('closed');
+						this.off('connected', connected);
+						this.off('disconnected', disconnected);
 					};
 	
 					this.once('connected', connected);
 					this.once('disconnected', disconnected);
+					this.once('close', closed);
 				});
 			}
 		} catch (err) {
@@ -945,14 +932,9 @@ export class HamokConnection<K, V> extends EventEmitter {
 				logger.warn('%s storage %s is disconnected, starting join process', this.localPeerId, this.config.storageId);
 				this.join().catch((err) => logger.warn('Failed to join the storage connection %s', err));
 			}
-		} 
-		if (!this._connected && leaderId !== undefined) {
+		} else if (!this._connected && leaderId !== undefined) {
 			this._connected = true;
-
-			// We don't need this if join works
-			this._waitingQueue?.flush();
-			
-			return this.emit('connected');
+			this.emit('connected');
 		}
 	}
 }

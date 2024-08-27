@@ -17,7 +17,6 @@ import { HamokGridCodec } from './messages/HamokGridCodec';
 import { SubmitMessageRequest } from './messages/messagetypes/SubmitMessage';
 import { HamokGrid } from './HamokGrid';
 import { createRaftEmptyState } from './raft/RaftEmptyState';
-import { HamokSnapshot } from './HamokSnapshot';
 import { HamokQueue } from './collections/HamokQueue';
 import { HamokEmitter, HamokEmitterEventMap } from './collections/HamokEmitter';
 import { RaftLogs } from './raft/RaftLogs';
@@ -247,7 +246,6 @@ export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = Partial<
 
 export type HamokFetchRemotePeersResponse = {
 	remotePeers: string[],
-	snapshots?: HamokSnapshot[],
 	minNumberOfLogs?: number,
 	smallestCommitIndex?: number,
 };
@@ -1117,7 +1115,6 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			let smallestCommitIndex: number | undefined;
 			let minNumberOfLogs: number | undefined;
 			const remotePeerIds = new Set<string>();
-			const snapshots: HamokSnapshot[] = [];
 			const timer = setTimeout(() => {
 				for (const notification of this._remoteStateRequests.get(requestId)?.responses ?? []) {
 					// if remote notification is from itself, we skip it
@@ -1134,18 +1131,11 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					if (notification.sourceEndpointId !== this.localPeerId) {
 						remotePeerIds.add(notification.sourceEndpointId);
 					}
-					if (notification.snapshot) {
-						const snapshot = JSON.parse(notification.snapshot) as HamokSnapshot;
-
-						snapshots.push(snapshot);
-					}
 				}
 
 				this._remoteStateRequests.delete(requestId);
-				logger.trace('Resolved fetchRemotePeers with %o', { remotePeerIds, snapshots });
 				resolve({
 					remotePeers: [ ...remotePeerIds ],
-					snapshots: 0 < snapshots.length ? snapshots : undefined,
 					minNumberOfLogs,
 					smallestCommitIndex,
 				});

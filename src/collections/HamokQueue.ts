@@ -148,9 +148,8 @@ export class HamokQueue<T> extends EventEmitter {
 
 					this._import(
 						snapshot, 
-						// emit events if we are initializing, otherwise we are rejoining,
-						// so we don't want to emit events
-						Boolean(this._initializing),
+						// emit events if we are not initializing
+						Boolean(this._initializing) === false,
 					);
 				} catch (err) {
 					logger.error(`Failed to import to queue ${this.id}. Error: ${err}, snapshot: ${serializedSnapshot}`);

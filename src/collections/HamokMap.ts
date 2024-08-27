@@ -4,6 +4,7 @@ import { HamokConnection } from './HamokConnection';
 import { BaseMap } from './BaseMap';
 import * as Collections from '../common/Collections';
 import { HamokMapSnapshot } from '../HamokSnapshot';
+import { createHamokCodec } from '../common/HamokCodec';
 
 const logger = createLogger('HamokMap');
 
@@ -176,9 +177,8 @@ export class HamokMap<K, V> extends EventEmitter {
 
 					this._import(
 						snapshot, 
-						// emit events if we are initializing, otherwise we are rejoining,
-						// so we don't want to emit events
-						Boolean(this._initializing),
+						// emit events if we are not initializing
+						Boolean(this._initializing) === false,
 					);
 				} catch (err) {
 					logger.error(`Failed to import to map ${this.id}. Error: ${err}`);
@@ -392,8 +392,8 @@ export class HamokMap<K, V> extends EventEmitter {
 		const [ keys, values ] = this.connection.codec.encodeEntries(this.baseMap);
 		const result: HamokMapSnapshot = {
 			mapId: this.id,
-			keys,
-			values
+			keys: HamokMap.uint8ArrayToStringCodec.encode(keys),
+			values: HamokMap.uint8ArrayToStringCodec.encode(values),
 		};
 
 		return result;
@@ -412,7 +412,12 @@ export class HamokMap<K, V> extends EventEmitter {
 	}
 
 	private _import(data: HamokMapSnapshot, eventing?: boolean) {
-		const entries = this.connection.codec.decodeEntries(data.keys, data.values);
+		const keys = HamokMap.uint8ArrayToStringCodec.decode(data.keys);
+		const values = HamokMap.uint8ArrayToStringCodec.decode(data.values);
+		const entries = this.connection.codec.decodeEntries(
+			keys, 
+			values
+		);
 
 		this.baseMap.setAll(entries, ({ inserted, updated }) => {
 			if (eventing) {
@@ -421,4 +426,13 @@ export class HamokMap<K, V> extends EventEmitter {
 			}
 		});
 	}
+
+	public static uint8ArrayToStringCodec = createHamokCodec<Uint8Array[], string[]>(
+		(array) => {
+			return array.map((item) => Buffer.from(item).toString('utf8'));	
+		},
+		(array) => {
+			return array.map((item) => Buffer.from(item, 'utf8'));
+		}
+	);
 }

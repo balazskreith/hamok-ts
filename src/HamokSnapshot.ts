@@ -6,13 +6,13 @@ export type HamokRecordSnapshot = {
 
 export type HamokMapSnapshot = {
 	mapId: string;
-	keys: Uint8Array[];
-	values: Uint8Array[];
+	keys: string[];
+	values: string[];
 }
 
 export type HamokRemoteMapSnapshot = {
 	mapId: string;
-	appliedCommitIndex?: number;
+	appliedCommitIndex: number;
 }
 
 export type HamokQueueSnapshot = {
@@ -25,18 +25,4 @@ export type HamokEmitterSnapshot = {
 	emitterId: string;
 	events: string[];
 	subscribers: string[][];
-}
-
-export type HamokSnapshot = {
-	meta: {
-		peerId: string;
-		created: number;
-	},
-	commitIndex: number;
-	term: number;
-	// records: HamokRecordSnapshot[];
-	// maps: HamokMapSnapshot[];
-	// queues: HamokQueueSnapshot[];
-	// emitters: HamokEmitterSnapshot[];
-	// remoteMaps: HamokRemoteMapSnapshot[];
 }

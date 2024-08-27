@@ -74,7 +74,8 @@ export async function run() {
 		queueId: 'my-distributed-queue',
 	});
 
-	queue_3.on('add', value => logger.info('Queue_3 added %d', value));
+	// queue_3.on('add', value => logger.info('Queue_3 added %d', value));
+	// queue_3.on('remove', value => logger.info('Queue_3 removed %d', value));
 
 	await queue_3.initializing;
 
@@ -86,11 +87,11 @@ export async function run() {
 
 	logger.info('Server 3 joined the cluster');
 
-	const startedConsumingAt = Date.now();
 	let expected = 0;
 	
 	while(!queue_3?.empty) {
-		const actual = await queue_3.pop();
+		const queue = expected % 2 === 0 ? queue_1 : queue_3;
+		const actual = await queue.pop();
 		if (actual !== expected) {
 			logger.error('Expected %d but got %d', expected, actual);
 			if (actual !== undefined)
@@ -98,6 +99,8 @@ export async function run() {
 		} else {
 			expected++;
 		}
+
+		logger.info('Got %d from %s', actual, expected % 2 === 0 ? 'queue_1' : 'queue_3');
 	}
 
 	server_1.close();

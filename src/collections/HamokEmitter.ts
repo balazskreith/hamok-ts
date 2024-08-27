@@ -239,13 +239,13 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			.once('close', () => this.close())
 		;
 
-		logger.trace('Queue %s is created', this.id);
+		logger.trace('Emitter %s is created', this.id);
 
 		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
 			.then(() => this.connection.join())
 			.then(() => this)
 			.catch((err) => {
-				logger.error('Error while initializing queue', err);
+				logger.error('Error while initializing emitter', err);
 
 				return this;
 			})

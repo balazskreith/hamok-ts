@@ -19,6 +19,10 @@
 
 This design is ideal for scenarios where a large number of key-value pairs need to be managed by multiple instances. Instead of introducing a distributed locking mechanism, `HamokRemoteMap` utilizes the RAFT consensus algorithm to guarantee consistent operation execution, ensuring consistency and fault tolerance in distributed systems.
 
+### Important Notes
+
+- RemoteMap relies on leader peer, as the leader peer is the only one which can executes action on a remote map. Therefore all peer which potentially can be the leader must create this map.
+
 ## Configuration
 
 ```typescript

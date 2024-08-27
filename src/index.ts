@@ -36,7 +36,6 @@ export {
 	MemoryStoredRaftLogs
 } from './raft/MemoryStoredRaftLogs';
 export {
-	HamokSnapshot,
 	HamokEmitterSnapshot,
 	HamokQueueSnapshot,
 	HamokMapSnapshot,
