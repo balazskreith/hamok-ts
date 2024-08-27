@@ -18,6 +18,9 @@ export async function run() {
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
 	const messageHub = new HamokMessageHub();
+
+	messageHub.add(server_1, server_2);
+
 	const jobId = 'myJob';
 	const storage_1 = server_1.createMap<string, Job>({
 		mapId: 'my-replicated-storage',
@@ -28,7 +31,7 @@ export async function run() {
 		// equalValues: (a, b) => a.id === b.id && a.state === b.state,
 	});
 
-	Promise.all([
+	await Promise.all([
 		server_1.join(),
 		server_2.join(),
 	]);

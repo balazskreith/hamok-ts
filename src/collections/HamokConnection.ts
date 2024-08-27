@@ -945,7 +945,7 @@ export class HamokConnection<K, V> extends EventEmitter {
 
 			if (!this._joining) {
 				// if there is no join process ongoing we must initiate one
-				logger.warn('%s storage %s is disconnected, starting join process', this.localPeerId, this.config.storageId);
+				logger.trace('%s storage %s is disconnected, starting join process', this.localPeerId, this.config.storageId);
 				this.join().catch((err) => logger.warn('Failed to join the storage connection %s', err));
 			}
 		} else if (!this._connected && leaderId !== undefined) {
