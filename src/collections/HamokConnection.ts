@@ -922,7 +922,10 @@ export class HamokConnection<K, V> extends EventEmitter {
 				clearTimeout(timer);
 				this.off('StorageStateNotification', receiveStorageStateNotification);
 				if (notification.serializedStorageSnapshot) {
-					resolve({ remoteAppliedCommitIndex: notification.commitIndex, serializedStorageSnapshot: notification.serializedStorageSnapshot });
+					resolve({ 
+						remoteAppliedCommitIndex: notification.commitIndex, 
+						serializedStorageSnapshot: notification.serializedStorageSnapshot 
+					});
 				} else {
 					resolve(undefined);
 				}
