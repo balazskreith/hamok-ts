@@ -47,14 +47,6 @@ const queue = hamok.createQueue<string>({
   requestTimeoutInMs: 5000,
 
   /**
-   * Optional. The maximum waiting time in milliseconds for a message to be sent.
-   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-   *
-   * DEFAULT: 10x requestTimeoutInMs
-   */
-  maxMessageWaitingTimeInMs: 50000,
-
-  /**
    * Optional. The maximum number of keys allowed in request or response messages.
    *
    * DEFAULT: 0 means infinity
@@ -109,6 +101,8 @@ A class for managing a distributed queue with event-driven capabilities.
 - **`size`**: `number` - Returns the number of elements in the queue.
 - **`connection`**: `HamokConnection<number, T>` - The connection used by the queue.
 - **`baseMap`**: `BaseMap<number, T>` - The base map used for storing the queue elements.
+- **`closed`**: `boolean` - Indicates whether the queue is closed.
+- **`ready`**: `Promise<void>` - A promise that resolves when the queue is initialized and ready to use.
 
 #### Methods
 
@@ -117,8 +111,7 @@ A class for managing a distributed queue with event-driven capabilities.
 - **peek**(): `T | undefined` - Returns the value at the front of the queue without removing it.
 - **clear**(): `Promise<void>` - Clears the queue.
 - **close**(): `void` - Closes the queue and releases any held resources.
-- **export**(): `HamokQueueSnapshot` - Exports the current state of the queue.
-- **import**(`snapshot: HamokQueueSnapshot`): `void` - Imports the state from a snapshot.
+- **sync**(): `Promise<void>` - Synchronizes the queue with the remote peers. (waiting for the commitHead in hamok)
 
 #### Events
 

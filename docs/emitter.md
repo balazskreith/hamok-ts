@@ -47,14 +47,6 @@ const emitter = hamok.createEmitter<MyEventMap>({
   requestTimeoutInMs: 5000,
 
   /**
-   * Optional. The maximum waiting time in milliseconds for a message to be sent.
-   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-   *
-   * DEFAULT: 10x requestTimeoutInMs
-   */
-  maxMessageWaitingTimeInMs: 50000,
-
-  /**
    * Optional. The maximum number of keys allowed in request or response messages.
    *
    * DEFAULT: 0 means infinity
@@ -96,6 +88,7 @@ A class for managing events and subscriptions in a distributed system.
 - `closed`: `boolean` - Indicates whether the emitter is closed.
 - `connection`: `HamokConnection<string, string>` - The connection used by the emitter.
 - `payloadsCodec`: `Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>` - Optional codec for encoding and decoding payloads.
+- `ready: Promise<void>` - A promise that resolves when the emitter is initialized and ready to use.
 
 #### Methods
 
@@ -107,6 +100,7 @@ A class for managing events and subscriptions in a distributed system.
 - **notify**<K extends keyof T>(`event: K`, `...args: T[K]`): `void` - Notifies all subscribed listeners of an event.
 - **export**(): `HamokEmitterSnapshot` - Exports the current state of the emitter.
 - **import**(`snapshot: HamokEmitterSnapshot`): `void` - Imports the state from a snapshot.
+- **sync**(): `Promise<void>` - Synchronizes the emitter state with the remote peers (wait for the commitHead in hamok).
 
 ### Events
 

@@ -249,6 +249,10 @@ Hamok emits various events that can be listened to for handling specific actions
 
   - Waits until the commit head is reached.
 
+- **waitUntilLeader**(): `Promise<void>`
+
+  - Waits until a leader is elected in the Raft cluster.
+
 - **createMap**<`K, V`>(`options: HamokMapBuilderConfig<K, V>`): `HamokMap<K, V>`
 
   - Creates a new map with the provided options.
@@ -298,7 +302,11 @@ Hamok emits various events that can be listened to for handling specific actions
   - Fetches remote peers with optional custom requests and timeout.
 
 - **join**(`params: HamokJoinProcessParams`): `Promise<void>`
+
   - Runs a join process with the provided parameters. See [here](#use-the-join-method) for more details.
+
+- **leave**(): `Promise<void>`
+  - Leaves the Raft cluster.
 
 ## Use cases
 
@@ -334,31 +342,6 @@ await hamok.join({
    * DEFAULT: 3
    */
   maxRetry: 3,
-
-  /**
-   * Indicates if remote peers should be automatically removed if no heartbeat is received.
-   *
-   * DEFAULT: true
-   */
-  removeRemotePeersOnNoHeartbeat: true,
-
-  /**
-   * Indicates if a snapshot should be requested from the remote peers.
-   * If provided, the best possible snapshot is selected amongst the provided ones and
-   * imported into the local peer before it joins to the grid.
-   *
-   * DEFAULT: true
-   */
-  requestSnapshot: true,
-
-  /**
-   * Indicates if the start() method should be called automatically after the join process is completed.
-   *
-   * if startAfterJoin is true the method promise is only resolved if a leader is elected or assigned.
-   *
-   * DEFAULT: true
-   */
-  startAfterJoin: true,
 });
 ```
 
@@ -594,16 +577,10 @@ hamok.on("no-heartbeat-from", (peerId) =>
 every mutation request is stored in the Raft logs. The logs store the history of all operations, even the unsuccessful ones.
 Every instance every map, record, queue, or emitter receives the messages and goes through exactly the same sequence of operations.
 
-### What snapshots are good for?
-
-See below.
-
 ### Can I overflow the memory with logs?
 
-Yes you can. The logs are stored in memory and can grow indefinitely. To prevent memory overflow,
-either explicitly remove logs or set the expiration time for logs. Additionally you can use snapshots
-to store the state of the instance along with the commitIndex a snapshot represents.
-Therefore any new instance can start from the snapshot and apply only the logs after the snapshot.
+Yes you can. By default the logs are stored in memory and can grow indefinitely. To prevent memory overflow,
+either explicitly remove logs or set the expiration time for logs.
 
 ### If I export a snapshot do I have to delete the logs?
 
@@ -652,3 +629,7 @@ console.log("foo is", hamok.appData.foo);
 
 There are no type restrictions for the generic types you can use in a Map, Record, Queue, or Emitter. However,
 it is strongly advised to use `null` if you want to indicate that something is uninitialized but still exists.
+
+### Can I create different types of collections with the same identifier?
+
+You should not. In a single Hamok instance, this is checked when you create any collection. If the given identifier is already in use for another type of collection, the system will prevent you from creating it. However, if you create an emitter in one Hamok instance and a map with the same identifier in another Hamok instance, they may attempt to communicate, but it will lead to crashes. So you can, but you shouldn't.

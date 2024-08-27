@@ -38,12 +38,6 @@ const config: HamokRemoteMapBuilderConfig<number, string> = {
   requestTimeoutInMs: 5000,
 
   /**
-   * Optional. The maximum waiting time in milliseconds for a message to be sent.
-   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-   */
-  maxMessageWaitingTimeInMs: 30000,
-
-  /**
    * Optional. A codec for encoding and decoding keys in the map.
    *
    * DEFAULT: JSON codec
@@ -189,6 +183,9 @@ remoteMap.on("remove", (key, value) => {
 
 - **`iterator(): AsyncIterableIterator<[K, V]>`**  
   Returns an iterator for the key-value pairs in the storage.
+
+- **`sync(): Promise<void>`**  
+  Synchronizes the storage with the remote peers. (waiting for the commitHead in hamok)
 
 ## Examples
 
