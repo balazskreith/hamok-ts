@@ -124,6 +124,12 @@ function addServer(name: string, done?: () => void): void{
 
 		logger.info('%s stopped recording "%s"', hamok.appData.name, job.id);
 		hamok.appData.actualRecording = undefined;
+
+		for (const [ , job ] of recordings) {
+			if (job.state !== 'pending') continue;
+
+			executor(() => recordingChanged(job)).catch(() => void 0);
+		}
 	}
 	const rescheduleJob = async (job: RecordingJob): Promise<void> => {
 		const rescheduledJob: RecordingJob = {
