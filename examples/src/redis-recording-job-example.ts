@@ -73,6 +73,8 @@ export async function run() {
 			run = false;
 		}
 	}
+
+	servers.forEach(server => server.close());
 	
 }
 

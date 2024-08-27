@@ -503,6 +503,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				maxRetry: -1,
 				// 
 				fetchRemotePeerTimeoutInMs: 5000,
+			}).catch((err) => {
+				logger.error('Failed to rejoin the grid', err);
 			});
 		} else {
 			// if I am not the leader I need to fetch the remote peers or at least check who is alive and who is not to be sure we are in the network
@@ -1132,6 +1134,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	private _acceptGridMessage(message: HamokMessage): void {
+		if (this._closed) return;
+
 		switch (message.type) {
 			case HamokMessageType.HELLO_NOTIFICATION: {
 				const hello = this._codec.decodeHelloNotification(message);
@@ -1380,6 +1384,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	private async _checkRemotePeers(): Promise<void> {
+		if (!this._closed) return;
 		if (this._checkingRemotePeers) {
 			return this._checkingRemotePeers;
 		}
