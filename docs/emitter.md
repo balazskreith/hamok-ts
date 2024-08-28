@@ -135,6 +135,7 @@ emitter.close();
 ## Examples
 
 - [simple distributed emitter](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/emitter-example.ts)
+- [emitter catchup](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/emitter-catchup-example.ts)
 
 ## FAQ
 

@@ -219,6 +219,7 @@ map.close();
 - [use insert](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-insert-get-example.ts)
 - [use events](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-events-example.ts)
 - [use updateIf](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-update-if-example.ts)
+- [see how dynamically created maps are catching up](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-catchup-example.ts)
 
 ## FAQ
 

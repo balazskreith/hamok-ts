@@ -143,6 +143,7 @@ record.close();
 
 - [use events](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-events-example.ts)
 - [use insert and get](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-insert-get-example.ts)
+- [record catchup](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-dynamic-creating-example.ts)
 
 ## FAQ
 

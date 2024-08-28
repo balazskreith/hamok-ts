@@ -58,19 +58,6 @@ export type HamokObjectConfig<AppData extends Record<string, unknown> = Record<s
 	// autoStopOnNoRemotePeers?: boolean,
 
 	/**
-	 * When a peer joins the grid, the process involves receiving snapshots from remote peers. 
-	 * This applies to both the Hamok instance joining the grid and the storages created by Hamok. 
-	 * Normally, snapshots are sent by every remote peer to the joining peer.
-	 * 
-	 * This flag indicates whether the snapshot should only be sent by the leader. 
-	 * Note that if the leader does not have a particular storage that has joined the grid, 
-	 * the snapshot will not be sent. This could cause the joining peer's storage to incorrectly 
-	 * interpret the situation as if the storage does not exist elsewhere, even if it was created 
-	 * by another peer other than the leader.
-	 */
-	onlyLeaderSendsStorageStateNotifications?: boolean,
-
-	/**
 	 * The timeout in milliseconds for waiting for the remote storage state.
 	 * 
 	 * DEFAULT: 1000
@@ -399,8 +386,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return this.raft.leaderId === this.raft.localPeerId && this.raft.state.stateName === 'leader';
 	}
 
-	public get joining(): Promise<void> {
-		return this._joining ?? this.waitUntilLeader();
+	public get ready(): Promise<this> {
+		return (this._joining ?? this.waitUntilLeader()).then(() => this);
 	}
 
 	public get state(): RaftStateName {
@@ -1296,13 +1283,6 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 		if (protocol) {
 			message.protocol = protocol;
-		}
-		if (
-			this.config.onlyLeaderSendsStorageStateNotifications && 
-			message.type === HamokMessageType.STORAGE_STATE_NOTIFICATION && 
-			!this.leader
-		) {
-			return logger.trace('%s is not leader, will not send storage state notification %o', this.localPeerId, message);
 		}
 
 		// if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 

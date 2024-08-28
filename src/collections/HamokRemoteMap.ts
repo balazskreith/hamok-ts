@@ -293,7 +293,7 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		return this.connection.config.storageId;
 	}
 
-	public get initializing(): Promise<this> {
+	public get ready(): Promise<this> {
 		return this._initializing ?? Promise.resolve(this);
 	}
 

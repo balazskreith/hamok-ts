@@ -154,6 +154,7 @@ queue.close();
 
 - [push() and pop()](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-push-pop-example.ts)
 - [events from the queue](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-events-example.ts)
+- [queue catchup](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/queue-catchup-example.ts)
 
 ## FAQ
 
