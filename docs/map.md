@@ -46,14 +46,6 @@ const map = hamok.createMap<string, number>({
 	requestTimeoutInMs: 5000,
 
 	/**
-	 * Optional. The maximum waiting time in milliseconds for a message to be sent.
-	 * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-	 *
-	 * DEFAULT: 10x requestTimeoutInMs
-	 */
-	maxMessageWaitingTimeInMs: 50000,
-
-	/**
 	 * Optional. The maximum number of keys allowed in request or response messages.
 	 *
 	 * DEFAULT: 0 means infinity
@@ -113,6 +105,8 @@ A class representing a distributed map with various methods for manipulating and
 - `size`: `number` - The number of entries in the map.
 - `isEmpty`: `boolean` - Indicates whether the map is empty.
 - `equalValues`: `(a: V, b: V) => boolean` - A function to compare values for equality.
+- `connection`: `HamokConnection<string, string>` - The connection used by the map.
+- `ready`: `Promise<void>` - A promise that resolves when the map is initialized and ready to use.
 
 ### Events
 
@@ -141,6 +135,14 @@ The `HamokMap` class extends `EventEmitter` and emits the following events:
 - **get**(`key: K`): `V | undefined`
 
   - Retrieves the value associated with the specified key.
+
+- **sync**(): `Promise<void>`
+
+  - Synchronizes the map with the baseMap.
+
+- **removeIf**(`key: K`, `value: V`): `Promise<boolean>`
+
+  - Removes the entry if the current value matches the specified value.
 
 - **getAll**(`keys: IterableIterator<K> | K[]`): `ReadonlyMap<K, V>`
 
@@ -217,6 +219,7 @@ map.close();
 - [use insert](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-insert-get-example.ts)
 - [use events](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-events-example.ts)
 - [use updateIf](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-update-if-example.ts)
+- [see how dynamically created maps are catching up](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/map-catchup-example.ts)
 
 ## FAQ
 

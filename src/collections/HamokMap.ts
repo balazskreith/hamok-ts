@@ -4,6 +4,7 @@ import { HamokConnection } from './HamokConnection';
 import { BaseMap } from './BaseMap';
 import * as Collections from '../common/Collections';
 import { HamokMapSnapshot } from '../HamokSnapshot';
+import { createHamokCodec } from '../common/HamokCodec';
 
 const logger = createLogger('HamokMap');
 
@@ -29,6 +30,7 @@ export declare interface HamokMap<K, V> {
 export class HamokMap<K, V> extends EventEmitter {
 	private _closed = false;
 	public equalValues: (a: V, b: V) => boolean;
+	private _initializing?: Promise<this>;
 
 	public constructor(
 		public readonly connection: HamokConnection<K, V>,
@@ -99,6 +101,23 @@ export class HamokMap<K, V> extends EventEmitter {
 				request.entries.forEach((v, k) => existingEntries.has(k) || this.emit('insert', k, v));
 			})
 			.on('RemoveEntriesRequest', (request) => {
+				if (request.prevValue !== undefined) {
+					// this is a conditional remove
+					if (request.keys.size !== 1) {
+						// we let the request to timeout
+						return logger.warn('Conditional remove request must have only one entry: %o', request);
+					}
+					const key = [ ...request.keys ][0];
+
+					const existingValue = this.baseMap.get(key);
+
+					logger.trace('Conditional remove request: %s, %s, %s', key, existingValue, request.prevValue);
+
+					if (!existingValue || !this.equalValues(existingValue, request.prevValue as V)) {
+						return;
+					}
+				}
+
 				const removedEntries = this.baseMap.removeAll(request.keys.values());
 
 				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
@@ -154,12 +173,79 @@ export class HamokMap<K, V> extends EventEmitter {
 				insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
 				updatedEntries.forEach(([ key, oldValue, newValue ]) => this.emit('update', key, oldValue, newValue));
 			})
+			.on('StorageHelloNotification', (notification) => {
+				// every storage needs to respond with its snapshot and the highest applied index they have
+				try {
+					const snapshot = this.export();
+					const serializedSnapshot = JSON.stringify(snapshot);
+	
+					this.connection.notifyStorageState(
+						serializedSnapshot,
+						this.connection.highestSeenCommitIndex,
+						notification.sourceEndpointId, 
+					);
+				} catch (err) {
+					logger.error('Failed to send snapshot', err);
+				}
+			})
+			.on('remote-snapshot', (serializedSnapshot, done) => {
+				try {
+					const snapshot = JSON.parse(serializedSnapshot) as HamokMapSnapshot;
+
+					this._import(
+						snapshot, 
+						// emit events if we are not initializing
+						Boolean(this._initializing) === false,
+					);
+				} catch (err) {
+					logger.error(`Failed to import to map ${this.id}. Error: ${err}`);
+				} finally {
+					done();
+				}
+			})
 			.once('close', () => this.close())
 		;
+
+		const entries = new Map([ ...this.baseMap.entries() ]);
+		// clear the initial entries
+
+		this.baseMap.clear();
+
+		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
+			.then(() => this.connection.join())
+			.then(async () => {
+				// initializing 
+
+				logger.debug('%s Initializing record %d', this.connection.localPeerId, this.id);
+
+				if (entries.size < 1) return this;
+
+				await this.connection.requestInsertEntries(entries).then(() => void 0);
+
+				logger.debug('%s Initialization for record %d is complete', this.connection.localPeerId, this.id);
+
+				return this;
+			})
+			.catch((err) => {
+				logger.error('Failed to initialize record %s %o', this.id, err);
+
+				return this;
+			})
+			.finally(() => {
+				this._initializing = undefined;
+			});
 	}
 
 	public get id(): string {
 		return this.connection.config.storageId;
+	}
+
+	public get ready(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
+	}
+
+	public async sync(): Promise<this> {
+		return this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
@@ -190,6 +276,8 @@ export class HamokMap<K, V> extends EventEmitter {
 
 	public async clear(): Promise<void> {
 		if (this._closed) throw new Error(`Cannot clear a closed storage (${this.id})`);
+
+		await this._initializing;
 		
 		return this.connection.requestClearEntries();
 	}
@@ -218,6 +306,8 @@ export class HamokMap<K, V> extends EventEmitter {
 	public async setAll(entries: ReadonlyMap<K, V>): Promise<ReadonlyMap<K, V>> {
 		if (this._closed) throw new Error(`Cannot set entries on a closed storage (${this.id})`);
 
+		await this._initializing;
+
 		if (entries.size < 1) {
 			return Collections.emptyMap<K, V>();
 		}
@@ -235,6 +325,8 @@ export class HamokMap<K, V> extends EventEmitter {
     
 	public async insertAll(entries: ReadonlyMap<K, V> | [K, V][]): Promise<ReadonlyMap<K, V>> {
 		if (this._closed) throw new Error(`Cannot insert entries on a closed storage (${this.id})`);
+
+		await this._initializing;
 
 		if (Array.isArray(entries)) {
 			if (entries.length < 1) return Collections.emptyMap<K, V>();
@@ -259,6 +351,8 @@ export class HamokMap<K, V> extends EventEmitter {
 	public async deleteAll(keys: ReadonlySet<K> | K[]): Promise<ReadonlySet<K>> {
 		if (this._closed) throw new Error(`Cannot delete entries on a closed storage (${this.id})`);
 
+		await this._initializing;
+
 		if (Array.isArray(keys)) {
 			if (keys.length < 1) return Collections.emptySet<K>();
 			keys = Collections.setOf(...keys);
@@ -268,6 +362,20 @@ export class HamokMap<K, V> extends EventEmitter {
 		}
 		
 		return this.connection.requestDeleteEntries(keys);
+	}
+
+	public async removeIf(key: K, oldValue: V): Promise<boolean> {
+		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
+
+		logger.trace('%s RemoveIf: %s, %s, %s', this.connection.grid.localPeerId, key, oldValue, oldValue);
+		
+		return (await this.connection.requestRemoveEntries(
+			Collections.setOf(key),
+			undefined,
+			oldValue,
+		)).get(key) !== undefined;
 	}
 
 	public async remove(key: K): Promise<boolean> {
@@ -280,6 +388,8 @@ export class HamokMap<K, V> extends EventEmitter {
 
 	public async removeAll(keys: ReadonlySet<K> | K[]): Promise<ReadonlyMap<K, V>> {
 		if (this._closed) throw new Error(`Cannot remove entries on a closed storage (${this.id})`);
+
+		await this._initializing;
 
 		if (Array.isArray(keys)) {
 			if (keys.length < 1) return Collections.emptyMap<K, V>();
@@ -294,6 +404,8 @@ export class HamokMap<K, V> extends EventEmitter {
 
 	public async updateIf(key: K, value: V, oldValue: V): Promise<boolean> {
 		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
 
 		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
 		
@@ -315,8 +427,8 @@ export class HamokMap<K, V> extends EventEmitter {
 		const [ keys, values ] = this.connection.codec.encodeEntries(this.baseMap);
 		const result: HamokMapSnapshot = {
 			mapId: this.id,
-			keys,
-			values
+			keys: HamokMap.uint8ArrayToStringCodec.encode(keys),
+			values: HamokMap.uint8ArrayToStringCodec.encode(values),
 		};
 
 		return result;
@@ -331,7 +443,16 @@ export class HamokMap<K, V> extends EventEmitter {
 			throw new Error(`Cannot import data on a closed storage (${this.id})`);
 		}
 
-		const entries = this.connection.codec.decodeEntries(data.keys, data.values);
+		this._import(data, eventing);
+	}
+
+	private _import(data: HamokMapSnapshot, eventing?: boolean) {
+		const keys = HamokMap.uint8ArrayToStringCodec.decode(data.keys);
+		const values = HamokMap.uint8ArrayToStringCodec.decode(data.values);
+		const entries = this.connection.codec.decodeEntries(
+			keys, 
+			values
+		);
 
 		this.baseMap.setAll(entries, ({ inserted, updated }) => {
 			if (eventing) {
@@ -339,6 +460,14 @@ export class HamokMap<K, V> extends EventEmitter {
 				updated.forEach(([ key, oldValue, newValue ]) => this.emit('update', key, oldValue, newValue));
 			}
 		});
-		
 	}
+
+	public static uint8ArrayToStringCodec = createHamokCodec<Uint8Array[], string[]>(
+		(array) => {
+			return array.map((item) => Buffer.from(item).toString('utf8'));	
+		},
+		(array) => {
+			return array.map((item) => Buffer.from(item, 'utf8'));
+		}
+	);
 }

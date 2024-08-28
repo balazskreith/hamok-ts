@@ -21,15 +21,10 @@ export async function run() {
 	server_1.addRemotePeerId(server_2.localPeerId);
 	server_2.addRemotePeerId(server_1.localPeerId);
 	
-	server_1.start();
-	server_2.start();
-
 	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
+		server_1.join(),
+		server_2.join(),
 	]);
-
-	logger.info('Leader changed');
 
 	const storage_1 = server_1.createRecord<MySharedConfig>({
 		recordId: 'my-replicated-record',
@@ -73,8 +68,8 @@ export async function run() {
 	logger.debug(`After deleted getting value from server1: ${storage_1.get('bar')}`);
 	logger.debug(`After deleted getting value from server2: ${storage_2.get('bar')}`);
 
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

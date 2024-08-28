@@ -42,6 +42,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		logger.trace('%s updateCommitIndex committedLogEntries: %d', localPeerId, committedLogEntries.length);
 
 		for (const logEntry of committedLogEntries) {
+			logger.trace('%s commit log entry %d', localPeerId, logEntry.index);
 			raftEngine.events.emit('commit', logEntry.index, logEntry.entry);
 		}
 	};
@@ -102,19 +103,22 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 
 		logger.trace('%s Received RaftAppendEntriesRequest %o Entries: %d', localPeerId, request, request.entries?.length);
 
-		if (logs.nextIndex < request.leaderNextIndex - (request.entries?.length ?? 0)) {
-			const message = `The next index is ${logs.nextIndex}, and the leader index is ${request.leaderNextIndex}, the provided entries are: ${request.entries?.length}. It is insufficient to close the gap in log entries. Import a snapshot or increase the expiration for the logs.`;
-			const error = new Error(message);
+		if (logs.nextIndex < request.leaderNextIndex - request.entries.length) {
+			const newCommitIndex = Math.max(0, request.leaderNextIndex - (request.entries?.length ?? 0)); 
 
-			raftEngine.events.stop();
-			if (!raftEngine.events.emit('error', error)) {
-				throw error;
-			}
-			// // we send success and processed response as the problem is not with the request,
-			// // but we do not change our next index because we cannot process it momentary due to not synced endpoint
-			const response = requestChunk.createResponse(true, logs.nextIndex, true);
+			logger.warn('%s Resetting commit index to %d. The current next index for logs is %d, and the leader index is %d. ' + 
+				'the leader has %d number of logs to send, which is insufficient to close the gap between this peer and the leader.' + 
+				' If snapshots for storages do not close the gap that can lead to inconsistency!'
+			, 
+			localPeerId,
+			newCommitIndex, 
+			logs.nextIndex, 
+			request.leaderNextIndex, 
+			request.entries?.length
+			);
+			raftEngine.logs.reset(newCommitIndex);
 
-			return messageEmitter.send(response);
+			// logger.warn('WTF %o', [ ...request.entries ].join(', '));
 		}
 
 		// if we arrived in this point we know that the sync is possible.
@@ -137,6 +141,8 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			} else if (!logs.compareAndAdd(logIndex, currentTerm, entry)) {
 				logger.warn('Log for index {} not added, though it supposed to', logIndex);
 				success = false;
+			// } else {
+			// 	logger.info('%s Log for index %d added', localPeerId, logIndex);
 			}
 		}
 		
@@ -147,6 +153,10 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
 		logger.trace('%s Received a vote request %o, votedFor: %s', localPeerId, request, props.votedFor);
+		if (raftEngine.leaderId !== undefined) {
+			// if we know the leader, we should not vote for anyone else, until the leader is alive
+			return messageEmitter.send(request.createResponse(false));
+		}
 		if (request.term <= props.currentTerm) {
 			// someone requested a vote from a previous or equal term.
 			return messageEmitter.send(request.createResponse(false));
@@ -201,7 +211,8 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		raftEngine.leaderId = undefined;
 		if (raftEngine.remotePeers.size < 1) {
 			// if we are alone, there is no point to start an election
-			return;
+			// so we just restart the timer
+			return (updated = now);
 		}
 
 		logger.debug(`${localPeerId} is timed out to wait for append logs request (maxIdle: ${config.followerMaxIdleInMs}, elapsed: ${elapsedInMs}) extraWaitingTime: ${context.extraWaitingTime}`);

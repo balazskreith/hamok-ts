@@ -19,6 +19,10 @@
 
 This design is ideal for scenarios where a large number of key-value pairs need to be managed by multiple instances. Instead of introducing a distributed locking mechanism, `HamokRemoteMap` utilizes the RAFT consensus algorithm to guarantee consistent operation execution, ensuring consistency and fault tolerance in distributed systems.
 
+### Important Notes
+
+- RemoteMap relies on leader peer, as the leader peer is the only one which can executes action on a remote map. Therefore all peer which potentially can be the leader must create this map.
+
 ## Configuration
 
 ```typescript
@@ -32,12 +36,6 @@ const config: HamokRemoteMapBuilderConfig<number, string> = {
    * Optional. The timeout duration in milliseconds for requests.
    */
   requestTimeoutInMs: 5000,
-
-  /**
-   * Optional. The maximum waiting time in milliseconds for a message to be sent.
-   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-   */
-  maxMessageWaitingTimeInMs: 30000,
 
   /**
    * Optional. A codec for encoding and decoding keys in the map.
@@ -185,6 +183,9 @@ remoteMap.on("remove", (key, value) => {
 
 - **`iterator(): AsyncIterableIterator<[K, V]>`**  
   Returns an iterator for the key-value pairs in the storage.
+
+- **`sync(): Promise<void>`**  
+  Synchronizes the storage with the remote peers. (waiting for the commitHead in hamok)
 
 ## Examples
 

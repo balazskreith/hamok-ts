@@ -4,6 +4,18 @@ import { LogEntry } from './LogEntry';
 
 export const logger = createLogger('RaftLogs');
 
+export type RaftLogsEventMap = {
+	committed: [commitIndex: number, message: HamokMessage];
+	removed: [commitIndex: number, message: HamokMessage];
+}
+
+export type MemoryStoredRaftLogsConfig = {
+	expirationTimeInMs: number;
+	memorySizeHighWaterMark: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+
 export interface RaftLogs {
 	readonly commitIndex: number;
 	readonly nextIndex: number;
@@ -16,7 +28,11 @@ export interface RaftLogs {
 	compareAndAdd(expectedNextIndex: number, term: number, entry: HamokMessage): boolean;
 	removeUntil(index: number): void;
 	get(index: number): LogEntry | undefined;
-	collectEntries(startIndex: number, endIndex?: number): HamokMessage[];
+	collectEntries(startIndex: number, endIndex?: number): LogEntry[];
 	[Symbol.iterator](): IterableIterator<LogEntry>;
 	reset(newCommitIndex: number): void;
+
+	on<U extends keyof RaftLogsEventMap>(event: U, listener: (...args: RaftLogsEventMap[U]) => void): this;
+	once<U extends keyof RaftLogsEventMap>(event: U, listener: (...args: RaftLogsEventMap[U]) => void): this;
+	off<U extends keyof RaftLogsEventMap>(event: U, listener: (...args: RaftLogsEventMap[U]) => void): this;
 }

@@ -1,7 +1,7 @@
 export { 
 	Hamok, 
-	HamokConfig, 
-	HamokConstructorConfig,
+	HamokObjectConfig, 
+	HamokConfig,
 	HamokEmitterBuilderConfig,
 	HamokQueueBuilderConfig,
 	HamokRecordBuilderConfig,
@@ -27,13 +27,15 @@ export {
 	HamokConnection
 } from './collections/HamokConnection';
 export {
+	HamokRecord
+} from './collections/HamokRecord';
+export {
 	RaftLogs
 } from './raft/RaftLogs';
 export {
 	MemoryStoredRaftLogs
 } from './raft/MemoryStoredRaftLogs';
 export {
-	HamokSnapshot,
 	HamokEmitterSnapshot,
 	HamokQueueSnapshot,
 	HamokMapSnapshot,
@@ -57,5 +59,4 @@ export {
 export { 
 	HamokCodec, 
 	createHamokJsonBinaryCodec, 
-	createNumberToUint8ArrayCodec 
 } from './common/HamokCodec';

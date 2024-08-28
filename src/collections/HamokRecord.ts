@@ -44,6 +44,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	private _closed = false;
 	public equalValues: <K extends keyof T>(a: T[K], b: T[K]) => boolean;
 	private _object: Partial<T>;
+	private _initializing?: Promise<this>;
 
 	public constructor(
 		public readonly connection: HamokConnection<string, string>, 
@@ -58,7 +59,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		this.setMaxListeners(Infinity);
 		
 		this.equalValues = setup?.equalValues ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
-		this._object = setup?.initalObject ?? {} as T;
+		this._object = {} as T;
 		this._payloadsCodec = setup?.payloadsCodec;
 
 		this.connection
@@ -184,12 +185,79 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 				insertedEntries.forEach(([ key, value ]) => this.emit('insert', { key, value }));
 				updatedEntries.forEach(([ key, oldValue, newValue ]) => this.emit('update', { key, oldValue, newValue }));
 			})
+			.on('StorageHelloNotification', (notification) => {
+				// every storage needs to respond with its snapshot and the highest applied index they have
+				try {
+					const snapshot = this.export();
+					const serializedSnapshot = JSON.stringify(snapshot);
+	
+					this.connection.notifyStorageState(
+						serializedSnapshot,
+						this.connection.highestSeenCommitIndex,
+						notification.sourceEndpointId, 
+					);
+				} catch (err) {
+					logger.error('Failed to send snapshot', err);
+				}
+			})
+			.on('remote-snapshot', (serializedSnapshot, done) => {
+				try {
+					const snapshot = JSON.parse(serializedSnapshot) as HamokRecordSnapshot;
+
+					this._import(
+						snapshot, 
+						// emit events if we are not initializing
+						Boolean(this._initializing) === false,
+					);
+				} catch (err) {
+					logger.error(`Failed to import to record ${this.id}. Error: ${err}`);
+				} finally {
+					done();
+				}
+			})
 			.once('close', () => this.close())
 		;
+
+		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
+			.then(() => this.connection.join())
+			.then(async () => {
+				if (setup?.initalObject === undefined) return this;
+				const initalObject = setup.initalObject;
+
+				logger.debug('%s Initializing record %d', this.connection.localPeerId, this.id);
+				const entries = new Map<string, string>();
+
+				for (const [ key, value ] of Object.entries(initalObject)) {
+					const encodedValue = this._encodeValue(key as keyof T, value as T[keyof T]);
+
+					entries.set(key, encodedValue);
+				}
+				await this.connection.requestInsertEntries(entries).then(() => void 0);
+
+				logger.debug('%s Initialization for record %d is complete', this.connection.localPeerId, this.id);
+
+				return this;
+			})
+			.catch((err) => {
+				logger.error('Failed to initialize record %s %o', this.id, err);
+
+				return this;
+			})
+			.finally(() => {
+				this._initializing = undefined;
+			});
 	}
 
 	public get id(): string {
 		return this.connection.config.storageId;
+	}
+
+	public get ready(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
+	}
+
+	public async sync(): Promise<this> {
+		return this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
@@ -209,6 +277,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	public async clear(): Promise<void> {
 		if (this._closed) throw new Error(`Cannot clear a closed storage (${this.id})`);
 		
+		await this._initializing;
+
 		return this.connection.requestClearEntries();
 	}
 	
@@ -222,6 +292,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 
 	public async set<K extends keyof T>(key: K, value: T[K]): Promise<T[K] | undefined> {
 		if (this._closed) throw new Error(`Cannot set an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
 
 		const entries = new Map<string, string>([
 			[ key as string, this._encodeValue(key, value) ]
@@ -237,6 +309,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	public async insert<K extends keyof T>(key: K, value: T[K]): Promise<T[K] | undefined> {
 		if (this._closed) throw new Error(`Cannot set an entry on a closed storage (${this.id})`);
 
+		await this._initializing;
+
 		const entries = new Map<string, string>([
 			[ key as string, this._encodeValue(key, value) ]
 		]);
@@ -250,6 +324,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 
 	public async updateIf<K extends keyof T>(key: K, value: T[K], oldValue: T[K]): Promise<boolean> {
 		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
 
 		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
 		
@@ -299,25 +375,32 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 			throw new Error(`Cannot import data on a closed storage (${this.id})`);
 		}
 
-		const entries = this.connection.codec.decodeEntries(data.keys, data.values);
+		this._import(data, eventing);
+	}
 
-		for (const [ key, encodedValue ] of entries) {
-			const newValue = this._decodeValue(key, encodedValue);
-			const oldValue = this._object[key as keyof T];
+	private _import(snapshot: HamokRecordSnapshot, eventing?: boolean) {
+		const entries = this.connection.codec.decodeEntries(snapshot.keys, snapshot.values);
 
-			this._object[key as keyof T] = newValue;
-			if (eventing) {
-				if (oldValue !== undefined) this.emit('update', { 
+		try {
+			for (const [ key, encodedValue ] of entries) {
+				const newValue = this._decodeValue(key, encodedValue);
+				const oldValue = this._object[key as keyof T];
+	
+				this._object[key as keyof T] = newValue;
+				if (oldValue !== undefined) eventing && this.emit('update', { 
 					key: key as keyof T, 
 					oldValue: oldValue as T[keyof T], 
 					newValue: newValue as T[keyof T], 
 				});
-				else this.emit('insert', {
+				else eventing && this.emit('insert', {
 					key,
 					value: newValue,
 				});
 			}
+		} catch (err) {
+			logger.error(`Failed to import to record ${this.id}. Error: ${err}`);
 		}
+		
 	}
 
 	private _encodeValue<K extends keyof T>(key: K, value: T[K]): string {

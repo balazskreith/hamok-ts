@@ -8,7 +8,8 @@ export class EndpointStatesNotification {
 		public readonly leaderNextIndex: number,
 		public readonly numberOfLogs: number,
 		public readonly activeEndpointIds?: ReadonlySet<string>,
-		public readonly customData?: string
+		public readonly snapshot?: string,
+		public readonly requestId?: string,
 	) {
 	}
 }

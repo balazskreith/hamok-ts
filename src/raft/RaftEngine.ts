@@ -49,7 +49,7 @@ interface HamokController extends EventEmitter {
 	once<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
 	off<U extends keyof HamokEventMap>(event: U, listener: (...args: HamokEventMap[U]) => void): this;
 	emit<U extends keyof HamokEventMap>(event: U, ...args: HamokEventMap[U]): boolean;
-	stop(): void;
+	// stop(): void;
 }
 
 export class RaftEngine {

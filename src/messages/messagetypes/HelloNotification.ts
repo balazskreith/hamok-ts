@@ -4,7 +4,8 @@ export class HelloNotification {
 		public readonly sourcePeerId: string,
 		public readonly destinationPeerId?: string,
 		public readonly raftLeaderId?: string,
-		public readonly customData?: string
+		public readonly customData?: string,
+		public readonly requestId?: string,
 	) {
 	}
 }

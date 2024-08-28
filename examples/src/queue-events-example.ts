@@ -1,5 +1,6 @@
 import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
+import { HamokMessageHub } from './utils/HamokMessageHub';
 
 const logger = pino.pino({
 	name: 'queue-events-example',
@@ -10,13 +11,7 @@ export async function run() {
 
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
-	
-	server_1.on('message', server_2.accept.bind(server_2));
-	server_2.on('message', server_1.accept.bind(server_1));
-	
-	server_1.addRemotePeerId(server_2.localPeerId);
-	server_2.addRemotePeerId(server_1.localPeerId);
-	
+	const messageHub = new HamokMessageHub();
 	const producer = server_1.createQueue<number>({
 		queueId: 'my-distributed-queue',
 	});
@@ -27,15 +22,12 @@ export async function run() {
 	consumer.on('empty', () => logger.info('Queue is empty'));
 	consumer.on('not-empty', () => logger.info('Queue is not empty'));
 	
-	server_1.start();
-	server_2.start();
-	
+	messageHub.add(server_1, server_2);
 	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
+		server_1.join(),
+		server_2.join(),
 	]);
 
-	logger.info('Leader changed');
 	let value = 0;
 	const producingTimer = setInterval(async () => {
 		const value_1 = ++value;
@@ -59,8 +51,8 @@ export async function run() {
 
 	await new Promise(resolve => setTimeout(resolve, 10000));
 
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 
 	[
 		producingTimer,

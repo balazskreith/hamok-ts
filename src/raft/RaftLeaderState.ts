@@ -159,7 +159,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 		messageEmitter.off('RaftAppendEntriesRequestChunk', appendEntriesRequestListener);
 		messageEmitter.off('RaftAppendEntriesResponse', appendEntriesResponseListener);
 
-		logger.debug('%s is closed', localPeerId);
+		logger.debug('%s LeaderState is closed', localPeerId);
 	};
 
 	messageEmitter.on('RaftVoteRequest', voteRequestListener);
@@ -250,7 +250,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 						currentTerm,
 						sequence,
 						sequence == entries.length - 1,
-						entry,
+						entry.entry,
 					);
 					//                    logger.info("Sending", request);
 

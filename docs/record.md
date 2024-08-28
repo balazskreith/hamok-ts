@@ -46,14 +46,6 @@ const record = hamok.createRecord<{ foo: string; bar: number }>({
   requestTimeoutInMs: 5000,
 
   /**
-   * Optional. The maximum waiting time in milliseconds for a message to be sent.
-   * The storage holds back the message sending if Hamok is not connected to a grid or not part of a network.
-   *
-   * DEFAULT: 10x requestTimeoutInMs
-   */
-  maxMessageWaitingTimeInMs: 50000,
-
-  /**
    * Optional. The maximum number of keys allowed in request or response messages.
    *
    * DEFAULT: 0 means infinity
@@ -151,6 +143,7 @@ record.close();
 
 - [use events](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-events-example.ts)
 - [use insert and get](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-insert-get-example.ts)
+- [record catchup](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/record-dynamic-creating-example.ts)
 
 ## FAQ
 

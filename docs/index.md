@@ -109,13 +109,6 @@ const config = {
   onlyFollower: false,
 
   /**
-   * Optional. Indicate if the Hamok should stop automatically when there are no remote peers.
-   *
-   * DEFAULT: false
-   */
-  autoStopOnNoRemotePeers: false,
-
-  /**
    * Specifies the expiration time for RAFT logs, after which they will be removed from the locally stored logs.
    * If this is set, a newly joined peer must sync up to the point where they can catch up with the logs that the leader provides,
    * possibly using snapshots. This option is only applicable if `raftLogs` is not provided as a configuration option;
@@ -158,21 +151,9 @@ const hamok = new Hamok(config);
 
   - The Raft engine instance used by Hamok for distributed consensus.
 
-- `records`: `Map<string, HamokRecord<any>>`
+- `storages`: `Map<string, HamokRecord<any> | HamokMap<any, any> | HamokEmitter<any> | HamokRemoteMap<any, any> | HamokQueue<any>>`
 
-  - A map of records managed by Hamok.
-
-- `maps`: `Map<string, HamokMap<any, any>>`
-
-  - A map of maps managed by Hamok.
-
-- `queues`: `Map<string, HamokQueue<any>>`
-
-  - A map of queues managed by Hamok.
-
-- `emitters`: `Map<string, HamokEmitter<any>>`
-
-  - A map of emitters managed by Hamok.
+  - A map of storages managed by Hamok.
 
 - `grid`: `HamokGrid`
 
@@ -195,7 +176,12 @@ const hamok = new Hamok(config);
   - The current state of the Raft engine.
 
 - `run`: `boolean`
+
   - A boolean indicating if the Raft timer is running.
+
+- `ready`: `Promise<void>`
+
+  - A promise that resolves when the Hamok instance is joined to the Raft cluster and reached the commit head.
 
 ### Events
 
@@ -205,6 +191,9 @@ Hamok emits various events that can be listened to for handling specific actions
 - `stopped`: Emitted when the Hamok instance stops.
 - `follower`: Emitted when the instance becomes a follower.
 - `leader`: Emitted when the instance becomes the leader.
+- `joined`: Emitted when the instance joins the Raft cluster.
+- `rejoining`: Emitted when the instance rejoins the Raft cluster.
+- `left`: Emitted when the instance leaves the Raft cluster.
 - `message`: Emitted when a message is received.
 - `remote-peer-joined`: Emitted when a remote peer joins.
 - `remote-peer-left`: Emitted when a remote peer leaves.
@@ -214,6 +203,7 @@ Hamok emits various events that can be listened to for handling specific actions
 - `heartbeat`: Emitted during heartbeats.
 - `error`: Emitted when an error occurs.
 - `no-heartbeat-from`: Emitted when no heartbeat is received from a peer.
+- `close`: Emitted when the Hamok instance is closed.
 
 ### Methods
 
@@ -237,17 +227,13 @@ Hamok emits various events that can be listened to for handling specific actions
 
   - Removes a remote peer ID from the Raft engine.
 
-- **export**(): `HamokSnapshot`
-
-  - Exports the current state of Hamok as a snapshot.
-
-- **import**(`snapshot: HamokSnapshot`): `void`
-
-  - Imports a snapshot to restore the state of Hamok.
-
 - **waitUntilCommitHead**(): `Promise<void>`
 
   - Waits until the commit head is reached.
+
+- **waitUntilLeader**(): `Promise<void>`
+
+  - Waits until a leader is elected in the Raft cluster.
 
 - **createMap**<`K, V`>(`options: HamokMapBuilderConfig<K, V>`): `HamokMap<K, V>`
 
@@ -298,7 +284,11 @@ Hamok emits various events that can be listened to for handling specific actions
   - Fetches remote peers with optional custom requests and timeout.
 
 - **join**(`params: HamokJoinProcessParams`): `Promise<void>`
+
   - Runs a join process with the provided parameters. See [here](#use-the-join-method) for more details.
+
+- **leave**(): `Promise<void>`
+  - Leaves the Raft cluster.
 
 ## Use cases
 
@@ -334,31 +324,6 @@ await hamok.join({
    * DEFAULT: 3
    */
   maxRetry: 3,
-
-  /**
-   * Indicates if remote peers should be automatically removed if no heartbeat is received.
-   *
-   * DEFAULT: true
-   */
-  removeRemotePeersOnNoHeartbeat: true,
-
-  /**
-   * Indicates if a snapshot should be requested from the remote peers.
-   * If provided, the best possible snapshot is selected amongst the provided ones and
-   * imported into the local peer before it joins to the grid.
-   *
-   * DEFAULT: true
-   */
-  requestSnapshot: true,
-
-  /**
-   * Indicates if the start() method should be called automatically after the join process is completed.
-   *
-   * if startAfterJoin is true the method promise is only resolved if a leader is elected or assigned.
-   *
-   * DEFAULT: true
-   */
-  startAfterJoin: true,
 });
 ```
 
@@ -436,7 +401,7 @@ const queue = hamokInstance.createQueue(queueConfig);
 await queue.push("item");
 
 // Removing an item from the queue
-const item = queue.dequeue();
+const item = await queue.pop();
 ```
 
 ### Creating and Managing Emitters
@@ -462,22 +427,9 @@ emitter.emit("event");
 
 ## Snapshots
 
-Hamok supports exporting and importing snapshots for persistence and recovery.
-Snapshots are used to store the state of a Hamok instance, including the Raft logs and the commit index.
-It is designed to trim the logs and store the state of the instance along with the commit index a snapshot represents.
-When you use snapshots you can start a new instance from the snapshot and apply only the logs after the snapshot.
+Hamok uses snapshots to help distributed storages catch up with remote peers. For example, when a record is created on one peer, it sends a `StorageHello` notification to the remote peers. The remote peers then reply with a `StorageState` notification, which may contains a snapshot of the storage and the last applied commit index on the remote peer. The local peer can apply this snapshot to catch up with the remote peer, allowing it to process logs from the leader and stay in sync with the remote peers.
 
-### Exporting a Snapshot
-
-```typescript
-const snapshot = hamok.export();
-```
-
-### Importing a Snapshot
-
-```typescript
-hamok.import(snapshot);
-```
+While you can manually export and import snapshots using the `export` and `import` methods, Hamok automatically handles this process when a storage connection is established.
 
 ## Error Handling
 
@@ -492,14 +444,11 @@ hamok.on("error", (error) => {
 ## Examples
 
 - [election and reelection](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-reelection-example.ts)
-- [Import and export snapshots](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-import-export-example.ts)
-- [Waiting for at least peers](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-waiting-example.ts)
-- [Use helper method to discover/add/remove remote peers](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-discovery-example.ts)
+- [example to use join and leave methods](https://github.com/balazskreith/hamok-ts/blob/main/examples/src/common-join-leave-rejoin-example.ts)
 
 ## Best Practices
 
 - Ensure to handle the `error` event to catch and respond to any issues.
-- Regularly export snapshots to persist the state of your Hamok instance.
 - Properly configure timeouts and periods to match your application’s requirements.
 -
 
@@ -512,16 +461,15 @@ If you encounter issues with Hamok, consider the following steps:
 - Review logs for any error messages or warnings.
 - Consult the Hamok documentation and community forums for additional support.
 
-## `HamokMessage` compatibility Table
+## Major changes and compatibility notes
 
-| Version | 2.1.0 | 2.2.0 | 2.3.0 |
-| ------- | ----- | ----- | ----- |
-| 2.1.0   | ✔️    | ✔️    | ❌    |
-| 2.2.0   | ✔️    | ✔️    | ❌    |
-| 2.3.0   | ❌    | ❌    | ✔️    |
-
-- ✔️ Compatible
-- ❌ Not Compatible
+- **version `2.5.x`**
+  - The `HamokMessage` schema was changed, `STORAGE_HELLO_NOTIFICATION` and `STORAGE_STATE_NOTIFICATION` message type were added, can cause compatibility issues with previous versions.
+  - The `import` and `export` methodd was removed from `Hamok` in favor of the unified `join` method.
+  - The `start` and `stop` methods were removed from `Hamok` in favor of the unified `join` / `leave` async methods.
+  - No more error will be thrown if the log gap is too big between the connected peers, the follower will pick up whatever it can, with the storage responsible for providing up-to-date snapshots to a remote peer through `StorageState` notifications.
+- **version `2.3.x`**
+  - The `HamokMessage` schema was changed, `JOIN_NOTIFICATION` message type was added, can cause compatibility issues with previous versions.
 
 ## FAQ
 
@@ -594,21 +542,10 @@ hamok.on("no-heartbeat-from", (peerId) =>
 every mutation request is stored in the Raft logs. The logs store the history of all operations, even the unsuccessful ones.
 Every instance every map, record, queue, or emitter receives the messages and goes through exactly the same sequence of operations.
 
-### What snapshots are good for?
-
-See below.
-
 ### Can I overflow the memory with logs?
 
-Yes you can. The logs are stored in memory and can grow indefinitely. To prevent memory overflow,
-either explicitly remove logs or set the expiration time for logs. Additionally you can use snapshots
-to store the state of the instance along with the commitIndex a snapshot represents.
-Therefore any new instance can start from the snapshot and apply only the logs after the snapshot.
-
-### If I export a snapshot do I have to delete the logs?
-
-Yes, if you don't have an expiration time set for logs,
-you should delete the logs after exporting a snapshot.
+Yes you can. By default the logs are stored in memory and can grow indefinitely. To prevent memory overflow,
+either explicitly remove logs or set the expiration time for logs.
 
 ### What is the difference between a map and a record?
 
@@ -625,11 +562,6 @@ In general, if you just want to share key-value map or queue between two instanc
 If you need to apply distributed lock to access a key in redis, Hamok can come into the picture as RAFT gives you atomicity.
 Hamok can also be used to elect a leader in the cluster giving some special management job to one instance amongst the replicated many.
 
-### What if the import/export is too large?
-
-Well, I have not designed my neat lightweight distributed object storage to store billions of entries, but in this case
-contact me and we can discuss the possibility of adding a feature to export the snapshot in chunks.
-
 ### How can I access `appData` of Hamok?
 
 ```typescript
@@ -644,6 +576,15 @@ const hamok = new Hamok({
 console.log("foo is", hamok.appData.foo);
 ```
 
-### How can I check if a Map/Record/Emitter/Queue I want to create already exists?
+### How can I check if a Map/Record/Emitter/Queue already exists?
 
-`Hamok` exposes the created objects via the `maps`, `records`, `emitters`, `remoteMaps`, and `queues` properties. You can check if an object already exists by using a command like `if (hamok.maps.has(mapId))`. Alternatively, you can use the `getOrCreate` method (`getOrCreateMap`, `getOrCreateEmitter`, `getOrCreateRecord`, `getOrCreateRemoteMap`, `getOrCreateQueue`) to either retrieve an existing object or create a new one if it doesn't already exist.
+`Hamok` exposes the created objects via the `storages`, property. You can check if an object already exists by using a command like `if (hamok.storages.has(mapId))`. Alternatively, you can use the `getOrCreate` method (`getOrCreateMap`, `getOrCreateEmitter`, `getOrCreateRecord`, `getOrCreateRemoteMap`, `getOrCreateQueue`) to either retrieve an existing object or create a new one if it doesn't already exist.
+
+### Can I use `undefined` as a value for a key or value?
+
+There are no type restrictions for the generic types you can use in a Map, Record, Queue, or Emitter. However,
+it is strongly advised to use `null` if you want to indicate that something is uninitialized but still exists.
+
+### Can I create different types of storages with the same identifier?
+
+You should not. In a single Hamok instance, this is checked when you create any storage. If the given identifier is already in use for another type of storage, the system will prevent you from creating it. However, if you create an emitter in one Hamok instance and a map with the same identifier in another Hamok instance, they may attempt to communicate, but it will lead to crashes. So you can, but you shouldn't.

@@ -32,26 +32,30 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 	public equalValues: (a: V, b: V) => boolean;
 	private readonly _executor = new ConcurrentExecutor(1);
 
+	/**
+	 * Flag indicate if the storage emit events and notify other storage to emit events (if this is the leader)
+	 */
 	public emitEvents = true;
+
+	private _initializing?: Promise<this>;
 
 	/**
 	 * The last commit index that was applied to the map
 	 */
-	private _appliedCommitIndex?: number;
-
-	/**
-	 * This is for a transitional time when no leader is elected.
-	 */
-	private _waitingForLeader?: {
-		promise: Promise<void>,
-		resolve: () => void,
-	};
+	private _appliedCommitIndex = -1;
 
 	/**
 	 * Whether this endpoint is the leader
 	 */
 	private _leader = false;
 
+	/**
+	 * 
+	 * @param supplier the supplied action has to be executed if this endpoint is the leader
+	 * @param commitIndex the commit index that the action is associated with
+	 * @param onCompleted callback if this endpoint is the leader and the action is executed
+	 * @returns 
+	 */
 	private async _executeIfLeader<T>(supplier: () => Promise<T>, commitIndex?: number, onCompleted?: (input: T) => void) {
 		if (this._closed) throw new Error(`Cannot execute on a closed storage (${this.id})`);
 		
@@ -62,9 +66,7 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		);
 
 		if (commitIndex === undefined) {
-			return logger.warn('Commit index is undefined for %s', this.id);
-		} else if (this._waitingForLeader) {
-			await this._waitingForLeader.promise;
+			return logger.warn('Cannot execute action in storage %s becasue the provided commit index undefined', this.id);
 		} else if (!this._leader) {
 			return logger.trace('Not the leader for %s', this.id);
 		}
@@ -74,11 +76,10 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		try {
 			const input = await this._executor.execute(supplier);
 
-			if (commitIndex <= (this._appliedCommitIndex ?? -1)) {
+			if (commitIndex <= this._appliedCommitIndex) {
 				logger.warn('Commit index is less than the applied commit index for %s. appliedCommitIndex: %d, commitIndex: %d', this.id, this._appliedCommitIndex, commitIndex);
 			}
 			this._appliedCommitIndex = commitIndex;
-			this.connection.notifyStorageAppliedCommit(this._appliedCommitIndex);
 
 			onCompleted?.(input);
 		} catch (err) {
@@ -100,11 +101,12 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		});
 
 		this.connection
-			.on('StorageAppliedCommitNotification', (notification) => {
-				if (!this._leader) {
-					this._appliedCommitIndex = notification.appliedCommitIndex;
-				}
-			})
+			// StorageAppliedCommitNotification is deprecated in favor of StorageState which contains the applied commit index
+			// .on('StorageAppliedCommitNotification', (notification) => {
+			// 	if (!this._leader) {
+			// 		this._appliedCommitIndex = notification.appliedCommitIndex;
+			// 	}
+			// })
 			.on('ClearEntriesRequest', (request, commitIndex) => {
 				this._executeIfLeader(() => this.remoteMap.clear(), commitIndex, () => {
 					this.connection.respond(
@@ -237,26 +239,62 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 			})
 			.on('EntryUpdatedNotification', ({ key, newValue, oldValue }) => this.emit('update', key, oldValue, newValue))
 			.on('leader-changed', (leaderId) => {
-				if (leaderId === undefined) {
-					let resolve: () => void = () => void 0;
-					const promise = new Promise<void>((_resolve) => {
-						resolve = () => {
-							this._waitingForLeader = undefined;
-							_resolve();
-						};
-					});
-
-					return (this._waitingForLeader = { promise, resolve });
-				}
+				// this is all we need to know
 				this._leader = leaderId === this.connection.grid.localPeerId;
-				this._waitingForLeader?.resolve();
+			})
+			.on('StorageHelloNotification', (notification) => {
+				// we only reply to it if this endpoint is the leader
+				// if there is no leader in the grid the fetch on the remote endpoint should retry
+				if (!this._leader) return;
+				try {
+					const snapshot = this.export();
+					const serializedSnapshot = JSON.stringify(snapshot);
+	
+					this.connection.notifyStorageState(
+						serializedSnapshot,
+						// and this is the trick here since this storage is async.
+						// the connection has it's own pace to emit commits, but we execute it async, so we need to know 
+						// where this storage is at the moment. 
+						this._appliedCommitIndex,
+						notification.sourceEndpointId, 
+					);
+				} catch (err) {
+					logger.error('Failed to send snapshot', err);
+				}
+			})
+			.on('remote-snapshot', (serializedSnapshot, done) => {
+				try {
+					const snapshot = JSON.parse(serializedSnapshot) as HamokRemoteMapSnapshot;
+
+					this._import(
+						snapshot, 
+					);
+				} catch (err) {
+					logger.error(`Failed to import to record ${this.id}. Error: ${err}`);
+				} finally {
+					done();
+				}
 			})
 			.once('close', () => this.close())
 		;
+
+		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
+			.then(() => this.connection.join())
+			.then(() => this)
+			.catch((err) => {
+				logger.error('Error while initializing remote map', err);
+
+				return this;
+			})
+			.finally(() => (this._initializing = undefined));
 	}
 
 	public get id(): string {
 		return this.connection.config.storageId;
+	}
+
+	public get ready(): Promise<this> {
+		return this._initializing ?? Promise.resolve(this);
 	}
 
 	public get closed() {
@@ -432,7 +470,12 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 		} else if (this._closed) {
 			throw new Error(`Cannot import data on a closed storage (${this.id})`);
 		}
+	}
 
-		this._appliedCommitIndex = data.appliedCommitIndex;
+	private _import(snapshot: HamokRemoteMapSnapshot) {
+		if (this._closed) {
+			throw new Error(`Cannot import data on a closed storage (${this.id})`);
+		}
+		this._appliedCommitIndex = snapshot.appliedCommitIndex;
 	}
 }

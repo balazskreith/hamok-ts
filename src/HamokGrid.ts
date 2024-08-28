@@ -3,6 +3,7 @@ import { HamokMessage } from './messages/HamokMessage';
 import { PendingRequest } from './messages/PendingRequest';
 import { PendingResponse } from './messages/PendingResponse';
 import { OngoingRequestsNotifier } from './messages/OngoingRequestsNotifier';
+import { RaftLogs } from './raft/RaftLogs';
 
 const logger = createLogger('HamokGrid');
 
@@ -16,6 +17,7 @@ export class HamokGrid {
 		public readonly waitUntilCommitHead: () => Promise<void>,
 		public readonly ongoingRequestsNotifier: OngoingRequestsNotifier,
 		public readonly remotePeerIds: ReadonlySet<string>,
+		public readonly logs: RaftLogs,
 		private _getLocalPeerId: () => string,
 		private _getLeaderId: () => string | undefined,
 	) {

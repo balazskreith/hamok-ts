@@ -1,5 +1,6 @@
 import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
+import { HamokMessageHub } from './utils/HamokMessageHub';
 
 const logger = pino.pino({
 	name: 'map-insert-get-example',
@@ -9,7 +10,7 @@ const logger = pino.pino({
 export async function run() {
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
-	
+	const messageHub = new HamokMessageHub();
 	const storage_1 = server_1.createMap<string, number>({
 		mapId: 'my-replicated-storage',
 	});
@@ -17,21 +18,12 @@ export async function run() {
 		mapId: 'my-replicated-storage',
 	});
 
-	server_1.on('message', server_2.accept.bind(server_2));
-	server_2.on('message', server_1.accept.bind(server_1));
-	
-	server_1.addRemotePeerId(server_2.localPeerId);
-	server_2.addRemotePeerId(server_1.localPeerId);
-	
-	server_1.start();
-	server_2.start();
+	messageHub.add(server_1, server_2);
 
 	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
+		server_1.join(),
+		server_2.join(),
 	]);
-
-	logger.info('Leader changed');
 
 	const value_1 = 1;
 	const value_2 = 2;
@@ -123,8 +115,8 @@ export async function run() {
 	logger.debug(`After deleted getting value from server1: ${storage_1.get('key')}`);
 	logger.debug(`After deleted getting value from server2: ${storage_2.get('key')}`);
 
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

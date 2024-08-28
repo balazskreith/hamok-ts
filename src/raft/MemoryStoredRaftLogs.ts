@@ -217,18 +217,18 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 		return this._entries.get(index);
 	}
 
-	public collectEntries(startIndex: number, endIndex?: number): HamokMessage[] {
-		const result: HamokMessage[] = [];
+	public collectEntries(startIndex: number, endIndex?: number): LogEntry[] {
+		const result: LogEntry[] = [];
 		let missingEntries = 0;
 
 		if (endIndex == undefined) {
 			endIndex = this._nextIndex;
 		} else if (endIndex < startIndex) {
-			logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but endIndex is smaller than startIndex.', startIndex);
+			logger.warn('Requested to collect entries, startIndex: %d, endIndex: %d, but endIndex is smaller than startIndex.', startIndex, endIndex);
 			
 			return [];
 		} else if (this._nextIndex < endIndex) {
-			logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but endIndex is higher than the nextIndex.', startIndex, endIndex);
+			logger.warn('Requested to collect entries, startIndex: %d, endIndex: %d, but endIndex is higher than the nextIndex.', startIndex, endIndex);
 			
 			endIndex = this._nextIndex;
 		} else {
@@ -243,11 +243,11 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 				++missingEntries;
 				continue;
 			}
-			result.push(logEntry.entry);
+			result.push(logEntry);
 		}
 		if (0 < missingEntries) {
 			if (!this._mssingEntriesLogged) {
-				logger.warn('Requested to collect entries, startIndex: {}, endIndex: {}, but missing {} entries.', startIndex, this.nextIndex, missingEntries);
+				logger.warn('Requested to collect entries, startIndex: %d, endIndex: %d, but missing %d entries.', startIndex, this.nextIndex, missingEntries);
 				this._mssingEntriesLogged = true;
 			}
 		} else if (this._mssingEntriesLogged) {
@@ -314,6 +314,8 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 			// infinite
 			return;
 		}
+		logger.trace('Expiring logs %o', this.config);
+
 		const thresholdInMs = Date.now() - this.config.expirationTimeInMs;
 		let expiredLogIndex = -1;
 
@@ -329,14 +331,18 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 				this._firstIndex = index + 1;
 				continue;
 			}
+			logger.trace('Log %d created at %d, elapsedMs %d threshold %d', index, logEntry.timestamp, Date.now() - logEntry.timestamp, thresholdInMs);
 			if (thresholdInMs <= logEntry.timestamp) {
 				break;
 			}
 			expiredLogIndex = index;
 		}
+
+		logger.trace('Expired log index is %d', expiredLogIndex);
 		if (expiredLogIndex < 0) {
 			return;
 		}
+		logger.trace('nextIndex %d, expiredLogIndex %d, firstIndex %d', this._nextIndex, expiredLogIndex, this._firstIndex);
 		if (this._nextIndex <= expiredLogIndex || expiredLogIndex < this._firstIndex) {
 			return;
 		}
@@ -356,6 +362,7 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 					this._memoryEstimateBytesLength -= logEntry.entry.values.length + logEntry.entry.keys.length;
 					
 					this.emit('expired', index, logEntry.entry);
+					this.emit('removed', index, logEntry.entry);
 				}
 				
 			}

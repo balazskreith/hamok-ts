@@ -28,7 +28,7 @@ const cache_2 = server_2.createRemoteMap<string, CachedItem>({
 });
 
 
-async function run() {
+export async function run() {
 	setHamokLogLevel('warn');
 	// let's just clear the map on start
 	await subscriber.subscribe('hamok-channel');
@@ -76,8 +76,8 @@ async function run() {
 	await cache_1.clear();
 	await cache_2.clear();
 	
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

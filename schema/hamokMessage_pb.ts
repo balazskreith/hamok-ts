@@ -145,6 +145,11 @@ export class HamokMessage extends Message<HamokMessage> {
    */
   prevValue?: Uint8Array;
 
+  /**
+   * @generated from field: optional bytes snapshot = 29;
+   */
+  snapshot?: Uint8Array;
+
   constructor(data?: PartialMessage<HamokMessage>) {
     super();
     proto2.util.initPartial(data, this);
@@ -180,6 +185,7 @@ export class HamokMessage extends Message<HamokMessage> {
     { no: 26, name: "sequence", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 27, name: "lastMessage", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 28, name: "prevValue", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 29, name: "snapshot", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HamokMessage {
@@ -502,6 +508,22 @@ export enum HamokMessage_MessageType {
    * @generated from enum value: STORAGE_APPLIED_COMMIT_NOTIFICATION = 60;
    */
   STORAGE_APPLIED_COMMIT_NOTIFICATION = 60,
+
+  /**
+   * *
+   * Notification from an endpoint created a storage and wants to join to the grid
+   *
+   * @generated from enum value: STORAGE_HELLO_NOTIFICATION = 61;
+   */
+  STORAGE_HELLO_NOTIFICATION = 61,
+
+  /**
+   * *
+   * Notification about the state of the storage as a response for the hello notification
+   *
+   * @generated from enum value: STORAGE_STATE_NOTIFICATION = 62;
+   */
+  STORAGE_STATE_NOTIFICATION = 62,
 }
 // Retrieve enum metadata with: proto2.getEnumType(HamokMessage_MessageType)
 proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.HamokMessage.MessageType", [
@@ -540,6 +562,8 @@ proto2.util.setEnumType(HamokMessage_MessageType, "io.github.hamok.dev.schema.Ha
   { no: 58, name: "UPDATE_ENTRIES_NOTIFICATION" },
   { no: 59, name: "ENTRY_UPDATED_NOTIFICATION" },
   { no: 60, name: "STORAGE_APPLIED_COMMIT_NOTIFICATION" },
+  { no: 61, name: "STORAGE_HELLO_NOTIFICATION" },
+  { no: 62, name: "STORAGE_STATE_NOTIFICATION" },
 ]);
 
 /**

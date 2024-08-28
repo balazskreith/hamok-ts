@@ -78,6 +78,8 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 	}
 
 	public encodeHelloNotification(notification: HelloNotification): HamokMessage {
+		logger.trace('encodeHelloNotification(): notification.customData %o', notification);
+		
 		return new HamokMessage({
 			// eslint-disable-next-line camelcase
 			protocol: HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL,
@@ -86,6 +88,7 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 			destinationId: notification.destinationPeerId,
 			raftLeaderId: notification.raftLeaderId,
 			keys: notification.customData ? [ strCodec.encode(notification.customData) ] : [],
+			requestId: notification.requestId,
 		});
 	}
 
@@ -93,13 +96,14 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		if (message.type !== MessageType.HELLO_NOTIFICATION) {
 			throw new Error('decodeHelloNotification(): Message type must be HELLO_NOTIFICATION');
 		}
-		const customData = message.values.length === 1 ? strCodec.decode(message.values[0]) : undefined;
+		const customData = message.keys.length === 1 ? strCodec.decode(message.keys[0]) : undefined;
 
 		return new HelloNotification(
 			message.sourceId!,
 			message.destinationId,
 			message.raftLeaderId,
-			customData
+			customData,
+			message.requestId,
 		);
 	}
 
@@ -126,7 +130,10 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 
 	public encodeEndpointStateNotification(notification: EndpointStatesNotification): HamokMessage {
 		const activeEndpointIds = setToArray<string>(notification.activeEndpointIds);
-        
+		const snapshot = notification.snapshot ? strCodec.encode(notification.snapshot) : undefined;
+		
+		logger.trace('encodeEndpointStateNotification(): activeEndpointIds %s', activeEndpointIds);
+
 		return new HamokMessage({
 			// eslint-disable-next-line camelcase
 			protocol: HamokMessageProtocol.GRID_COMMUNICATION_PROTOCOL,
@@ -138,7 +145,8 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 			raftLeaderNextIndex: notification.leaderNextIndex,
 			raftNumberOfLogs: notification.numberOfLogs,
 			activeEndpointIds,
-			values: notification.customData ? [ strCodec.encode(notification.customData) ] : [],
+			snapshot,
+			requestId: notification.requestId,
 		});
 	}
 
@@ -146,9 +154,12 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 		if (message.type !== MessageType.ENDPOINT_STATES_NOTIFICATION) {
 			throw new Error('decodeEndpointStateNotification(): Message type must be ENDPOINT_STATES_NOTIFICATION');
 		}
+
+		logger.trace('decodeEndpointStateNotification(): activeEndpointIds %s', message.activeEndpointIds);
+
 		const activeEndpointIds = arrayToSet<string>(message.activeEndpointIds);
-		const customData = message.values.length === 1 ? strCodec.decode(message.values[0]) : undefined;
-		
+		const snapshot = message.snapshot ? strCodec.decode(message.snapshot) : undefined;
+
 		return new EndpointStatesNotification(
 			message.sourceId!,
 			message.destinationId!,
@@ -157,7 +168,8 @@ export class HamokGridCodec implements HamokCodec<Input, HamokMessage> {
 			message.raftLeaderNextIndex!,
 			message.raftNumberOfLogs!,
 			activeEndpointIds,
-			customData
+			snapshot,
+			message.requestId,
 		);
 	}
 

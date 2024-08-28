@@ -1,5 +1,6 @@
 import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
+import { HamokMessageHub } from './utils/HamokMessageHub';
 
 const logger = pino.pino({
 	name: 'queue-push-pop-example',
@@ -10,22 +11,14 @@ export async function run() {
 
 	const server_1 = new Hamok();
 	const server_2 = new Hamok();
+	const messageHub = new HamokMessageHub();
 	
-	server_1.on('message', server_2.accept.bind(server_2));
-	server_2.on('message', server_1.accept.bind(server_1));
-	
-	server_1.addRemotePeerId(server_2.localPeerId);
-	server_2.addRemotePeerId(server_1.localPeerId);
-	
-	server_1.start();
-	server_2.start();
+	messageHub.add(server_1, server_2);
 
 	await Promise.all([
-		new Promise(resolve => server_1.once('leader-changed', resolve)),
-		new Promise(resolve => server_2.once('leader-changed', resolve)),
+		server_1.join(),
+		server_2.join(),
 	]);
-
-	logger.info('Leader changed');
 
 	const queue_1 = server_1.createQueue<number>({
 		queueId: 'my-distributed-queue',
@@ -70,8 +63,8 @@ export async function run() {
 
 	logger.debug('Second round of popped values from distributed queue by server_1: %s, server_2: %s', popppedValue_3 ?? 'empty', popppedValue_4 ?? 'empty');
 
-	server_1.stop();
-	server_2.stop();
+	server_1.close();
+	server_2.close();
 }
 
 if (require.main === module) {

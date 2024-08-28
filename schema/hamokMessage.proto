@@ -193,6 +193,16 @@ message HamokMessage {
     */
     STORAGE_APPLIED_COMMIT_NOTIFICATION = 60;
 
+    /**
+    * Notification from an endpoint created a storage and wants to join to the grid
+    */
+    STORAGE_HELLO_NOTIFICATION = 61;
+
+    /**
+    * Notification about the state of the storage as a response for the hello notification
+    */
+    STORAGE_STATE_NOTIFICATION = 62;
+
   }
 
   enum MessageProtocol {
@@ -243,4 +253,5 @@ message HamokMessage {
   optional bool lastMessage = 27;
 
   optional bytes prevValue = 28;
+  optional bytes snapshot = 29;
 }
