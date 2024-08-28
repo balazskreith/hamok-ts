@@ -100,7 +100,6 @@ A class for managing events and subscriptions in a distributed system.
 - **notify**<K extends keyof T>(`event: K`, `...args: T[K]`): `void` - Notifies all subscribed listeners of an event.
 - **export**(): `HamokEmitterSnapshot` - Exports the current state of the emitter.
 - **import**(`snapshot: HamokEmitterSnapshot`): `void` - Imports the state from a snapshot.
-- **sync**(): `Promise<void>` - Synchronizes the emitter state with the remote peers (wait for the commitHead in hamok).
 
 ### Events
 

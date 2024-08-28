@@ -111,7 +111,6 @@ A class for managing a distributed queue with event-driven capabilities.
 - **peek**(): `T | undefined` - Returns the value at the front of the queue without removing it.
 - **clear**(): `Promise<void>` - Clears the queue.
 - **close**(): `void` - Closes the queue and releases any held resources.
-- **sync**(): `Promise<void>` - Synchronizes the queue with the remote peers. (waiting for the commitHead in hamok)
 
 #### Events
 

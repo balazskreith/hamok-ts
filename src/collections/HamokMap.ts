@@ -239,13 +239,9 @@ export class HamokMap<K, V> extends EventEmitter {
 	public get id(): string {
 		return this.connection.config.storageId;
 	}
-
+	
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
-	}
-
-	public async sync(): Promise<this> {
-		return this.connection.grid.waitUntilCommitHead().then(() => this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {

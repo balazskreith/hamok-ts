@@ -294,7 +294,7 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 	}
 
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
