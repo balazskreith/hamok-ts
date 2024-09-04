@@ -150,7 +150,7 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						insertedEntries.set(key, value);
 					}
 
-					await this.remoteMap.setAll(request.entries);
+					await this.remoteMap.setAll(request.entries, () => void 0);
 					
 					return insertedEntries;
 				}, commitIndex, (insertedEntries) => {
@@ -209,7 +209,7 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 						// logger.warn('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
 	
 						if (existingValue && this.equalValues(existingValue, request.prevValue)) {
-							await this.remoteMap.set(key, value);
+							await this.remoteMap.set(key, value, () => void 0);
 							updatedEntries.push([ key, existingValue, value ]);
 							// logger.warn('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
 						}
