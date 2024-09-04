@@ -68,6 +68,14 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 					}
 				}
 				logger.info('DeleteEntriesRequest is received, %o is removed from the subscription list for %s', removedPeerIds, this.id);
+
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'DeleteEntriesResponse',
+						request.createResponse(new Set(removedPeerIds)),
+						request.sourceEndpointId
+					);
+				}
 			})
 			.on('RemoveEntriesRequest', (request) => {
 				// this is for the subscription to manage, and to remove the source endpoint from the list
@@ -205,8 +213,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				if (0 < this._removedPeerIdsBuffer.length) {
 					this.connection.requestDeleteEntries(new Set(this._removedPeerIdsBuffer))
 						.then(() => (this._removedPeerIdsBuffer = []))
-						.catch(() => {
-							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s', this._removedPeerIdsBuffer, this.id);
+						.catch((err) => {
+							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s. error: %o', this._removedPeerIdsBuffer, this.id, err);
 						});
 				}
 			})

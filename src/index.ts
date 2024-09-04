@@ -15,7 +15,7 @@ export {
 	HamokMap,
 } from './collections/HamokMap';
 export {
-	HamokRemoteMap
+	HamokRemoteMap,
 } from './collections/HamokRemoteMap';
 export {
 	HamokQueue
@@ -45,6 +45,7 @@ export {
 } from './raft/LogEntry';
 export { 
 	setHamokLogLevel, 
+	addHamokLogTransport,
 	HamokLogLevel 
 } from './common/logger';
 export { 
@@ -54,7 +55,8 @@ export {
 	BaseMap
 } from './collections/BaseMap';
 export {
-	RemoteMap
+	RemoteMap,
+	RemoteMapUpdateResult,
 } from './collections/RemoteMap';
 export { 
 	HamokCodec, 

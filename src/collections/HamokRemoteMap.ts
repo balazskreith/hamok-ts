@@ -183,11 +183,13 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 					}
 				});
 			})
-			.on('EntriesRemovedNotification', (removedEntries) => removedEntries.entries.forEach((v, k) => this.emit('remove', k, v)))
+			.on('EntriesRemovedNotification', (removedEntries) => {
+				removedEntries.entries.forEach((v, k) => this.emit('remove', k, v));
+			})
 			.on('UpdateEntriesRequest', (request, commitIndex) => {
 				// logger.warn('Accepting UpdateEntriesRequest %s, commitIndex: %d', request.requestId, commitIndex);
 				this._executeIfLeader(async () => {
-					logger.trace('%s UpdateEntriesRequest: %o, %s', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '));
+					// logger.warn('%s UpdateEntriesRequest: %o, %s, prevValue: %o', this.connection.grid.localPeerId, request, [ ...request.entries ].join(', '), request.prevValue);
 
 					const updatedEntries: [K, V, V][] = [];
 					const insertedEntries: [K, V][] = [];
@@ -204,11 +206,12 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 	
 						const existingValue = await this.remoteMap.get(key);
 	
-						logger.trace('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
+						// logger.warn('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
 	
 						if (existingValue && this.equalValues(existingValue, request.prevValue)) {
-							this.remoteMap.set(key, value);
+							await this.remoteMap.set(key, value);
 							updatedEntries.push([ key, existingValue, value ]);
+							// logger.warn('Conditional update request: %s, %s, %s, %s', key, value, existingValue, request.prevValue);
 						}
 					} else {
 						await this.remoteMap.setAll(request.entries, ({ inserted, updated }) => {
@@ -226,6 +229,11 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 					);
 
 					if (this.emitEvents) {
+						logger.trace('Emitting events for %s, insertedEntries: %s, updatedEntries: %s', 
+							this.connection.grid.localPeerId,
+							insertedEntries.map(([ key, value ]) => `${key}=${value}`).join(', '),
+							updatedEntries.map(([ key, oldValue, newValue ]) => `${key}=${JSON.stringify(oldValue)}=>${JSON.stringify(newValue)}`).join(', ')
+						);
 						insertedEntries.forEach(([ key, value ]) => this.emit('insert', key, value));
 						this.connection.notifyEntriesInserted(new Map(insertedEntries), this.connection.grid.remotePeerIds);
 	
@@ -237,7 +245,9 @@ export class HamokRemoteMap<K, V> extends EventEmitter {
 				});
 				
 			})
-			.on('EntryUpdatedNotification', ({ key, newValue, oldValue }) => this.emit('update', key, oldValue, newValue))
+			.on('EntryUpdatedNotification', ({ key, newValue, oldValue }) => {
+				this.emit('update', key, oldValue, newValue);
+			})
 			.on('leader-changed', (leaderId) => {
 				// this is all we need to know
 				this._leader = leaderId === this.connection.grid.localPeerId;
