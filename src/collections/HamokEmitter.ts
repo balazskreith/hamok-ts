@@ -58,12 +58,12 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			.on('DeleteEntriesRequest', (request) => {
 				const removedPeerIds = [ ...request.keys ];
 
-				for (const subscribedPeerIds of [ ...this._subscriptions.values() ]) {
+				for (const [ eventType, subscribedPeerIds ] of [ ...this._subscriptions.entries() ]) {
 					for (const removedPeerId of removedPeerIds) {
 						subscribedPeerIds.delete(removedPeerId);
 
 						if (subscribedPeerIds.size < 1) {
-							this._subscriptions.delete(removedPeerId);
+							this._subscriptions.delete(eventType);
 						}
 					}
 				}

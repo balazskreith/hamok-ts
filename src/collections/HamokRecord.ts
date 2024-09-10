@@ -7,7 +7,7 @@ import { HamokCodec } from '../common/HamokCodec';
 
 const logger = createLogger('HamokMap');
 
-export type HamokRecordObject = Record<string, unknown>;
+export type HamokRecordObject = DatabaseFrameConditions<string, unknown>;
 
 type InsertRemovePayload<T, K extends keyof T> = {
 	key: K;
