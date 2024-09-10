@@ -260,6 +260,12 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		return this._closed;
 	}
 
+	public get instance(): T {
+		return {
+			...this._object
+		} as T;
+	}
+
 	public close(): void {
 		if (this._closed) return;
 		this._closed = true;
