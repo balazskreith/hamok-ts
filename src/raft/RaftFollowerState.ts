@@ -153,10 +153,10 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
 		logger.trace('%s Received a vote request %o, votedFor: %s', localPeerId, request, props.votedFor);
-		if (raftEngine.leaderId !== undefined) {
-			// if we know the leader, we should not vote for anyone else, until the leader is alive
-			return messageEmitter.send(request.createResponse(false));
-		}
+		// if (raftEngine.leaderId !== undefined) {
+		// if we know the leader, we should not vote for anyone else, until the leader is alive
+		// return messageEmitter.send(request.createResponse(false));
+		// }
 		if (request.term <= props.currentTerm) {
 			// someone requested a vote from a previous or equal term.
 			return messageEmitter.send(request.createResponse(false));
