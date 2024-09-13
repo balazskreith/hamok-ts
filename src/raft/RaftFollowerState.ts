@@ -152,13 +152,15 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		messageEmitter.send(response);
 	};
 	const voteRequestListener = (request: RaftVoteRequest) => {
-		logger.trace('%s Received a vote request %o, votedFor: %s', localPeerId, request, props.votedFor);
+		logger.debug('%s Received a vote request %o, votedFor: %s', localPeerId, request, props.votedFor);
 		// if (raftEngine.leaderId !== undefined) {
 		// if we know the leader, we should not vote for anyone else, until the leader is alive
 		// return messageEmitter.send(request.createResponse(false));
 		// }
 		if (request.term <= props.currentTerm) {
 			// someone requested a vote from a previous or equal term.
+			logger.warn('The candidate %s requested a vote from a previous or equal term. The current term is %d.', request.candidateId, props.currentTerm);
+			
 			return messageEmitter.send(request.createResponse(false));
 		}
         
@@ -167,6 +169,8 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 			if (request.lastLogIndex < logs.commitIndex) {
 				// if the highest index of the candidate is smaller than the commit index of this,
 				// then that candidate should not lead this cluster, and wait for another leader who can
+				logger.warn('The candidate %s has a smaller last log index than the commit index of this follower %s. The candidate should not lead this cluster.', request.candidateId, localPeerId);
+				
 				return messageEmitter.send(request.createResponse(false));
 			}    
 		}
@@ -209,6 +213,7 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 		}
 		// we don't know a leader at this point
 		raftEngine.leaderId = undefined;
+		raftEngine.props.votedFor = undefined;
 		if (raftEngine.remotePeers.size < 1) {
 			// if we are alone, there is no point to start an election
 			// so we just restart the timer
