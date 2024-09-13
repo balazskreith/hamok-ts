@@ -136,6 +136,70 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 				}
 			})
 			.on('UpdateEntriesRequest', (request) => {
+				if (!request.prevValue) return; // the other listener will handle this
+				const updatedEntries: [keyof T, T[keyof T], T[keyof T]][] = [];
+				const insertedEntries: [keyof T, T[keyof T]][] = [];
+
+				const prevValue = JSON.parse(request.prevValue);
+				// check
+				let ok = true;
+
+				for (const [ key, value ] of Object.entries(prevValue)) {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					if (this.equalValues(this._object[key] as any, value as any)) continue;
+					ok = false;
+					break;
+				}
+				if (!ok) {
+					// respond false;
+					return;
+				}
+				for (const [ key, encodedValue ] of request.entries) {
+					const newValue = this._decodeValue(key, encodedValue);
+					const existingValue = this._object[key];
+					
+					this._object[key as keyof T] = newValue;
+					if (existingValue) updatedEntries.push([ key, existingValue, newValue ]);
+					else insertedEntries.push([ key, newValue ]);
+					
+				}
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					// some special response because this is used in updateIf
+				}
+				insertedEntries.forEach(([ key, value ]) => this.emit('insert', { key, value }));
+				updatedEntries.forEach(([ key, oldValue, newValue ]) => this.emit('update', { key, oldValue, newValue }));
+			})
+			.on('UpdateEntriesRequest', (request) => {
+				if (request.prevValue) return;
+
+				const updatedEntries: [keyof T, T[keyof T], T[keyof T]][] = [];
+				const insertedEntries: [keyof T, T[keyof T]][] = [];
+
+				for (const [ key, encodedValue ] of request.entries) {
+					const existingValue = this._object[key];
+					const decodedNewValue = this._decodeValue(key, encodedValue);
+					
+					if (existingValue === undefined) {
+						insertedEntries.push([ key, this._decodeValue(key, encodedValue) ]);
+					} else {
+						updatedEntries.push([ key, existingValue, decodedNewValue ]);
+					}
+
+					this._object[key as keyof T] = decodedNewValue;
+				}
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'UpdateEntriesResponse',
+						request.createResponse(new Map<string, string>(
+							updatedEntries.map(([ key, oldValue ]) => [ key as string, this._encodeValue(key, oldValue) ]))
+						),
+						request.sourceEndpointId
+					);
+				}
+				insertedEntries.forEach(([ key, value ]) => this.emit('insert', { key, value }));
+				updatedEntries.forEach(([ key, oldValue, newValue ]) => this.emit('update', { key, oldValue, newValue }));
+			})
+			.on('UpdateEntriesRequest', (request) => {
 
 				const updatedEntries: [keyof T, T[keyof T], T[keyof T]][] = [];
 				const insertedEntries: [keyof T, T[keyof T]][] = [];
@@ -343,6 +407,35 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	}
 
 	public async updateIf<K extends keyof T>(key: K, value: T[K], oldValue: T[K]): Promise<boolean> {
+		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
+
+		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
+		
+		return (await this.connection.requestUpdateEntries(
+			Collections.mapOf([ key as string, this._encodeValue(key, value) ]),
+			undefined,
+			this._encodeValue(key, oldValue)
+		)).get(key as string) !== undefined;
+	}
+
+	public async updateIf2<K extends keyof T>(key: K, value: T[K], oldValue: T[K]): Promise<boolean> {
+		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+
+		await this._initializing;
+
+		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
+		const newValue: Partial<T> = {};
+		const prevValue: Partial<T> = {};
+
+		newValue[key] = value;
+		prevValue[key] = oldValue;
+		
+		return this.instanceUpdateIf(newValue, prevValue);
+	}
+
+	public async instanceUpdateIf(newValue: Partial<T>, oldValue: Partial<T>): Promise<boolean> {
 		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
 
 		await this._initializing;
