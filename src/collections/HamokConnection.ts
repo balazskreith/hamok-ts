@@ -875,19 +875,19 @@ export class HamokConnection<K, V> extends EventEmitter {
 			if (!this.connected) {
 				await new Promise<void>((resolve, reject) => {
 					const connected = () => {
-						resolve();
 						this.off('disconnected', disconnected);
 						this.off('close', closed);
+						resolve();
 					};
 					const disconnected = () => {
-						reject('disconnected');
 						this.off('connected', connected);
 						this.off('close', closed);
+						reject('disconnected');
 					};
 					const closed = () => {
-						reject('closed');
 						this.off('connected', connected);
 						this.off('disconnected', disconnected);
+						reject('closed');
 					};
 	
 					this.once('connected', connected);
