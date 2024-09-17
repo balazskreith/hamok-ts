@@ -24,6 +24,7 @@
 		"dev:common:2": "nodemon -x ts-node src/common-readme-example.ts | pino-pretty",
 		"dev:common:3": "nodemon -x ts-node src/common-join-leave-rejoin-example.ts | pino-pretty",
 		"dev:common:4": "nodemon -x ts-node src/common-waiting-example.ts | pino-pretty",
+		"dev:common:5": "nodemon -x ts-node src/common-join-leave-rejoin-example-2.ts | pino-pretty",
 		"dev:redis:1": "nodemon -x ts-node src/redis-remote-map-example.ts | pino-pretty",
 		"dev:redis:2": "nodemon -x ts-node src/redis-dynamic-record-example.ts | pino-pretty",
 		"dev:redis:3": "nodemon -x ts-node src/redis-job-executing-example.ts | pino-pretty",

@@ -173,35 +173,36 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 					);
 				}
 			})
-			.on('remote-peer-removed', (remotePeerId) => {
-				if (this.connection.grid.leaderId !== this.connection.localPeerId) {
-					if (this.connection.grid.leaderId === undefined) {
-						this._removedPeerIdsBuffer.push(remotePeerId);
-					}
+			// this is problematic if we a bit more flexible about the remote peers
+			// .on('remote-peer-removed', (remotePeerId) => {
+			// 	if (this.connection.grid.leaderId !== this.connection.localPeerId) {
+			// 		if (this.connection.grid.leaderId === undefined) {
+			// 			this._removedPeerIdsBuffer.push(remotePeerId);
+			// 		}
 					
-					return;
-				}
-				let retried = 0;
-				const process = async (): Promise<unknown> => {
-					if (this.connection.grid.leaderId === undefined) {
-						return Promise.resolve(this._removedPeerIdsBuffer.push(remotePeerId));
-					} else if (this.connection.grid.leaderId !== this.connection.localPeerId) {
-						// not our problem.
-						return Promise.resolve();
-					}
-					try {
-						return this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
-					} catch (err) {
-						logger.warn('Error while requesting to remove endpoint %s, from subscriptions in emitter %s, error: %o', remotePeerId, this.id, err);
+		// 		return;
+		// 	}
+		// 	let retried = 0;
+		// 	const process = async (): Promise<unknown> => {
+		// 		if (this.connection.grid.leaderId === undefined) {
+		// 			return Promise.resolve(this._removedPeerIdsBuffer.push(remotePeerId));
+		// 		} else if (this.connection.grid.leaderId !== this.connection.localPeerId) {
+		// 			// not our problem.
+		// 			return Promise.resolve();
+		// 		}
+		// 		try {
+		// 			return this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
+		// 		} catch (err) {
+		// 			logger.warn('Error while requesting to remove endpoint %s, from subscriptions in emitter %s, error: %o', remotePeerId, this.id, err);
 
-						if (++retried < 10) {
-							return process();
-						}
-					}
-				};
+		// 			if (++retried < 10) {
+		// 				return process();
+		// 			}
+		// 		}
+		// 	};
 				
-				process().catch(() => void 0);
-			})
+			// 	process().catch(() => void 0);
+			// })
 			.on('leader-changed', (leaderId) => {
 				if (leaderId !== this.connection.grid.localPeerId) {
 					if (leaderId !== undefined) {
