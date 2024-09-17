@@ -58,16 +58,24 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			.on('DeleteEntriesRequest', (request) => {
 				const removedPeerIds = [ ...request.keys ];
 
-				for (const subscribedPeerIds of [ ...this._subscriptions.values() ]) {
+				for (const [ eventType, subscribedPeerIds ] of [ ...this._subscriptions.entries() ]) {
 					for (const removedPeerId of removedPeerIds) {
 						subscribedPeerIds.delete(removedPeerId);
 
 						if (subscribedPeerIds.size < 1) {
-							this._subscriptions.delete(removedPeerId);
+							this._subscriptions.delete(eventType);
 						}
 					}
 				}
 				logger.info('DeleteEntriesRequest is received, %o is removed from the subscription list for %s', removedPeerIds, this.id);
+
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'DeleteEntriesResponse',
+						request.createResponse(new Set(removedPeerIds)),
+						request.sourceEndpointId
+					);
+				}
 			})
 			.on('RemoveEntriesRequest', (request) => {
 				// this is for the subscription to manage, and to remove the source endpoint from the list
@@ -206,8 +214,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 				if (0 < this._removedPeerIdsBuffer.length) {
 					this.connection.requestDeleteEntries(new Set(this._removedPeerIdsBuffer))
 						.then(() => (this._removedPeerIdsBuffer = []))
-						.catch(() => {
-							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s', this._removedPeerIdsBuffer, this.id);
+						.catch((err) => {
+							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s. error: %o', this._removedPeerIdsBuffer, this.id, err);
 						});
 				}
 			})
@@ -264,11 +272,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
-	}
-
-	public async sync(): Promise<this> {
-		return this.connection.grid.waitUntilCommitHead().then(() => this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {

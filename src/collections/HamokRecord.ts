@@ -253,15 +253,17 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 	}
 
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
-	}
-
-	public async sync(): Promise<this> {
-		return this.connection.grid.waitUntilCommitHead().then(() => this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
 		return this._closed;
+	}
+
+	public get instance(): T {
+		return {
+			...this._object
+		} as T;
 	}
 
 	public close(): void {
@@ -305,6 +307,24 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 
 		return this._decodeValue(key as string, respondedValue) as T[K];
 	}
+
+	// public async addToList<K extends keyof T, V extends T[K] extends ArrayLike<unknown> ? T[K][number] : never>(key: K, item: V): Promise<void> {
+	// 	key;
+	// 	item;
+	// 	await this.ready;
+	// }
+
+	// public async removeFromList<K extends keyof T, V extends T[K] extends ArrayLike<unknown> ? T[K][number] : never>(key: K, item: V): Promise<void> {
+	// 	key;
+	// 	item;
+	// 	await this.ready;
+	// }
+
+	// public async changeNumBy<K extends keyof T, V extends T[K] & number>(key: K, byValue: V): Promise<void> {
+	// 	key;
+	// 	byValue;
+	// 	await this.ready;
+	// }
 
 	public async insert<K extends keyof T>(key: K, value: T[K]): Promise<T[K] | undefined> {
 		if (this._closed) throw new Error(`Cannot set an entry on a closed storage (${this.id})`);
@@ -411,3 +431,8 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		return this._payloadsCodec?.get(key as keyof T) ?? JSON.parse(value);
 	}
 }
+
+// const record: HamokRecord<{ foo: number, bar: string[] }>;
+
+// record.changeNumBy('bar', 1);
+// record.removeFromList('bar', 'asd');

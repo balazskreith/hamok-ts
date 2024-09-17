@@ -26,3 +26,9 @@ export function setHamokLogLevel(level: HamokLogLevel) {
 	logger.info(`Log level set to ${level}`);
 	childs.forEach((childLogger) => (childLogger.level = logger.level));
 }
+
+export function addHamokLogTransport(options: pino.TransportTargetOptions) {
+	const transport = pino.transport(options);
+
+	pino.pino(transport);
+}

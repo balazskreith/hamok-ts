@@ -1293,8 +1293,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			message.protocol = protocol;
 		}
 
-		// if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
-		logger.trace('%s sending message %o', this.localPeerId, message);
+		// if (message.type === HamokMessageType.ENTRY_UPDATED_NOTIFICATION) 
+		// 	logger.warn('%s sending message %o', this.localPeerId, message);
 
 		if (!destinationPeerIds) {
 			return this.emit('message', message);

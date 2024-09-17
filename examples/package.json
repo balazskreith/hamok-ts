@@ -29,6 +29,8 @@
 		"dev:redis:2": "nodemon -x ts-node src/redis-dynamic-record-example.ts | pino-pretty",
 		"dev:redis:3": "nodemon -x ts-node src/redis-job-executing-example.ts | pino-pretty",
 		"dev:redis:4": "nodemon -x ts-node src/redis-recording-job-example.ts | pino-pretty",
+		"dev:redis:5": "nodemon -x ts-node src/redis-job-manager-example.ts | pino-pretty",
+		"dev:redis:6": "nodemon -x ts-node src/redis-remote-requestmap-example.ts | pino-pretty",
 		"build": "tsc",
 		"test": "jest --config jest.config.js",
 		"lint": "eslint --ext .ts src"
