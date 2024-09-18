@@ -36,3 +36,9 @@ A ready version to use (hopefully)
 - Added auto-rejoin functionality for `Hamok` when the connection is lost, provided it was in the joined state.
 - Fixed a bug where detached remote peers were not detected if the peer was a follower and lost all connections. (Added `_checkRemotePeers` method for this).
 - Added `ready` promise to `Hamok` to await until the `Hamok` is ready and initialized.
+
+### 2.5.1
+
+- Fixed a bug where the leader would not send a `StorageState` notification to a follower when the follower was behind the leader.
+- Fixed bug of remaining remote peer not part of the grid due to follower ENDPOINT_STATE_NOTIFICATION contained a wrong endpoint.
+- Changing follower behavior when falling out of the grid. Instead of trying to collect endpoints, it periodically sends JOIN_NOTIFICATION until a leader is not elected for the endpoint
