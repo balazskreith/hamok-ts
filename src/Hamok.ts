@@ -300,7 +300,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	private readonly _codec = new HamokGridCodec();
 	public readonly grid: HamokGrid;
 
-	private _checkingRemotePeers?: Promise<void>;
+	private _lookingForRemotePeers?: ReturnType<typeof setInterval>;
 
 	public constructor(providedConfig?: Partial<HamokConfig<AppData>>) {
 		super();
@@ -757,6 +757,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	public async submit(entry: HamokMessage): Promise<void> {
+		if (this._closed) throw new Error('Cannot submit on a closed Hamok instance');
 		if (!this.raft.leaderId) {
 			throw new Error(`No leader is elected, cannot submit message type ${entry.type}`);
 		}
@@ -814,6 +815,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	}
 
 	public accept(message: HamokMessage, commitIndex?: number): void {
+		if (this._closed) return;
 		if (message.destinationId && message.destinationId !== this.localPeerId) {
 			return logger.trace('%s Received message address is not matching with the local peer %o', this.localPeerId, message);
 		}
@@ -1042,7 +1044,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 						minNumberOfLogs = notification.numberOfLogs;
 					}
 
-					notification.activeEndpointIds?.forEach((remotePeerId) => (remotePeerId !== this.localPeerId ? remotePeerIds.add(remotePeerId) : void 0));
+					// notification.activeEndpointIds?.forEach((remotePeerId) => (remotePeerId !== this.localPeerId ? remotePeerIds.add(remotePeerId) : void 0));
 					if (notification.sourceEndpointId !== this.localPeerId) {
 						remotePeerIds.add(notification.sourceEndpointId);
 					}
@@ -1088,6 +1090,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		}
 		const raftEngine = this.raft;
 
+		logger.debug('%s Stopping the raft engine', this.localPeerId);
 		clearInterval(this._raftTimer);
 		this._raftTimer = undefined;
 		
@@ -1138,6 +1141,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				const notification = this._codec.decodeJoinNotification(message);
 
 				if (notification.sourcePeerId !== this.localPeerId) {
+					logger.debug('%s Received join notification from %s', this.localPeerId, notification.sourcePeerId);
 					this.addRemotePeerId(notification.sourcePeerId);	
 				} else {
 					logger.debug('%s Received join notification from itself %o', this.localPeerId, notification);
@@ -1253,6 +1257,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		for (const collection of this.storages.values()) {
 			collection.connection.emit('leader-changed', leaderId);
 		}
+		clearInterval(this._lookingForRemotePeers);
+		this._lookingForRemotePeers = undefined;
 
 		if (this.localPeerId === leaderId) {
 			this.on('remote-peer-joined', this._sendEndpointNotificationsToAll);
@@ -1262,8 +1268,10 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			this.off('remote-peer-left', this._sendEndpointNotificationsToAll);
 
 			if (leaderId === undefined) {
+				logger.warn('%s detected that Leader is gone, clearing the remote peers', this.localPeerId);
+				this.raft.remotePeers.clear();
 				// when there is no leader we need to check the remote peers
-				this._checkRemotePeers().catch(() => void 0);
+				this._checkRemotePeers();
 			}
 		}
 	}
@@ -1285,8 +1293,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			message.protocol = protocol;
 		}
 
-		// if (message.protocol !== HamokMessageProtocol.RAFT_COMMUNICATION_PROTOCOL) 
-		logger.trace('%s sending message %o', this.localPeerId, message);
+		// if (message.type === HamokMessageType.ENTRY_UPDATED_NOTIFICATION) 
+		// 	logger.warn('%s sending message %o', this.localPeerId, message);
 
 		if (!destinationPeerIds) {
 			return this.emit('message', message);
@@ -1363,53 +1371,22 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return connection;
 	}
 
-	private async _checkRemotePeers(): Promise<void> {
+	private _checkRemotePeers(): void {
 		if (!this._closed) return;
-		if (this._checkingRemotePeers) {
-			return this._checkingRemotePeers;
+		if (this._lookingForRemotePeers) {
+			return;
 		}
 
 		// if the leader is elected, we don't need to check the remote peers
 		if (this.raft.leaderId !== undefined || !this._run) return;
 
 		logger.debug('_checkRemotePeers(): %s checking remote peers', this.localPeerId);
+		this._lookingForRemotePeers = setInterval(() => {
+			const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId));
 
-		this._checkingRemotePeers = (async () => {
-			try {
-				const response = await this.fetchRemotePeers(1000);
-
-				// we don't need to check the remote peers if the leader is elected meanwhile
-				if (this.raft.leaderId !== undefined || !this._run) return logger.trace('_checkRemotePeers(): %s leader is elected meanwhile', this.localPeerId);
-
-				logger.debug('_checkRemotePeers(): %s received remote peers %o, this peer current remote peers: %s', 
-					this.localPeerId, 
-					response.remotePeers,
-					[ ...this.remotePeerIds ].join(', ')
-				);
-
-				for (const remotePeerId of response.remotePeers) {
-					if (this.remotePeerIds.has(remotePeerId)) continue;
-					if (remotePeerId === this.localPeerId) continue;
-
-					logger.debug('_checkRemotePeers(): %s add remote peer %s', this.localPeerId, remotePeerId);
-					this.addRemotePeerId(remotePeerId);
-				}
-
-				for (const remotePeerId of this.remotePeerIds) {
-					if (response.remotePeers.includes(remotePeerId)) continue;
-					if (remotePeerId === this.localPeerId) continue;
-
-					logger.debug('_checkRemotePeers(): %s remove remote peer %s', this.localPeerId, remotePeerId);
-					this.removeRemotePeerId(remotePeerId);
-				}
-			} catch (err) {
-				logger.warn('_checkRemotePeers(): Failed to fetch remote peers', err);
-			} finally {
-				this._checkingRemotePeers = undefined;
-			}
-		})();
-
-		return this._checkingRemotePeers;
+			// this will trigger the remote endpoint to add this endpoint
+			this._emitMessage(joinMsg);
+		}, Math.max(this.raft.config.followerMaxIdleInMs / 5, 100));
 	}
 
 	private _acceptKeepAliveHamokMessage(message: HamokMessage) {

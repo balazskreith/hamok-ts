@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - main
+      - patch*
   pull_request:
     branches:
       - main
+      - patch*
 
 jobs:
   publish:
@@ -23,10 +25,10 @@ jobs:
 
       - name: Test
         run: yarn test --detectOpenHandles --forceExit
-      
+
       - name: Setup Custom Contexts
         shell: bash
-        run: | 
+        run: |
           echo "##[set-output name=branch;]$(echo ${GITHUB_REF##*/})"
           echo "##[set-output name=version;]$(cat ./package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')"
           echo "##[set-output name=short_sha;]$(git rev-parse --short HEAD)"

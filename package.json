@@ -1,6 +1,6 @@
 {
 	"name": "hamok",
-	"version": "2.5.0",
+	"version": "2.5.1",
 	"description": "Lightweight Distributed Object Storage on RAFT consensus algorithm",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",

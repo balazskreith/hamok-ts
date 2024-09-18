@@ -58,16 +58,24 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 			.on('DeleteEntriesRequest', (request) => {
 				const removedPeerIds = [ ...request.keys ];
 
-				for (const subscribedPeerIds of [ ...this._subscriptions.values() ]) {
+				for (const [ eventType, subscribedPeerIds ] of [ ...this._subscriptions.entries() ]) {
 					for (const removedPeerId of removedPeerIds) {
 						subscribedPeerIds.delete(removedPeerId);
 
 						if (subscribedPeerIds.size < 1) {
-							this._subscriptions.delete(removedPeerId);
+							this._subscriptions.delete(eventType);
 						}
 					}
 				}
 				logger.info('DeleteEntriesRequest is received, %o is removed from the subscription list for %s', removedPeerIds, this.id);
+
+				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
+					this.connection.respond(
+						'DeleteEntriesResponse',
+						request.createResponse(new Set(removedPeerIds)),
+						request.sourceEndpointId
+					);
+				}
 			})
 			.on('RemoveEntriesRequest', (request) => {
 				// this is for the subscription to manage, and to remove the source endpoint from the list
@@ -165,49 +173,41 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 					);
 				}
 			})
-			.on('remote-peer-removed', (remotePeerId) => {
+			.on('remote-peer-removed', async (remotePeerId) => {
 				if (this.connection.grid.leaderId !== this.connection.localPeerId) {
-					if (this.connection.grid.leaderId === undefined) {
-						this._removedPeerIdsBuffer.push(remotePeerId);
-					}
-					
 					return;
 				}
-				let retried = 0;
-				const process = async (): Promise<unknown> => {
-					if (this.connection.grid.leaderId === undefined) {
-						return Promise.resolve(this._removedPeerIdsBuffer.push(remotePeerId));
-					} else if (this.connection.grid.leaderId !== this.connection.localPeerId) {
-						// not our problem.
-						return Promise.resolve();
-					}
+				for (let retried = 0; retried < 10; retried++) {
 					try {
-						return this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
+						await this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
+						break;
 					} catch (err) {
+						if (retried < 8) continue;
 						logger.warn('Error while requesting to remove endpoint %s, from subscriptions in emitter %s, error: %o', remotePeerId, this.id, err);
-
-						if (++retried < 10) {
-							return process();
-						}
+						break;
 					}
-				};
-				
-				process().catch(() => void 0);
+				}
 			})
-			.on('leader-changed', (leaderId) => {
+			.on('leader-changed', async (leaderId) => {
 				if (leaderId !== this.connection.grid.localPeerId) {
-					if (leaderId !== undefined) {
-						this._removedPeerIdsBuffer = [];
-					}
-					
 					return;
 				}
-				if (0 < this._removedPeerIdsBuffer.length) {
-					this.connection.requestDeleteEntries(new Set(this._removedPeerIdsBuffer))
-						.then(() => (this._removedPeerIdsBuffer = []))
-						.catch(() => {
-							logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s', this._removedPeerIdsBuffer, this.id);
-						});
+				const removedPeerIds = new Set<string>();
+
+				for (const [ , subscribedPeerIds ] of this._subscriptions) {
+					for (const subscribedPeerId of subscribedPeerIds) {
+						removedPeerIds.add(subscribedPeerId);
+					}
+				}
+				for (const remotePeerId of this.connection.grid.remotePeerIds) {
+					if (removedPeerIds.has(remotePeerId)) removedPeerIds.delete(remotePeerId);
+				}
+				if (0 < removedPeerIds.size) {
+					try {
+						await this.connection.requestDeleteEntries(removedPeerIds);
+					} catch (err) {
+						logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s. error: %o', removedPeerIds, this.id, err);
+					}
 				}
 			})
 			.on('StorageHelloNotification', (notification) => {
@@ -241,17 +241,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 		logger.trace('Emitter %s is created', this.id);
 
-		this._initializing = new Promise((resolve) => setTimeout(resolve, 20))
-			.then(() => this.connection.join())
-			.then(() => this)
-			.catch((err) => {
-				logger.error('Error while initializing emitter', err);
-
-				return this;
-			})
-			.finally(() => (this._initializing = undefined))
-		;
-		
+		process.nextTick(() => (this._initializing = this._startInitializing()));
 	}
 
 	public get id(): string {
@@ -263,11 +253,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 	}
 
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
-	}
-
-	public async sync(): Promise<this> {
-		return this.connection.grid.waitUntilCommitHead().then(() => this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public get closed() {
@@ -427,5 +413,17 @@ export class HamokEmitter<T extends HamokEmitterEventMap> {
 
 			this._subscriptions.set(event, new Set(peerIds));
 		}
+	}
+
+	private async _startInitializing() {
+		try {
+			await this.connection.join();
+		} catch (err) {
+			logger.error('Error while initializing emitter', err);
+		} finally {
+			this._initializing = undefined;
+		}
+
+		return this;
 	}
 }

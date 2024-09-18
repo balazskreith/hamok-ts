@@ -191,11 +191,7 @@ export class HamokQueue<T> extends EventEmitter {
 	}
 
 	public get ready(): Promise<this> {
-		return this._initializing ?? Promise.resolve(this);
-	}
-
-	public async sync(): Promise<this> {
-		return this.connection.grid.waitUntilCommitHead().then(() => this);
+		return this._initializing ?? this.connection.grid.waitUntilCommitHead().then(() => this);
 	}
 
 	public async push(...values: T[]): Promise<void> {

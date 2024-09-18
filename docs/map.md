@@ -136,10 +136,6 @@ The `HamokMap` class extends `EventEmitter` and emits the following events:
 
   - Retrieves the value associated with the specified key.
 
-- **sync**(): `Promise<void>`
-
-  - Synchronizes the map with the baseMap.
-
 - **removeIf**(`key: K`, `value: V`): `Promise<boolean>`
 
   - Removes the entry if the current value matches the specified value.
