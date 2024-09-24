@@ -1,0 +1,5 @@
+RemoteMap will be dumper and access to the remoteMap without any going to the leader thing, the only thing is the lock!
+and locks will be named so several can be ongoing at the same time with a consensus.
+
+RxProducer, RxConsumer - which can connect to a remote source (key-value sending, so like in kafka, but much simpler here).
+The hamok comes for acknowledgement and consuming in consumerGroup <- RxJs compatible, so backpressure can be handled

@@ -205,13 +205,14 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 					// logger.warn(`Collected ${entries.length} entries, but peer ${peerId} should need ${logs.nextIndex - peerNextIndex}. logs.nextIndex: ${logs.nextIndex}, peerNextIndex: ${peerNextIndex}`);
 				}
 			} else if (0 < unsyncedRemotePeers.size) {
-				unsyncedRemotePeers.delete(peerId);
-				logger.info('%s Peer %s is synced, logs.nextIndex: %d, peerNextIndex: %d', 
-					localPeerId, 
-					peerId, 
-					logs.nextIndex, 
-					peerNextIndex
-				);
+				if (unsyncedRemotePeers.delete(peerId)) {
+					logger.info('%s Peer %s is synced, logs.nextIndex: %d, peerNextIndex: %d', 
+						localPeerId, 
+						peerId, 
+						logs.nextIndex, 
+						peerNextIndex
+					);
+				}
 			}
 			let sentRequest = sentRequests.get(peerId);
 

@@ -109,7 +109,7 @@ export class RaftEngine {
 
 		prevState.close();
 		this._state = newState;
-		
+
 		logger.debug(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
 		
 		if (prevState.stateName === 'candidate' && newState.stateName === 'follower') {
