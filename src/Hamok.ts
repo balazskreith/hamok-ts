@@ -1221,6 +1221,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		if (this.localPeerId === leaderId) {
 			this.on('remote-peer-joined', this._sendEndpointNotificationsToAll);
 			this.on('remote-peer-left', this._sendEndpointNotificationsToAll);
+
+			[ ...this.remotePeerIds ].forEach((peerId) => this._sendEndpointNotification(peerId));
 		} else {
 			this.off('remote-peer-joined', this._sendEndpointNotificationsToAll);
 			this.off('remote-peer-left', this._sendEndpointNotificationsToAll);

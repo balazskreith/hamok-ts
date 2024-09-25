@@ -416,6 +416,14 @@ export class HamokMap<K, V> extends EventEmitter {
 		return this.baseMap[Symbol.iterator]();
 	}
 
+	public entries(): IterableIterator<[K, V]> {
+		return this.baseMap.entries();
+	}
+
+	public values(): IterableIterator<V> {
+		return this.baseMap.values();
+	}
+
 	/**
 	 * Exports the storage data
 	 */
