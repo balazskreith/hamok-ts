@@ -420,34 +420,40 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 		)).get(key as string) !== undefined;
 	}
 
-	public async updateIf2<K extends keyof T>(key: K, value: T[K], oldValue: T[K]): Promise<boolean> {
-		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+	// public async updateIf2<K extends keyof T>(key: K, value: T[K], oldValue: T[K]): Promise<boolean> {
+	// 	if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
 
-		await this._initializing;
+	// 	await this._initializing;
 
-		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
-		const newValue: Partial<T> = {};
-		const prevValue: Partial<T> = {};
+	// 	logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
+	// 	const newValue: Partial<T> = {};
+	// 	const prevValue: Partial<T> = {};
 
-		newValue[key] = value;
-		prevValue[key] = oldValue;
+	// 	newValue[key] = value;
+	// 	prevValue[key] = oldValue;
 		
-		return this.instanceUpdateIf(newValue, prevValue);
-	}
+	// 	return this.instanceUpdateIf(newValue, prevValue);
+	// }
 
-	public async instanceUpdateIf(newValue: Partial<T>, oldValue: Partial<T>): Promise<boolean> {
-		if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
+	// public async instanceUpdateIf(newValue: Partial<T>, oldValue: Partial<T>): Promise<boolean> {
+	// 	if (this._closed) throw new Error(`Cannot update an entry on a closed storage (${this.id})`);
 
-		await this._initializing;
+	// 	await this._initializing;
 
-		logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
+	// 	const entries = new Map<string, string>();
+
+	// 	for (const [ key, value ] of Object.entries(newValue)) {
+	// 		entries.set(key, this._encodeValue(key as keyof T, value as T[keyof T]));
+	// 	}
+
+	// 	logger.trace('%s UpdateIf: %s, %s, %s', this.connection.grid.localPeerId, key, value, oldValue);
 		
-		return (await this.connection.requestUpdateEntries(
-			Collections.mapOf([ key as string, this._encodeValue(key, value) ]),
-			undefined,
-			this._encodeValue(key, oldValue)
-		)).get(key as string) !== undefined;
-	}
+	// 	return (await this.connection.requestUpdateEntries(
+	// 		Collections.mapOf([ key as string, this._encodeValue(key, value) ]),
+	// 		undefined,
+	// 		this._encodeValue(key, oldValue)
+	// 	)).get(key as string) !== undefined;
+	// }
     
 	public async delete<K extends keyof T>(key: K): Promise<boolean> {
 		return (await this.connection.requestDeleteEntries(

@@ -31,6 +31,7 @@
 
 import { Hamok, setHamokLogLevel } from 'hamok';
 import * as pino from 'pino';
+import { HamokMessageHub } from './utils/HamokMessageHub';
 
 const logger = pino.pino({
 	name: 'common-join-example-2',
@@ -39,61 +40,70 @@ const logger = pino.pino({
 
 export async function run() {
 
-	const server_1 = new Hamok({
-		onlyFollower: true,
-	});
-	logger.info('server 1 is %s', server_1.localPeerId);
-	const server1Acceptor = server_1.accept.bind(server_1);
-
-	let server_1_joined = false;
+	const servers = new Map<string, Hamok>();
+	const messageHub = new HamokMessageHub();
+	const addServer = (server: Hamok) => {
+		server.once('close', () => {
+			servers.delete(server.localPeerId);
+			messageHub.remove(server);
+		})
+		servers.set(server.localPeerId, server);
+		messageHub.add(server);
+	}
+	addServer(new Hamok());
 
 	for (let i = 0; i < 10; ++i) {
-		const server_2 = new Hamok();
+		const newServer = new Hamok();
+		const oldServer = servers.values().next().value;
+		addServer(newServer);
 		// by having the communication channel we assume we can inquery remote endpoints
-		logger.info('server 2 is %s', server_2.localPeerId);
 
-		const server2Acceptor = server_2.accept.bind(server_2);
-
-		server_1.on('message', server2Acceptor);
-		server_2.on('message', server1Acceptor);
 
 		const timer = setInterval(() => {
 			logger.debug('\
 				\niteration: %d, \
-				\nserver_1 (%s, state: %s) remotePeers are %s, \
-				\nserver_2 (%s, state: %s) remotePeers are %s',
+				\noldServer (%s, state: %s) remotePeers are %s, \
+				\nnewServer (%s, state: %s) remotePeers are %s',
 				i,
-				server_1.localPeerId,
-				server_1.state,
-				[...server_1.remotePeerIds].join(', '),
-				server_2.localPeerId,
-				server_2.state,
-				[...server_2.remotePeerIds].join(', '),
+				oldServer.localPeerId,
+				oldServer.state,
+				[...oldServer.remotePeerIds].join(', '),
+				newServer.localPeerId,
+				newServer.state,
+				[...newServer.remotePeerIds].join(', '),
 			);
 		}, 1000)
 		
 
 		await Promise.all([
-			server_1_joined ? Promise.resolve() : server_1.join(),
-			server_2.join(),
+			oldServer.join(),
+			newServer.join(),
 		]);
 
-		logger.info('Server 1 and Server 2 joined');
+		logger.info('\
+			\niteration: %d, \
+			\noldServer (%s, state: %s) remotePeers are %s, \
+			\nnewServer (%s, state: %s) remotePeers are %s',
+			i,
+			oldServer.localPeerId,
+			oldServer.state,
+			[...oldServer.remotePeerIds].join(', '),
+			newServer.localPeerId,
+			newServer.state,
+			[...newServer.remotePeerIds].join(', '),
+		);
+	
+		oldServer.close();
 
-		server_2.close();
-
-		server_1.off('message', server2Acceptor);
-		server_2.off('message', server1Acceptor);
-
-		server_1_joined = true;
-		server_1.raft.config.onlyFollower = false;
 		clearInterval(timer);
 	}
 
 	
 	logger.info('Close');
 
-	server_1.close();
+	for (const server of servers.values()) {
+		server.close();
+	}
 }
 
 if (require.main === module) {
