@@ -1231,6 +1231,10 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			this.off('remote-peer-joined', this.broadcastEndpointNotification);
 			this.off('remote-peer-left', this.broadcastEndpointNotification);
 
+			// we don't want any heartbeat measures if we are not the leader
+			this._remoteHeartbeats.forEach((timer) => clearTimeout(timer));
+			this._remoteHeartbeats.clear();
+
 			if (leaderId === undefined) {
 				if (this._closed || !this._run) return;
 
@@ -1362,6 +1366,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	// }
 
 	private _acceptKeepAliveHamokMessage(message: HamokMessage) {
+		if (this.raft.leaderId !== this.raft.localPeerId) return;
 		if (!message.sourceId || message.sourceId === this.localPeerId) return;
 		const remotePeerId = message.sourceId;
 		
@@ -1379,6 +1384,9 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			if (this._joining) {
 				return this._addNoHeartbeatTimer(remotePeerId);
 			}
+			
+			logger.debug('%s No heartbeat from %s', this.localPeerId, remotePeerId);
+			
 			this.emit('no-heartbeat-from', remotePeerId);
 		}, this.raft.config.electionTimeoutInMs);
 
