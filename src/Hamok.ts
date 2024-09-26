@@ -312,7 +312,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this._emitRemotePeerRemoved = this._emitRemotePeerRemoved.bind(this);
 		this.removeRemotePeerId = this.removeRemotePeerId.bind(this);
 		this.addRemotePeerId = this.addRemotePeerId.bind(this);
-		this._sendEndpointNotificationsToAll = this._sendEndpointNotificationsToAll.bind(this);
+		this.broadcastEndpointNotification = this.broadcastEndpointNotification.bind(this);
 
 		const raftLogs = providedConfig?.raftLogs ?? new MemoryStoredRaftLogs({
 			expirationTimeInMs: providedConfig?.logEntriesExpirationTimeInMs ?? 300000,
@@ -361,8 +361,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			this.off('remote-peer-left', this._emitRemotePeerRemoved);
 			
 			// we may add these events along the way
-			this.off('remote-peer-joined', this._sendEndpointNotificationsToAll);
-			this.off('remote-peer-left', this._sendEndpointNotificationsToAll);
+			this.off('remote-peer-joined', this.broadcastEndpointNotification);
+			this.off('remote-peer-left', this.broadcastEndpointNotification);
 		});
 		this.on('no-heartbeat-from', this.removeRemotePeerId);
 		this.on('commit', this._acceptCommit);
@@ -396,6 +396,10 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 	public get run() {
 		return this._run;
+	}
+
+	public get activeRemoteHeartbeats(): IterableIterator<string> {
+		return this._remoteHeartbeats.keys();
 	}
 
 	public get closed() {
@@ -1207,7 +1211,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		}
 	}
 
-	private _sendEndpointNotificationsToAll(): void {
+	public broadcastEndpointNotification(): void {
 		for (const remotePeerId of this.remotePeerIds) {
 			this._sendEndpointNotification(remotePeerId);
 		}
@@ -1219,13 +1223,13 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		}
 
 		if (this.localPeerId === leaderId) {
-			this.on('remote-peer-joined', this._sendEndpointNotificationsToAll);
-			this.on('remote-peer-left', this._sendEndpointNotificationsToAll);
+			this.on('remote-peer-joined', this.broadcastEndpointNotification);
+			this.on('remote-peer-left', this.broadcastEndpointNotification);
 
-			[ ...this.remotePeerIds ].forEach((peerId) => this._sendEndpointNotification(peerId));
+			this.broadcastEndpointNotification();
 		} else {
-			this.off('remote-peer-joined', this._sendEndpointNotificationsToAll);
-			this.off('remote-peer-left', this._sendEndpointNotificationsToAll);
+			this.off('remote-peer-joined', this.broadcastEndpointNotification);
+			this.off('remote-peer-left', this.broadcastEndpointNotification);
 
 			if (leaderId === undefined) {
 				if (this._closed || !this._run) return;

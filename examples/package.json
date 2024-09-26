@@ -14,6 +14,7 @@
 		"dev:record:1": "nodemon -x ts-node src/record-insert-get-example.ts | pino-pretty",
 		"dev:record:2": "nodemon -x ts-node src/record-events-example.ts | pino-pretty",
 		"dev:record:3": "nodemon -x ts-node src/record-dynamic-creating-example.ts | pino-pretty",
+		"dev:record:4": "nodemon -x ts-node src/record-update-if.ts | pino-pretty",
 		"dev:emitter:1": "nodemon -x ts-node src/emitter-example.ts | pino-pretty",
 		"dev:emitter:2": "nodemon -x ts-node src/emitter-catchup-example.ts | pino-pretty",
 		"dev:election:1": "nodemon -x ts-node src/reelection-example.ts | pino-pretty",
