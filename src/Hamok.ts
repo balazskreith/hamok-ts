@@ -244,7 +244,7 @@ export type HamokEventMap = {
 	'remote-peer-joined': [peerId: string],
 	'remote-peer-left': [peerId: string],
 	'leader-changed': [leaderId: string | undefined, prevLeader: string | undefined],
-	'state-changed': [state: RaftStateName],
+	'state-changed': [newState: RaftStateName, prevState: RaftStateName],
 	commit: [commitIndex: number, message: HamokMessage],
 	heartbeat: [],
 	error: [error: Error],
@@ -273,31 +273,17 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	public readonly raft: RaftEngine;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public readonly storages = new Map<string, HamokRecord<any> | HamokMap<any, any> | HamokQueue<any> | HamokRemoteMap<any, any> | HamokEmitter<any>>();
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// public readonly records = new Map<string, HamokRecord<any>>();
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// public readonly maps = new Map<string, HamokMap<any, any>>();
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// public readonly queues = new Map<string, HamokQueue<any>>();
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// public readonly emitters = new Map<string, HamokEmitter<any>>();
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	// public readonly remoteMaps = new Map<string, HamokRemoteMap<any, any>>();
 
 	private _closed = false;
 	private _run = false;
 	// private _joining?: Promise<void>;
 	private _raftTimer?: ReturnType<typeof setInterval>;
-	private readonly _remoteStateRequests = new Map<string, { timer: ReturnType<typeof setTimeout>, responses: EndpointStatesNotification[] }>();
 	private readonly _remoteHeartbeats = new Map<string, ReturnType<typeof setTimeout>>();
 	private readonly _codec = new HamokGridCodec();
 	public readonly grid: HamokGrid;
 
 	private _lookingForRemotePeers?: {
+		waiters: (() => void)[],
 		timer: ReturnType<typeof setTimeout>,
 		close: () => void,
 	};
@@ -309,7 +295,6 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this._emitMessage = this._emitMessage.bind(this);
 		this._acceptLeaderChanged = this._acceptLeaderChanged.bind(this);
 		this._acceptCommit = this._acceptCommit.bind(this);
-		this._emitRemotePeerRemoved = this._emitRemotePeerRemoved.bind(this);
 		this.removeRemotePeerId = this.removeRemotePeerId.bind(this);
 		this.addRemotePeerId = this.addRemotePeerId.bind(this);
 		this.broadcastEndpointNotification = this.broadcastEndpointNotification.bind(this);
@@ -355,19 +340,11 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		);
 
 		this.once('close', () => {
-			this.off('no-heartbeat-from', this.removeRemotePeerId);
 			this.off('commit', this._acceptCommit);
 			this.off('leader-changed', this._acceptLeaderChanged);
-			this.off('remote-peer-left', this._emitRemotePeerRemoved);
-			
-			// we may add these events along the way
-			this.off('remote-peer-joined', this.broadcastEndpointNotification);
-			this.off('remote-peer-left', this.broadcastEndpointNotification);
 		});
-		this.on('no-heartbeat-from', this.removeRemotePeerId);
 		this.on('commit', this._acceptCommit);
 		this.on('leader-changed', this._acceptLeaderChanged);
-		this.on('remote-peer-left', this._emitRemotePeerRemoved);
 	}
 
 	public get appData(): AppData {
@@ -477,29 +454,60 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 		logger.debug('%s added remote peer %s', this.localPeerId, remoteEndpointId);
 
+		if (this.localPeerId === this.raft.leaderId) {
+			this.broadcastEndpointNotification();
+		}
+
 		this.emit('remote-peer-joined', remoteEndpointId);
 	}
 
-	public removeRemotePeerId(remoteEndpointId: string): void {
-		if (!this.raft.remotePeers.delete(remoteEndpointId)) return;
+	public removeRemotePeerId(remotePeerId: string): void {
+		if (!this.raft.remotePeers.delete(remotePeerId)) return;
 
-		logger.debug('%s removed remote peer %s', this.localPeerId, remoteEndpointId);
+		logger.debug('%s removed remote peer %s', this.localPeerId, remotePeerId);
 
-		this.emit('remote-peer-left', remoteEndpointId);
+		if (this.localPeerId === this.raft.leaderId) {
+			this.broadcastEndpointNotification();
+		}
 
-		// if (this.remotePeerIds.size === 0) {
-		// 	if (this._closed || !this._run) return;
-		// 	this.join({
-		// 		// we retry indefinitely if we lost the connection
-		// 		maxRetry: -1,
-		// 		// 
-		// 		fetchRemotePeerTimeoutInMs: 5000,
-		// 	}).catch((err) => {
-		// 		logger.error('Failed to rejoin the grid', err);
-		// 	});
-		// } else {
-		// 	// if I am not the leader I need to fetch the remote peers or at least check who is alive and who is not to be sure we are in the network
-		// }
+		// notify upstream and all connections
+		this.emit('remote-peer-left', remotePeerId);
+		for (const collection of this.storages.values()) {
+			collection.connection.emit('remote-peer-removed', remotePeerId);
+		}
+	}
+
+	private _acceptLeaderChanged(leaderId: string | undefined): void {
+		// let's just reset remote heartbeat measures.
+		// if we are the leader we will receive those, if we are not we don't need them
+		this._remoteHeartbeats.forEach((timer) => clearTimeout(timer));
+		this._remoteHeartbeats.clear();
+
+		// notify all storages about the leader change
+		for (const collection of this.storages.values()) {
+			collection.connection.emit('leader-changed', leaderId);
+		}
+
+		if (this.localPeerId === leaderId) {
+			// we are the leader, we should send the endpoint notification to all remote peers
+			return this.broadcastEndpointNotification();
+		}
+
+		if (leaderId === undefined) {
+			if (this._closed || !this._run) return;
+
+			logger.warn('%s detected that Leader is gone, clearing the remote peers', this.localPeerId);
+			// this._stopRaftEngine();
+			[ ...this.remotePeerIds ].forEach((peerId) => this.removeRemotePeerId(peerId));
+
+			this.join({
+				fetchRemotePeerTimeoutInMs: 5000,
+				maxRetry: -1,
+			}).catch((err) => {
+				logger.error('Failed to rejoin the grid', err);
+			});
+		}
+
 	}
 
 	/**
@@ -940,6 +948,42 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			this._joining = undefined;
 		}
 	}
+	private async _tryJoiningToGrid(settings: { fetchRemotePeerTimeoutInMs: number; }) {
+		if (this._closed) throw new Error('Cannot join the network on a closed hamok');
+		if (this._lookingForRemotePeers) return new Promise<void>((resolve) => this._lookingForRemotePeers?.waiters.push(resolve));
+		if (this.raft.leaderId !== undefined) return logger.warn('Already joined the network as %s', this.localPeerId);
+
+		return new Promise<void>((resolve) => {
+			const started = Date.now();
+			const finalize = () => {
+				const waiters = this._lookingForRemotePeers?.waiters;
+				
+				clearInterval(this._lookingForRemotePeers?.timer);
+				this._lookingForRemotePeers = undefined;
+				resolve();
+				
+				waiters?.forEach((release) => release());
+			};
+
+			this._lookingForRemotePeers = {
+				waiters: [],
+				timer: setInterval(() => {
+					const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId));
+					const now = Date.now();
+
+					this._emitMessage(joinMsg);
+
+					if (now - started < settings.fetchRemotePeerTimeoutInMs) return;
+
+					finalize();
+				}, this.raft.config.heartbeatInMs),
+				close: () => {
+					// logger.warn('%s Stopping looking for remote peers', this.localPeerId);
+					finalize();
+				},
+			};
+		});
+	}
 
 	private async _join(params: Required<HamokJoinProcessParams>, retried = 0): Promise<void> {
 		if (this._closed) throw new Error('Cannot join the network on a closed hamok');
@@ -955,30 +999,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 		this._stopRaftEngine();
 		
-		await new Promise<void>((resolve) => {
-			const started = Date.now();
-
-			this._lookingForRemotePeers = {
-				timer: setInterval(() => {
-					const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId));
-					const now = Date.now();
-
-					this._emitMessage(joinMsg);
-
-					if (now - started < fetchRemotePeerTimeoutInMs) return;
-
-					clearInterval(this._lookingForRemotePeers?.timer);
-					this._lookingForRemotePeers = undefined;
-					resolve();
-				}, this.raft.config.heartbeatInMs),
-				close: () => {
-					logger.warn('%s Stopping looking for remote peers', this.localPeerId);
-					clearInterval(this._lookingForRemotePeers?.timer);
-					this._lookingForRemotePeers = undefined;
-					resolve();
-				},
-			};
-		});
+		await this._tryJoiningToGrid({ fetchRemotePeerTimeoutInMs });
 		
 		if (this.remotePeerIds.size < 1) {
 			if (0 <= maxRetry && maxRetry <= retried) throw new Error('No remote peers found');
@@ -991,7 +1012,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this._startRaftEngine();
 
 		let leaderElected: () => void | undefined;
-		let noMoreRemotePeers: () => void | undefined;
+		let remotePeerChangedListener: () => void | undefined;
 			
 		await new Promise<void>(
 			(resolve, reject) => {
@@ -1001,10 +1022,14 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					resolve();
 					this.emit('joined');
 				};
-				noMoreRemotePeers = () => (this.remotePeerIds.size === 0 ? reject(new Error('Remote peers are gone while joining')) : void 0);
+				remotePeerChangedListener = () => {
+					// if anything changed in the remote peers we need to retry, and forget this try
+					reject(new Error('Remote peers changed while joining'));
+				};
 
 				this.on('leader-changed', leaderElected);
-				this.on('remote-peer-left', noMoreRemotePeers);
+				this.on('remote-peer-left', remotePeerChangedListener);
+				this.on('remote-peer-joined', remotePeerChangedListener);
 
 				// now we start the engine
 				this._startRaftEngine();
@@ -1017,7 +1042,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			})
 			.finally(() => {
 				this.off('leader-changed', leaderElected);
-				this.off('remote-peer-left', noMoreRemotePeers);
+				this.off('remote-peer-left', remotePeerChangedListener);
+				this.off('remote-peer-joined', remotePeerChangedListener);
 			});
 	}
 
@@ -1217,47 +1243,6 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		}
 	}
 
-	private _acceptLeaderChanged(leaderId: string | undefined): void {
-		for (const collection of this.storages.values()) {
-			collection.connection.emit('leader-changed', leaderId);
-		}
-
-		if (this.localPeerId === leaderId) {
-			this.on('remote-peer-joined', this.broadcastEndpointNotification);
-			this.on('remote-peer-left', this.broadcastEndpointNotification);
-
-			this.broadcastEndpointNotification();
-		} else {
-			this.off('remote-peer-joined', this.broadcastEndpointNotification);
-			this.off('remote-peer-left', this.broadcastEndpointNotification);
-
-			// we don't want any heartbeat measures if we are not the leader
-			this._remoteHeartbeats.forEach((timer) => clearTimeout(timer));
-			this._remoteHeartbeats.clear();
-
-			if (leaderId === undefined) {
-				if (this._closed || !this._run) return;
-
-				logger.warn('%s detected that Leader is gone, clearing the remote peers', this.localPeerId);
-				// this._stopRaftEngine();
-				[ ...this.remotePeerIds ].forEach((peerId) => this.removeRemotePeerId(peerId));
-
-				this.join({
-					fetchRemotePeerTimeoutInMs: 5000,
-					maxRetry: -1,
-				}).catch((err) => {
-					logger.error('Failed to rejoin the grid', err);
-				});
-			}
-		}
-	}
-
-	private _emitRemotePeerRemoved(remotePeerId: string): void {
-		for (const collection of this.storages.values()) {
-			collection.connection.emit('remote-peer-removed', remotePeerId);
-		}
-	}
-
 	private _emitMessage(
 		message: HamokMessage, 
 		destinationPeerIds?: ReadonlySet<string> | string[] | string,
@@ -1388,6 +1373,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			logger.debug('%s No heartbeat from %s', this.localPeerId, remotePeerId);
 			
 			this.emit('no-heartbeat-from', remotePeerId);
+			this.removeRemotePeerId(remotePeerId);
 		}, this.raft.config.electionTimeoutInMs);
 
 		this._remoteHeartbeats.set(remotePeerId, timer);

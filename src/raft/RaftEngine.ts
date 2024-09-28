@@ -118,7 +118,7 @@ export class RaftEngine {
 
 		newState.init?.();
 
-		this.events.emit('state-changed', newState.stateName);
+		this.events.emit('state-changed', newState.stateName, prevState.stateName);
 
 		switch (newState.stateName) {
 			case 'leader':
