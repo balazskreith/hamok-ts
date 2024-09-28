@@ -1117,11 +1117,16 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					logger.trace('%s Received join notification from itself %o', this.localPeerId, notification);
 					break;
 				}
+				if (this.raft.remotePeers.has(notification.sourcePeerId)) {
+					logger.trace('%s Received join notification from %s, but it is already in the remote peers', this.localPeerId, notification.sourcePeerId);
+					break;
+				}
+
+				this.addRemotePeerId(notification.sourcePeerId);
+				
 				if (this.raft.leaderId === this.localPeerId) {
 					this._sendEndpointNotification(notification.sourcePeerId, undefined);
 				}
-				this.addRemotePeerId(notification.sourcePeerId);
-
 				break;
 			}
 			case HamokMessageType.ENDPOINT_STATES_NOTIFICATION: {
@@ -1147,10 +1152,15 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					this.removeRemotePeerId(peerId);
 				}
 
+				let foundLocalPeerId = false;
+
 				for (const peerId of endpointStateNotification.activeEndpointIds ?? []) {
 					if (this.remotePeerIds.has(peerId)) continue;
-					if (peerId === this.localPeerId) continue;
-
+					if (peerId === this.localPeerId) {
+						foundLocalPeerId = true;
+						continue;
+					}
+					
 					logger.debug('%s Received endpoint state notification from %s (supposed to be the leader), and in that it has %s in its active endpoints, therefore we need to add it',
 						this.localPeerId,
 						endpointStateNotification.sourceEndpointId,
@@ -1164,6 +1174,16 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					this.addRemotePeerId(endpointStateNotification.sourceEndpointId);
 				}
 
+				if (!foundLocalPeerId) {
+					// we need to add the local peer id to the active endpoints of the leader
+
+					const joinMsg = this._codec.encodeJoinNotification(new JoinNotification(this.localPeerId, endpointStateNotification.sourceEndpointId));
+
+					this._emitMessage(joinMsg, endpointStateNotification.sourceEndpointId);
+
+					break;
+				}
+
 				// we add 2 becasue the nextIndex of the leader has not been reserved, and 
 				const possibleLowestIndex = endpointStateNotification.leaderNextIndex - endpointStateNotification.numberOfLogs + 2; 
 
@@ -1173,7 +1193,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				) {
 					// we make a warn message only if it is not the first join
 
-					logger.warn('%s Commit index of this peer (%d) is lower than the smallest commit index (%s) from remote peers resetting the logs', 
+					logger.warn('%s Commit index of this peer (%d) is lower than the smallest commit index (%d) from remote peers resetting the logs', 
 						this.localPeerId, 
 						this.raft.logs.commitIndex,
 						possibleLowestIndex
