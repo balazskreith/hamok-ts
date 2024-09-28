@@ -507,7 +507,6 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 				logger.error('Failed to rejoin the grid', err);
 			});
 		}
-
 	}
 
 	/**
