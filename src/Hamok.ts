@@ -249,6 +249,7 @@ export type HamokEventMap = {
 	heartbeat: [],
 	error: [error: Error],
 	'no-heartbeat-from': [remotePeerId: string],
+	'unsynced-peer': [remotePeerId: string],
 
 	// new events:
 	joined:[],
@@ -294,6 +295,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this.setMaxListeners(Infinity);
 		this._emitMessage = this._emitMessage.bind(this);
 		this._acceptLeaderChanged = this._acceptLeaderChanged.bind(this);
+		this._acceptStateChange = this._acceptStateChange.bind(this);
 		this._acceptCommit = this._acceptCommit.bind(this);
 		this.removeRemotePeerId = this.removeRemotePeerId.bind(this);
 		this.addRemotePeerId = this.addRemotePeerId.bind(this);
@@ -342,9 +344,13 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this.once('close', () => {
 			this.off('commit', this._acceptCommit);
 			this.off('leader-changed', this._acceptLeaderChanged);
+			this.off('unsynced-peer', this.removeRemotePeerId);
+			this.off('state-changed', this._acceptStateChange);
 		});
 		this.on('commit', this._acceptCommit);
 		this.on('leader-changed', this._acceptLeaderChanged);
+		this.on('unsynced-peer', this.removeRemotePeerId);
+		this.on('state-changed', this._acceptStateChange);
 	}
 
 	public get appData(): AppData {
@@ -1396,5 +1402,13 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		}, this.raft.config.electionTimeoutInMs);
 
 		this._remoteHeartbeats.set(remotePeerId, timer);
+	}
+
+	private _acceptStateChange(newState: RaftStateName, prevState: RaftStateName): void {
+		if (prevState === 'follower' && newState === 'candidate') {
+			const joinMsg = new JoinNotification(this.localPeerId);
+
+			this._emitMessage(this._codec.encodeJoinNotification(joinMsg));
+		}
 	}
 }

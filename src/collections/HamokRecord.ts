@@ -140,17 +140,21 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 				if (!request.prevValue) return; // the other listener will handle this
 				const updatedEntries: [keyof T, T[keyof T], T[keyof T]][] = [];
 				const insertedEntries: [keyof T, T[keyof T]][] = [];
-
 				const prevValue = JSON.parse(request.prevValue);
+
+				logger.warn('UpdateEntriesRequest prevValue %o, prevValue: %o', [ ...request.entries ].map(([ k, v ]) => `key: ${k}, value: ${v}`).join(', '), prevValue);
+
 				// check
 				let ok = true;
 
 				for (const [ key, value ] of Object.entries(prevValue)) {
+					logger.warn('UpdateEntriesRequest prevValue %o, checking equality between: %s === %s', key, value, this._object[key as keyof T]);
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					if (this.equalValues(this._object[key] as any, value as any)) continue;
 					ok = false;
 					break;
 				}
+				logger.warn('Apply update %o', [ ...request.entries ].map(([ k, v ]) => `key: ${k}, value: ${v}`).join(', '));
 				if (!ok) {
 					// respond false
 					if (request.sourceEndpointId === this.connection.grid.localPeerId) {
@@ -386,7 +390,7 @@ export class HamokRecord<T extends HamokRecordObject> extends EventEmitter {
 
 		const respondedValue = (await this.connection.requestInsertEntries(entries));
 
-		if (!respondedValue) return;
+		if (!respondedValue || respondedValue.size < 1) return;
 
 		const respondedInstance: Partial<T> = {};
 

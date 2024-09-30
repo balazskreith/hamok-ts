@@ -33,7 +33,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
      * until the follower does not respond normally.
      */
 	const sentRequests = new Map<string, [string, number]>();
-	const unsyncedRemotePeers = new Set<string>();
+	const unsyncedRemotePeers = new Map<string, number>();
 	let follow: () => void = () => void 0;
 	let closed = false;
 	const appendEntriesRequestListener = (request: RaftAppendEntriesRequestChunk) => {
@@ -195,7 +195,10 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 			logger.trace('%s Collected %d entries for peer %s', localPeerId, entries.length, peerId);
 
 			if (peerNextIndex < logs.firstIndex) {
-				if (unsyncedRemotePeers.add(peerId)) {
+				const startedUnsynced = unsyncedRemotePeers.get(peerId);
+
+				if (!startedUnsynced) {
+					unsyncedRemotePeers.set(peerId, Date.now());
 					logger.warn('%s Peer %s is unsynced, logs.nextIndex: %d, peerNextIndex: %d', 
 						localPeerId, 
 						peerId, 
@@ -203,6 +206,11 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 						peerNextIndex
 					);
 					// logger.warn(`Collected ${entries.length} entries, but peer ${peerId} should need ${logs.nextIndex - peerNextIndex}. logs.nextIndex: ${logs.nextIndex}, peerNextIndex: ${peerNextIndex}`);
+				} else if (30000 < now - startedUnsynced) {
+					// we should kick the peer out of the cluster
+
+					logger.warn('%s Peer %s is unsynced for a long time, we remove it from the cluster');
+					raftEngine.events.emit('unsynced-peer', peerId);
 				}
 			} else if (0 < unsyncedRemotePeers.size) {
 				if (unsyncedRemotePeers.delete(peerId)) {
