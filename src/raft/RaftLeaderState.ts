@@ -211,6 +211,7 @@ export function createRaftLeaderState(context: RaftLeaderStateContext): RaftStat
 
 					logger.warn('%s Peer %s is unsynced for a long time, we remove it from the cluster');
 					raftEngine.events.emit('unsynced-peer', peerId);
+					unsyncedRemotePeers.delete(peerId);
 				}
 			} else if (0 < unsyncedRemotePeers.size) {
 				if (unsyncedRemotePeers.delete(peerId)) {
