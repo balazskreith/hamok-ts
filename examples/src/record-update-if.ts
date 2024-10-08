@@ -54,11 +54,13 @@ export async function run() {
 
 	const [ updatedByServer1, updatedByServer2 ] = await Promise.all([
 		storage_1.updateInstanceIf({bar: 5}, insertedByServer1 ?? insertedByServer2 ?? {}),
-		storage_2.updateInstanceIf({bar: 5}, insertedByServer1 ?? insertedByServer2 ?? {})
+		storage_2.updateInstanceIf({bar: 6}, insertedByServer1 ?? insertedByServer2 ?? {})
 	]);
 
-	updatedByServer1 && logger.debug('Server 1 updated %o', updatedByServer1);
-	updatedByServer2 && logger.debug('Server 2 updated %o', updatedByServer2);
+	updatedByServer1 && logger.debug('Server 1 updated %o. instance: %o', updatedByServer1, storage_1.instance);
+	updatedByServer2 && logger.debug('Server 2 updated %o. instance: %o', updatedByServer2, storage_2.instance);
+
+	await new Promise(resolve => setTimeout(resolve, 1000));
 
 	server_1.close();
 	server_2.close();
