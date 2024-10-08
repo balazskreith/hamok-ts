@@ -395,6 +395,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		this.emit('close');
 
 		logger.info('%s is closed', this.localPeerId);
+
+		this.removeAllListeners();
 	}
 
 	public get stats() {
@@ -465,6 +467,10 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		if (!this.raft.remotePeers.delete(remotePeerId)) return;
 
 		logger.debug('%s removed remote peer %s', this.localPeerId, remotePeerId);
+
+		// remove the peer from props
+		this.raft.props.nextIndex.delete(remotePeerId);
+		this.raft.props.matchIndex.delete(remotePeerId);
 
 		if (this.localPeerId === this.raft.leaderId) {
 			this.broadcastEndpointNotification();
@@ -725,7 +731,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return storage;
 	}
 
-	public createEmitter<T extends HamokEmitterEventMap>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T> {
+	public createEmitter<T extends HamokEmitterEventMap, M extends Record<string, unknown> = Record<string, unknown>>(options: HamokEmitterBuilderConfig<T>): HamokEmitter<T, M> {
 		if (this._closed) throw new Error('Cannot create emitter on a closed Hamok instance');
 
 		const connection = this._createStorageConnection<string, string>( 
@@ -743,7 +749,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			},
 		);
 
-		const storage = new HamokEmitter<T>(
+		const storage = new HamokEmitter<T, M>(
 			connection,
 			options.payloadsCodec,
 		);

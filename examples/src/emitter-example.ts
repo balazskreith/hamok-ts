@@ -12,6 +12,10 @@ type ExampleEventMap = {
 	'event-2': [number, string],
 }
 
+type ExampleSubscriberMetaData = {
+	some: string;
+}
+
 export async function run() {
 
 	const server_1 = new Hamok();
@@ -27,20 +31,26 @@ export async function run() {
 
 	logger.info('Servers are joined');
 
-	const emitter_1 = await server_1.createEmitter<ExampleEventMap>({
+	const emitter_1 = await server_1.createEmitter<ExampleEventMap, ExampleSubscriberMetaData>({
 		emitterId: 'my-distributed-emitter',
 	}).ready;
 	const emitter_2 = await server_2.createEmitter<ExampleEventMap>({
 		emitterId: 'my-distributed-emitter',
 	}).ready;
-
-	const listener = (number: number, string: string, boolean: boolean) => {
+	const eventListener = (number: number, string: string, boolean: boolean) => {
 		logger.debug('Event-1 received by server_1: %s, %s, %s', number, string, boolean);
 	};
-	await emitter_1.subscribe('event-1', listener);
+	emitter_1.subscriptions.on('add-peer', (event, peerId, metaData) => {
+		logger.debug('On server_1 (%s) peer %s subscribed to event %s, metaData: %o', server_1.localPeerId, peerId, event, metaData);
+	});
+	emitter_1.subscriptions.on('remove-peer', (event, peerId, metaData) => {
+		logger.debug('On server_1 (%s) peer %s unsubscribed from event %s, metaData: %o', server_1.localPeerId, peerId, event, metaData);
+	});
+
+	await emitter_1.subscribe('event-1', eventListener);
 	await emitter_2.subscribe('event-1', (number: number, string: string, boolean: boolean) => {
 		logger.debug('Event-1 received by server_2: %s, %s, %s', number, string, boolean);
-	});
+	}, { some: 'metadata' });
 	await emitter_2.subscribe('event-2', (number, string) => {
 		logger.debug('Event-2 received by server_2: %s, %s', number, string);
 	});
@@ -52,7 +62,7 @@ export async function run() {
 	await emitter_1.publish('event-2', 2, 'world');
 
 	logger.debug('Unsubscribing from event-1 on server_1');
-	await emitter_1.unsubscribe('event-1', listener);
+	await emitter_1.unsubscribe('event-1', eventListener);
 
 	logger.debug('Publishing event-1 from server_2');
 	await emitter_1.publish('event-1', 3, 'hello', false);
