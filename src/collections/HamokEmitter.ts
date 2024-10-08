@@ -10,6 +10,11 @@ export interface HamokEmitterEventMap extends Record<string, unknown[]> {
 	// empty
 }
 
+type UpdatedMetaData<M extends Record<string, unknown>> = {
+	prevMetaData?: M | null;
+	newMetaData: M;
+}
+
 export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<string, unknown> = Record<string, unknown>> {
 	// private readonly _subscriptions = new Map<keyof T, Set<string>>();
 	public readonly subscriptions = new HamokEmitterSubscriptions<T, M>();
@@ -31,18 +36,38 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 						request
 					);
 				}
+				let responseEntries: Map<string, string> | undefined;
+				
 				for (const [ event, serializedMetaData ] of request.entries.entries()) {
-					let metaData: M | null = null;
+					try {
+						if (this.subscriptions.hasPeerOnEvent(event as keyof T, request.sourceEndpointId)) {
+							const metaDataUpdate = JSON.parse(serializedMetaData) as UpdatedMetaData<M>;
+							const updated = this.subscriptions.updatePeer(
+								event as keyof T, 
+								request.sourceEndpointId, 
+								metaDataUpdate.newMetaData, 
+								metaDataUpdate.prevMetaData
+							);
 
-					if (serializedMetaData !== 'null') {
-						try {
-							metaData = JSON.parse(serializedMetaData);
-						} catch (err) {
-							logger.error('Error while decoding the metadata for %s, %s, %o', this.id, event, `${err}`);
+							if (!updated) {
+								if (!responseEntries) responseEntries = new Map();
+
+								responseEntries.set(event, 'not-updated');
+
+								continue;
+							}
+						} else {
+							// this is a new subscription
+							let metaData: M | null = null;
+
+							if (serializedMetaData !== 'null') metaData = JSON.parse(serializedMetaData);
+
+							this.subscriptions.addPeer(event, request.sourceEndpointId, metaData);
 						}
+					} catch (err) {
+						logger.error('Error while decoding the metadata for %s, %s, %o', this.id, event, `${err}`);
+						continue;
 					}
-
-					this.subscriptions.addPeer(event, request.sourceEndpointId, metaData);
 
 					logger.debug('%s InsertEntriesRequest is received, %s is added to the subscription list for %s', 
 						this.connection.grid.localPeerId,
@@ -54,7 +79,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				if (request.sourceEndpointId === this.connection.grid.localPeerId) {
 					this.connection.respond(
 						'InsertEntriesResponse',
-						request.createResponse(Collections.EMPTY_MAP),
+						request.createResponse(responseEntries ?? Collections.EMPTY_MAP),
 						request.sourceEndpointId
 					);
 				}
@@ -96,7 +121,6 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 			})
 			.on('UpdateEntriesRequest', (request) => {
 				// this is for the events to emit
-
 				for (const [ event, serializedPayload ] of request.entries) {
 					try {
 						const payloads = this.payloadsCodec?.get(event)?.decode(serializedPayload) ?? JSON.parse(serializedPayload);
@@ -266,6 +290,25 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 		this._emitter.on(event as string, listener);
 	}
 
+	public async updateSubscriptionMetaData<K extends keyof T>(event: K, newMetaData: M, prevMetaData?: M | null): Promise<boolean> {
+		if (this._closed) throw new Error('Cannot subscribe on a closed emitter');
+
+		await this._initializing;
+
+		// if we already have a listener, we don't need to subscribe in the raft
+		if (!this._emitter.listenerCount(event as string)) {
+			throw new Error('Cannot update a non-existing subscription');
+		}
+
+		const updatedMetaData: UpdatedMetaData<M> = { 
+			prevMetaData,
+			newMetaData, 
+		};
+		const serializedMetaData = JSON.stringify(updatedMetaData);
+
+		return (await this.connection.requestInsertEntries(new Map([ [ event as string, serializedMetaData ] ]))).get(event as string) === undefined;
+	}
+
 	public async unsubscribe<K extends keyof T>(event: K, listener: (...args: T[K]) => void): Promise<void> {
 		if (this._closed) throw new Error('Cannot unsubscribe on a closed emitter');
 		
@@ -407,12 +450,18 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 }
 
 type HamokSubscriptionsEmitterEventMap<EventMap extends HamokEmitterEventMap, M extends Record<string, unknown> = Record<string, unknown>> = {
-	'add-peer': [
+	'added': [
 		event: keyof EventMap, 
 		peerId: string,
 		metaData: M | null,
 	],
-	'remove-peer': [
+	'updated': [
+		event: keyof EventMap,
+		peerId: string,
+		newMetaData: M,
+		prevMetaData?: M | null,
+	],
+	'removed': [
 		event: keyof EventMap,
 		peerId: string,
 		metaData: M | null,
@@ -422,11 +471,11 @@ type HamokSubscriptionsEmitterEventMap<EventMap extends HamokEmitterEventMap, M 
 class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends Record<string, unknown> = Record<string, unknown>> extends EventEmitter<HamokSubscriptionsEmitterEventMap<EventMap, M>> {
 	private readonly _map = new Map<keyof EventMap, Map<string, null | M>>();
 
-	hasEvent<K extends keyof EventMap>(event: K): boolean {
+	public hasEvent<K extends keyof EventMap>(event: K): boolean {
 		return this._map.has(event);
 	}
 
-	addPeer<K extends keyof EventMap>(event: K, peerId: string, metaData: M | null = null): boolean {
+	public addPeer<K extends keyof EventMap>(event: K, peerId: string, metaData: M | null = null): boolean {
 		let peersMap = this._map.get(event);
 
 		if (!peersMap) {
@@ -436,12 +485,32 @@ class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends
 
 		peersMap.set(peerId, metaData);
 
-		this.emit('add-peer', event, peerId, metaData);
+		this.emit('added', event, peerId, metaData);
 
 		return true;
 	}
 
-	removePeer<K extends keyof EventMap>(event: K, peerId: string): boolean {
+	public updatePeer<K extends keyof EventMap>(event: K, peerId: string, metaData: M, prevMetaData?: M | null): boolean {
+		const peersMap = this._map.get(event);
+		const currentMetaData = peersMap?.get(peerId);
+
+		if (!peersMap || currentMetaData === undefined) return false;
+
+		if (prevMetaData !== undefined) {
+			const serializedCurrentMetaData = JSON.stringify(currentMetaData);
+			const serializedPrevMetaData = JSON.stringify(prevMetaData);
+
+			if (serializedCurrentMetaData !== serializedPrevMetaData) return false;
+		}
+
+		peersMap.set(peerId, metaData);
+
+		this.emit('updated', event, peerId, metaData, currentMetaData);
+
+		return true;
+	}
+
+	public removePeer<K extends keyof EventMap>(event: K, peerId: string): boolean {
 		const peersMap = this._map.get(event);
 		const metaData = peersMap?.get(peerId);
 		
@@ -450,12 +519,12 @@ class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends
 			this._map.delete(event);
 		}
 
-		this.emit('remove-peer', event, peerId, metaData ?? null);
+		this.emit('removed', event, peerId, metaData ?? null);
 
 		return true;
 	}
 
-	removePeerFromAllEvent(peerId: string): boolean {
+	public removePeerFromAllEvent(peerId: string): boolean {
 		const events = [ ...this.events() ];
 		let removedAtLeastFromOneEvent = false;
 
@@ -466,26 +535,32 @@ class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends
 		return removedAtLeastFromOneEvent;
 	}
 
-	getEventPeersMap<K extends keyof EventMap>(event: K): Map<string, Record<string, unknown> | null> | undefined {
+	public getEventPeersMap<K extends keyof EventMap>(event: K): Map<string, Record<string, unknown> | null> | undefined {
 		return this._map.get(event);
 	}
 
-	entries(): IterableIterator<[keyof EventMap, Map<string, Record<string, unknown> | null>]> {
+	public entries(): IterableIterator<[keyof EventMap, Map<string, Record<string, unknown> | null>]> {
 		return this._map.entries();
 	}
 
-	events(): IterableIterator<keyof EventMap> {
+	public events(): IterableIterator<keyof EventMap> {
 		return this._map.keys();
 	}
 
-	getPeerIds<K extends keyof EventMap>(event: K): Set<string> | undefined {
+	public hasPeerOnEvent<K extends keyof EventMap>(event: K, peerId: string): boolean {
+		const peersMap = this._map.get(event);
+
+		return peersMap ? peersMap.has(peerId) : false;
+	}
+
+	public getPeerIds<K extends keyof EventMap>(event: K): Set<string> | undefined {
 		const peersMap = this._map.get(event);
 
 		if (!peersMap) return;
 		else return new Set([ ...peersMap.keys() ]);
 	}
 
-	getAllPeerIds(): Set<string> {
+	public getAllPeerIds(): Set<string> {
 		const peerIds = new Set<string>();
 
 		for (const peersMap of this._map.values()) {

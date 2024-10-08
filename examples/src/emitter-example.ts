@@ -40,11 +40,14 @@ export async function run() {
 	const eventListener = (number: number, string: string, boolean: boolean) => {
 		logger.debug('Event-1 received by server_1: %s, %s, %s', number, string, boolean);
 	};
-	emitter_1.subscriptions.on('add-peer', (event, peerId, metaData) => {
+	emitter_1.subscriptions.on('added', (event, peerId, metaData) => {
 		logger.debug('On server_1 (%s) peer %s subscribed to event %s, metaData: %o', server_1.localPeerId, peerId, event, metaData);
 	});
-	emitter_1.subscriptions.on('remove-peer', (event, peerId, metaData) => {
+	emitter_1.subscriptions.on('removed', (event, peerId, metaData) => {
 		logger.debug('On server_1 (%s) peer %s unsubscribed from event %s, metaData: %o', server_1.localPeerId, peerId, event, metaData);
+	});
+	emitter_1.subscriptions.on('updated', (event, peerId, newMetaData, oldMetaData) => {
+		logger.debug('On server_1 (%s) peer %s updated subscription to event %s, newMetaData: %o, oldMetaData: %o', server_1.localPeerId, peerId, event, newMetaData, oldMetaData);
 	});
 
 	await emitter_1.subscribe('event-1', eventListener);
@@ -54,6 +57,17 @@ export async function run() {
 	await emitter_2.subscribe('event-2', (number, string) => {
 		logger.debug('Event-2 received by server_2: %s, %s', number, string);
 	});
+
+	const success1 = await emitter_2.updateSubscriptionMetaData('event-1', { some: 'new metadata' }, { some: 'metadat' });
+	const success2 = await emitter_2.updateSubscriptionMetaData('event-1', { some: 'new metadata 2' }, { some: 'metadata' });
+	const success3 = await emitter_2.updateSubscriptionMetaData('event-1', { some: 'new metadata 3' });
+	try {
+		const success4 = await emitter_2.updateSubscriptionMetaData('event-2', { some: 'new metadata 4' });
+	} catch (err) {
+		logger.debug('Update metadata failed: %s', err);
+	}
+	
+	logger.debug('Update metadata success: %s, %s, %s', success1, success2, success3);
 
 	logger.debug('Publishing event-1 from server_2');
 	await emitter_2.publish('event-1', 1, 'hello', true);
