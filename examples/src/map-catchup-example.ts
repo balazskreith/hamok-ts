@@ -42,6 +42,11 @@ export async function run() {
 	
 	server_1.close();
 	server_2.close();
+
+	for (const [key, value] of storage_2) {
+		logger.debug('key: %s, value: %d', key, value);
+	}
+	
 }
 
 if (require.main === module) {

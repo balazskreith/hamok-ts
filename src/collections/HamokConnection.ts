@@ -250,7 +250,11 @@ export class HamokConnection<K, V> extends EventEmitter {
 			// 	message.type === HamokMessageType.INSERT_ENTRIES_REQUEST ? this.codec.valueCodec.decode(message.values[0]) : -1
 			// );
 			if (commitIndex <= this._appliedCommitIndex) {
-				return logger.warn('Received message with commit index %d is older or equal than the last applied commit index %d', commitIndex, this._appliedCommitIndex);
+				return logger.warn('Connection for id %s Received message with commit index %d is older or equal than the last applied commit index %d', 
+					this.config.storageId,
+					commitIndex, 
+					this._appliedCommitIndex
+				);
 			}
 			// only in test purposes
 			// if (this._appliedCommitIndex + 1 !== commitIndex) {

@@ -279,7 +279,7 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 		this._firstIndex = newCommitIndex;
 		this._memoryEstimateBytesLength = 0;
 
-		logger.debug(`Logs are reset. new values: commitIndex: ${this._commitIndex}, nextIndex: ${this._nextIndex}, lastApplied: ${this._firstIndex}`);
+		logger.warn(`Logs are reset. new values: commitIndex: ${this._commitIndex}, nextIndex: ${this._nextIndex}, lastApplied: ${this._firstIndex}`);
 	}
 
 	public removeUntil(newFirstIndex: number): void {
