@@ -285,9 +285,14 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				serializedMetaData = 'null';
 			}
 		} else serializedMetaData = 'null';
-
-		await this.connection.requestInsertEntries(new Map([ [ event as string, serializedMetaData ] ]));
+		
 		this._emitter.on(event as string, listener);
+		try {
+			await this.connection.requestInsertEntries(new Map([ [ event as string, serializedMetaData ] ]));
+		} catch (err) {
+			this._emitter.off(event as string, listener);
+			throw err;
+		}
 	}
 
 	public async updateSubscriptionMetaData<K extends keyof T>(event: K, newMetaData: M, prevMetaData?: M | null): Promise<boolean> {
