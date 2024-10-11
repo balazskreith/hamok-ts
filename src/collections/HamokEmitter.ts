@@ -389,6 +389,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 			result.push(this.connection.grid.localPeerId);
 		}
 
+		++this.stats.numberOfSentEventInvocations;
+
 		return result;
 	}
 
@@ -417,6 +419,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				remotePeerId
 			);
 		}
+
+		++this.stats.numberOfSentEventInvocations;
 
 		return true;
 	}
