@@ -569,11 +569,11 @@ class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends
 		return removedAtLeastFromOneEvent;
 	}
 
-	public getEventPeersMap<K extends keyof EventMap>(event: K): Map<string, Record<string, unknown> | null> | undefined {
+	public getEventPeersMap<K extends keyof EventMap>(event: K): Map<string, M | null> | undefined {
 		return this._map.get(event);
 	}
 
-	public entries(): IterableIterator<[keyof EventMap, Map<string, Record<string, unknown> | null>]> {
+	public entries(): IterableIterator<[keyof EventMap, Map<string, M | null>]> {
 		return this._map.entries();
 	}
 
