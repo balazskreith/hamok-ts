@@ -109,7 +109,7 @@ export class RaftEngine {
 
 		prevState.close();
 		this._state = newState;
-		
+
 		logger.debug(`%s State changed from ${prevState.stateName} to ${newState.stateName}`, this.localPeerId);
 		
 		if (prevState.stateName === 'candidate' && newState.stateName === 'follower') {
@@ -118,7 +118,7 @@ export class RaftEngine {
 
 		newState.init?.();
 
-		this.events.emit('state-changed', newState.stateName);
+		this.events.emit('state-changed', newState.stateName, prevState.stateName);
 
 		switch (newState.stateName) {
 			case 'leader':
