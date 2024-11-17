@@ -1148,7 +1148,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 					return logger.trace('%s Received endpoint state notification from itself %o', this.localPeerId, endpointStateNotification);
 				}
 
-				logger.warn('%s Received endpoint state notification %o, activeEndpointIds: %s', this.localPeerId, endpointStateNotification, [ ...(endpointStateNotification.activeEndpointIds ?? []) ].join(', '));
+				logger.debug('%s Received endpoint state notification %o, activeEndpointIds: %s', this.localPeerId, endpointStateNotification, [ ...(endpointStateNotification.activeEndpointIds ?? []) ].join(', '));
 
 				for (const peerId of this.remotePeerIds) {
 					logger.trace('%s Remote peer %s is in the active endpoints', this.localPeerId, peerId);
