@@ -226,6 +226,12 @@ export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = Partial<
 	 */
 	payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
 
+	/**
+	 * Optional.Indicate if the emitter automatically cleans up and unssubscribes from events 
+	 * remote peers gone offline. Only leader endpoint does this.
+	 */
+	autoClean?: boolean,
+
 }
 
 export type HamokFetchRemotePeersResponse = {
@@ -758,6 +764,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		const storage = new HamokEmitter<T, M>(
 			connection,
 			options.payloadsCodec,
+			options.autoClean,
 		);
 
 		connection.once('close', () => {
