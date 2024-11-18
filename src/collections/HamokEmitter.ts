@@ -36,7 +36,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
     
 	public constructor(
 		public readonly connection: HamokConnection<string, string>,
-		public readonly payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>
+		public readonly payloadsCodec?: Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>,
+		public readonly autoClean?: boolean
 	) {
 		this.connection
 			.on('InsertEntriesRequest', (request) => {
@@ -182,42 +183,30 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				this.subscriptions.removePeerFromAllEvent(request.sourceEndpointId);
 			})
 			.on('remote-peer-removed', async (remotePeerId) => {
-				if (this.connection.grid.leaderId !== this.connection.localPeerId) {
-					return;
-				}
-				if (this.connection.localPeerId === remotePeerId) {
-					return;
-				}
+				if (this.connection.grid.leaderId !== this.connection.localPeerId) return;
+				if (this.connection.localPeerId === remotePeerId) return;
+				if (!this.autoClean) return;
+				
 				for (let retried = 0; retried < 10; retried++) {
 					try {
-						this.subscriptions.emit('debug', `Removing endpoint ${remotePeerId} from subscriptions in emitter ${this.id}`);
-						await this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
+						await this.cleanup();
 						break;
 					} catch (err) {
 						if (retried < 8) continue;
-						logger.warn('Error while requesting to remove endpoint %s, from subscriptions in emitter %s, error: %o', remotePeerId, this.id, err);
+						logger.error('Error while cleaning up subscriptions in emitter %s, error: %o', this.id, err);
 						break;
 					}
 				}
 			})
 			.on('leader-changed', async (leaderId) => {
-				if (leaderId !== this.connection.localPeerId) {
+				if (leaderId !== this.connection.localPeerId || !this.autoClean) {
 					return;
 				}
-				const removedPeerIds = this.subscriptions.getAllPeerIds();
 
-				removedPeerIds.delete(this.connection.grid.localPeerId);
-
-				for (const remotePeerId of this.connection.grid.remotePeerIds) {
-					if (removedPeerIds.has(remotePeerId)) removedPeerIds.delete(remotePeerId);
-				}
-				if (0 < removedPeerIds.size) {
-					this.subscriptions.emit('debug', `Removing endpoints ${JSON.stringify(removedPeerIds)} from subscriptions in emitter ${this.id}`);
-					try {
-						await this.connection.requestDeleteEntries(removedPeerIds);
-					} catch (err) {
-						logger.warn('Error while requesting to remove endpoints %o, from subscriptions in emitter %s. error: %o', removedPeerIds, this.id, err);
-					}
+				try {
+					await this.cleanup();
+				} catch (err) {
+					logger.error('Error while cleaning up subscriptions in emitter %s, error: %o', this.id, err);
 				}
 			})
 			.on('StorageHelloNotification', (notification) => {
@@ -284,6 +273,24 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 		this.connection.close();
 		this._emitter.removeAllListeners();
 		this.subscriptions.removeAllListeners();
+	}
+
+	/**
+	 * This method is used to cleanup the subscriptions by removing the endpoints that are not in the grid anymore.
+	 */
+	public async cleanup() {
+		const removedPeerIds = this.subscriptions.getAllPeerIds();
+
+		removedPeerIds.delete(this.connection.grid.localPeerId);
+
+		for (const remotePeerId of this.connection.grid.remotePeerIds) {
+			if (removedPeerIds.has(remotePeerId)) removedPeerIds.delete(remotePeerId);
+		}
+		if (0 < removedPeerIds.size) {
+			this.subscriptions.emit('debug', `Removing endpoints ${JSON.stringify(removedPeerIds)} from subscriptions in emitter ${this.id}`);
+
+			return this.connection.requestDeleteEntries(removedPeerIds);
+		}
 	}
 
 	public async hasSubscribers<K extends keyof T>(event: K, filterByLocalNode = false): Promise<boolean> {

@@ -60,7 +60,7 @@
 	"dependencies": {
 		"pino": "^9.3.2",
 		"ioredis": "^5.4.1",
-		"hamok": "2.6.1-76ef244.0"
+		"hamok": "2.6.1-7ab70c1.0"
 	},
 	"devDependencies": {
 		"@types/events": "^3.0.0",

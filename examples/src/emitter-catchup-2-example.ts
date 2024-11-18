@@ -103,6 +103,9 @@ export async function run() {
 		emitterId: 'my-distributed-emitter',
 	});
 
+	(emitter_1.subscriptions as any).on('debug', (log: any) => {
+		logger.debug('Log received by server_1: %o', log);
+	})
 	emitter_1.subscriptions.on('added', (event, peerId, metaData) => {
 		logger.debug('On server_1 (%s) peer %s subscribed to event %s, metaData: %o. peers on event: %o', server_1.localPeerId, peerId, event, metaData, [...(emitter_1.subscriptions.getEventPeersMap(event) ?? [])]);
 	});
