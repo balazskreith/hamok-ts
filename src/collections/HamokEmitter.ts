@@ -185,8 +185,12 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				if (this.connection.grid.leaderId !== this.connection.localPeerId) {
 					return;
 				}
+				if (this.connection.localPeerId === remotePeerId) {
+					return;
+				}
 				for (let retried = 0; retried < 10; retried++) {
 					try {
+						this.subscriptions.emit('debug', `Removing endpoint ${remotePeerId} from subscriptions in emitter ${this.id}`);
 						await this.connection.requestDeleteEntries(new Set([ remotePeerId ]));
 						break;
 					} catch (err) {
@@ -197,7 +201,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				}
 			})
 			.on('leader-changed', async (leaderId) => {
-				if (leaderId !== this.connection.grid.localPeerId) {
+				if (leaderId !== this.connection.localPeerId) {
 					return;
 				}
 				const removedPeerIds = this.subscriptions.getAllPeerIds();
@@ -208,6 +212,7 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 					if (removedPeerIds.has(remotePeerId)) removedPeerIds.delete(remotePeerId);
 				}
 				if (0 < removedPeerIds.size) {
+					this.subscriptions.emit('debug', `Removing endpoints ${JSON.stringify(removedPeerIds)} from subscriptions in emitter ${this.id}`);
 					try {
 						await this.connection.requestDeleteEntries(removedPeerIds);
 					} catch (err) {
@@ -235,6 +240,8 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 					const snapshot = JSON.parse(serializedSnapshot) as HamokEmitterSnapshot;
 
 					this._import(snapshot);
+
+					this.subscriptions.emit('debug', `Imported snapshot from ${JSON.stringify(snapshot)}`);
 				} catch (err) {
 					logger.error(`Failed to import to emitter ${this.id}. Error: ${err}`);
 				} finally {
@@ -502,6 +509,9 @@ type HamokSubscriptionsEmitterEventMap<EventMap extends HamokEmitterEventMap, M 
 		peerId: string,
 		metaData: M | null,
 	],
+	'debug': [
+		log: string,
+	]
 }
 
 class HamokEmitterSubscriptions<EventMap extends HamokEmitterEventMap, M extends Record<string, unknown> = Record<string, unknown>> extends EventEmitter<HamokSubscriptionsEmitterEventMap<EventMap, M>> {
