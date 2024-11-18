@@ -202,8 +202,9 @@ export class HamokEmitter<T extends HamokEmitterEventMap, M extends Record<strin
 				}
 				const removedPeerIds = this.subscriptions.getAllPeerIds();
 
+				removedPeerIds.delete(this.connection.grid.localPeerId);
+
 				for (const remotePeerId of this.connection.grid.remotePeerIds) {
-					if (remotePeerId === this.connection.grid.localPeerId) continue;
 					if (removedPeerIds.has(remotePeerId)) removedPeerIds.delete(remotePeerId);
 				}
 				if (0 < removedPeerIds.size) {
