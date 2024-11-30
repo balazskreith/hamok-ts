@@ -105,6 +105,8 @@ export async function run() {
 
 	logger.info('We remove server1Acceptor from server_2 and server_3 and see if rejoin event is triggered');
 
+	logger.info('Waiting for rejoining event');
+
 	await Promise.all([
 		new Promise<void>(resolve => server_1.once('rejoining', () => (logger.info('Server_1 rejoin'), resolve()))),
 		Promise.resolve(server_2.off('message', server1Acceptor)),
@@ -114,6 +116,8 @@ export async function run() {
 	]);
 
 	logger.info('We add server1Acceptor to server_2 and server_3 and see if joined event is triggered');
+
+	logger.info('Waiting for joined event');
 
 	await Promise.all([
 		new Promise<void>(resolve => server_1.once('joined', () => (logger.info('Server_1 joined'), resolve()))),

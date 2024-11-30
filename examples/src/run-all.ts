@@ -8,7 +8,6 @@ import { run as recordEvents } from './record-events-example';
 import { run as recordDynamicCreating } from './record-dynamic-creating-example';
 import { run as emitterExample } from './emitter-example';
 import { run as emitterCatchup } from './emitter-catchup-example';
-import { run as reelectionExample } from './common-reelection-example';
 import { run as queueEvents } from './queue-events-example';
 import { run as queuePushPop } from './queue-push-pop-example';
 import { run as queueCatchingUp } from './queue-catching-up-example';
