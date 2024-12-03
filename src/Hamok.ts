@@ -996,8 +996,8 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 			maxRetry,
 		} = params ?? {};
 
-		if (this._joining?.aborted) {
-			return Promise.reject(new Error('Joining process is aborted'));
+		if (this._joining?.aborted || this._closed) {
+			return Promise.reject(new Error('Joining process is aborted or the hamok is closed'));
 		}
 
 		// this will start a heartbeat timer, which will start sending join messages
@@ -1006,13 +1006,13 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		try {
 			await this.waitUntilLeader(fetchRemotePeerTimeoutInMs);
 
-			if (this._joining?.aborted) {
-				return Promise.reject(new Error('Joining process is aborted'));
+			if (this._joining?.aborted || this._closed) {
+				return Promise.reject(new Error('Joining process is aborted or the hamok is closed'));
 			}
 
 		} catch (err) {
-			if (this._joining?.aborted) {
-				return Promise.reject(new Error('Joining process is aborted'));
+			if (this._joining?.aborted || this._closed) {
+				return Promise.reject(new Error('Joining process is aborted or the hamok is closed'));
 			} else if (0 < maxRetry && maxRetry <= retried) {
 				throw err;
 			} else if (0 < this.raft.remotePeers.size) {
