@@ -832,6 +832,7 @@ export class StorageCodec<K, V> implements HamokCodec<Input<K, V>, Message> {
 			requestId: request.requestId,
 			keys,
 			values,
+			// prevValue: request.prevValue !== undefined ? this.valueCodec.encode(request.prevValue) : undefined,
 			prevValue: request.prevValue !== undefined ? this.valueCodec.encode(request.prevValue) : undefined,
 		});
 	}

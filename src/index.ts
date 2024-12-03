@@ -21,7 +21,8 @@ export {
 	HamokQueue
 } from './collections/HamokQueue';
 export {
-	HamokEmitter
+	HamokEmitter,
+	HamokEmitterStats,
 } from './collections/HamokEmitter';
 export {
 	HamokConnection

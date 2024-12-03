@@ -13,7 +13,7 @@ export type PendingRequestConfig = {
 
 export type PendingRequestState = 'pending' | 'resolved' | 'rejected';
 
-export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
+export class PendingRequest {
 	public readonly responses = new Map<string, HamokMessage>();
 	
 	private _postponeTimeout = false;
@@ -95,17 +95,21 @@ export class PendingRequest implements Promise<ReadonlyArray<HamokMessage>> {
 		return this._state;
 	}
 
-	public then<TResult1 = HamokMessage[], TResult2 = never>(onfulfilled?: ((value: HamokMessage[]) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: string) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
-		return this._promise.then(onfulfilled, onrejected);
+	public get promise(): Promise<HamokMessage[]> {
+		return this._promise;
 	}
+
+	// public then<TResult1 = HamokMessage[], TResult2 = never>(onfulfilled?: ((value: HamokMessage[]) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: string) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
+	// 	return this._promise.then(onfulfilled, onrejected);
+	// }
     
-	public catch<TResult = never>(onrejected?: ((reason: string) => TResult | PromiseLike<TResult>) | null): Promise<HamokMessage[] | TResult> {
-		return this._promise.catch(onrejected);
-	}
+	// public catch<TResult = never>(onrejected?: ((reason: string) => TResult | PromiseLike<TResult>) | null): Promise<HamokMessage[] | TResult> {
+	// 	return this._promise.catch(onrejected);
+	// }
     
-	public finally(onfinally?: (() => void) | null): Promise<HamokMessage[]> {
-		return this._promise.finally(onfinally);
-	}
+	// public finally(onfinally?: (() => void) | null): Promise<HamokMessage[]> {
+	// 	return this._promise.finally(onfinally);
+	// }
 
 	// private _resolve(): void {
 	// 	if (this._timer) {

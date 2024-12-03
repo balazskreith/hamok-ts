@@ -85,7 +85,7 @@ export class HamokGrid {
 				this.sendMessage(options.message, remotePeers);
 			}
 			
-			const response = await pendingRequest;
+			const response = await pendingRequest.promise;
 
 			return response;
 		} catch (error) {

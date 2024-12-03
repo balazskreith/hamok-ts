@@ -10,6 +10,7 @@
   - [Properties](#properties)
   - [Events](#events)
   - [Methods](#methods)
+  - [Subscriptions](#subscriptions)
 - [Examples](#examples)
 - [FAQ](#faq)
 
@@ -130,6 +131,75 @@ emitter.unsubscribe("event", (data) => {
 
 emitter.close();
 ```
+
+### Subscriptions
+
+Peers subscribe to events using the `subscribe` method. When an event is published, all subscribed peers receive the event.
+You can observe the subscriptions by accessing the `subscriptions` property of the emitter.
+
+```typescript
+// Handle a peer subscribing to an event
+for (const [event, peers] of emitter.subscriptions.entries()) {
+  console.log(`Event: ${event}`, [ ...peers.entries() ]);
+}
+```
+
+Additionally you can listen to the `add-peer` and `remove-peer` events to observe the subscriptions.
+
+```typescript
+// Handle a peer subscribing to an event
+emitter.subscriptions.on('add-peer', (event, peerId) => {
+  console.log(`Peer ${peerId} subscribed to event ${event}.`);
+});
+
+// Handle a peer unsubscribing from an event
+emitter.subscriptions.on('remove-peer', (event, peerId) => {
+  console.log(`Peer ${peerId} unsubscribed from event ${event}.`);
+});
+```
+
+#### Add Metadata to subscription
+
+Peers can subscribe to an event with metadata.
+
+```typescript
+type SubscriptionMetaData = {
+  userId: string;
+  timestamp: Date;  // Time when the peer subscribed
+}
+
+// Create the emitter with metadata for subscriptions
+const emitter = hamok.createEmitter<MyEventMap, SubscriptionMetaData>({
+  emitterId: "exampleEmitter",
+});
+
+// Handle a peer subscribing to an event
+emitter.subscriptions.on('add-peer', (event, peerId, metaData) => {
+  console.log(`Peer ${peerId} subscribed to event ${event}.`);
+  console.log(`User ID: ${metaData?.userId}`);
+  console.log(`Subscription Timestamp: ${metaData.timestamp}`);
+});
+
+// Handle a peer unsubscribing from an event
+emitter.subscriptions.on('remove-peer', (event, peerId, metaData) => {
+  console.log(`Peer ${peerId} unsubscribed from event ${event}.`);
+  console.log(`User ID: ${metaData?.userId}`);
+  console.log(`Unsubscription Timestamp: ${new Date().toISOString()}`);
+});
+
+```
+
+#### Update Metadata for subscription
+
+Peers can update the metadata for an existing subscription.
+
+```typescript
+// Update the metadata for a subscription
+emitter.subscriptions.updateSubscriptionMetaData('myEvent', 'peerId', {
+  userId
+}, prevMetaData);
+```
+
 
 ## Examples
 

@@ -5,6 +5,7 @@
 	"main": "main.js",
 	"scripts": {
 		"format": "prettier --write \"src/**/*.ts\"",
+		"dev:my": "nodemon -x ts-node src/_mything.ts | pino-pretty",
 		"dev:run-all": "nodemon -x ts-node src/run-all.ts | pino-pretty",
 		"dev:readme": "nodemon -x ts-node src/common-readme-example.ts | pino-pretty",
 		"dev:map:1": "nodemon -x ts-node src/map-insert-get-example.ts | pino-pretty",
@@ -14,8 +15,10 @@
 		"dev:record:1": "nodemon -x ts-node src/record-insert-get-example.ts | pino-pretty",
 		"dev:record:2": "nodemon -x ts-node src/record-events-example.ts | pino-pretty",
 		"dev:record:3": "nodemon -x ts-node src/record-dynamic-creating-example.ts | pino-pretty",
+		"dev:record:4": "nodemon -x ts-node src/record-update-if.ts | pino-pretty",
 		"dev:emitter:1": "nodemon -x ts-node src/emitter-example.ts | pino-pretty",
 		"dev:emitter:2": "nodemon -x ts-node src/emitter-catchup-example.ts | pino-pretty",
+		"dev:emitter:3": "nodemon -x ts-node src/emitter-catchup-2-example.ts | pino-pretty",
 		"dev:election:1": "nodemon -x ts-node src/reelection-example.ts | pino-pretty",
 		"dev:queue:1": "nodemon -x ts-node src/queue-events-example.ts | pino-pretty",
 		"dev:queue:2": "nodemon -x ts-node src/queue-push-pop-example.ts | pino-pretty",
@@ -25,6 +28,7 @@
 		"dev:common:3": "nodemon -x ts-node src/common-join-leave-rejoin-example.ts | pino-pretty",
 		"dev:common:4": "nodemon -x ts-node src/common-waiting-example.ts | pino-pretty",
 		"dev:common:5": "nodemon -x ts-node src/common-join-leave-rejoin-example-2.ts | pino-pretty",
+		"dev:common:6": "nodemon -x ts-node src/common-rollout-example.ts | pino-pretty",
 		"dev:redis:1": "nodemon -x ts-node src/redis-remote-map-example.ts | pino-pretty",
 		"dev:redis:2": "nodemon -x ts-node src/redis-dynamic-record-example.ts | pino-pretty",
 		"dev:redis:3": "nodemon -x ts-node src/redis-job-executing-example.ts | pino-pretty",
@@ -57,7 +61,7 @@
 	"dependencies": {
 		"pino": "^9.3.2",
 		"ioredis": "^5.4.1",
-		"hamok": "file:../"
+		"hamok": "2.6.1-7ab70c1.0"
 	},
 	"devDependencies": {
 		"@types/events": "^3.0.0",

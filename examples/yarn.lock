@@ -1713,8 +1713,10 @@ graphemer@^1.4.0:
   resolved "https://registry.npmjs.org/graphemer/-/graphemer-1.4.0.tgz"
   integrity sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==
 
-"hamok@file:..":
-  version "2.2.0"
+hamok@2.6.1-7ab70c1.0:
+  version "2.6.1-7ab70c1.0"
+  resolved "https://registry.yarnpkg.com/hamok/-/hamok-2.6.1-7ab70c1.0.tgz#84448b18f0324a278677856882ba994b484baf58"
+  integrity sha512-qf3OMnCyGcBx6/e+IaKvwNVYkibdNYTGy1aIAEIsQgxk2vzyEp8SMnGRUG5eZ6G5PkRUu9xL9JBDx8xkc5s6pg==
   dependencies:
     "@bufbuild/protobuf" "^1.10.0"
     pino "^9.3.2"

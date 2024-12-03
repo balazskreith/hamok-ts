@@ -28,6 +28,7 @@ yarn add hamok
   - [HamokEmitter](#hamokemitter)
   - [HamokRecord](#hamokrecord)
 - [User Manual](#user-manual)
+- [NPM library](#npm-library)
 - [Important Notes](#important-notes)
 - [Contributing](#contributing)
 - [License](#license)
@@ -129,7 +130,11 @@ HamokRecord is a feature that provides distributed storage for individual record
 
 ## User Manual
 
-You can find detailed user manuals [here](https://balazskreith.github.io/hamok-ts/)
+You can find detailed user manuals [here](https://balazskreith.github.io/hamok-ts/).
+
+## NPM library
+
+The Hamok library is available on [NPM](https://www.npmjs.com/package/hamok).
 
 ## Contributing
 

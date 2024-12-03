@@ -23,6 +23,10 @@ export type HamokQueueSnapshot = {
 
 export type HamokEmitterSnapshot = {
 	emitterId: string;
-	events: string[];
-	subscribers: string[][];
+	subscriptions: {
+		event: string;
+		subscribers: {
+			peerId: string, metaData: Record<string, unknown> | null
+		}[];
+	}[],
 }
