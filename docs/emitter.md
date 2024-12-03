@@ -10,6 +10,7 @@
   - [Properties](#properties)
   - [Events](#events)
   - [Methods](#methods)
+  - [Subscriptions](#subscriptions)
 - [Examples](#examples)
 - [FAQ](#faq)
 
@@ -76,6 +77,61 @@ const emitter = hamok.createEmitter<MyEventMap>({
 });
 ```
 
+## API Reference
+
+### `HamokEmitter<T extends HamokEmitterEventMap>` Class
+
+A class for managing events and subscriptions in a distributed system.
+
+#### Properties
+
+- `id`: `string` - The unique identifier of the emitter.
+- `closed`: `boolean` - Indicates whether the emitter is closed.
+- `connection`: `HamokConnection<string, string>` - The connection used by the emitter.
+- `payloadsCodec`: `Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>` - Optional codec for encoding and decoding payloads.
+- `ready: Promise<void>` - A promise that resolves when the emitter is initialized and ready to use.
+
+#### Methods
+
+- **close**(): `void` - Closes the emitter and releases any held resources.
+- **subscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Subscribes a listener to an event.
+- **unsubscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Unsubscribes a listener from an event.
+- **clear**(): `void` - Clears all subscriptions and listeners.
+- **publish**<K extends keyof T>(`event: K`, `...args: T[K]`): `Promise<string[]>` - Publishes an event to all subscribed listeners.
+- **notify**<K extends keyof T>(`event: K`, `...args: T[K]`): `void` - Notifies all subscribed listeners of an event.
+- **export**(): `HamokEmitterSnapshot` - Exports the current state of the emitter.
+- **import**(`snapshot: HamokEmitterSnapshot`): `void` - Imports the state from a snapshot.
+
+### Events
+
+- `InsertEntriesRequest`: Manages subscription and adds the source endpoint to the list.
+- `RemoveEntriesRequest`: Manages subscription and removes the source endpoint from the list.
+- `UpdateEntriesRequest`: Emits events with decoded payloads.
+- `UpdateEntriesNotification`: Emits events with decoded payloads.
+- `ClearEntriesNotification`: Manages subscription and removes the source endpoint from the list.
+- `remote-peer-removed`: Removes the remote peer from all subscriptions.
+- `close`: Closes the emitter and removes all listeners.
+
+### Example Usage
+
+```typescript
+const emitter = new HamokEmitter(connection, payloadsCodec);
+
+emitter.subscribe("event", (data) => {
+  console.log(`Received data: ${data}`);
+});
+
+emitter.publish("event", "sample data").then((peerIds) => {
+  console.log(`Event published to peers: ${peerIds}`);
+});
+
+emitter.unsubscribe("event", (data) => {
+  console.log(`Unsubscribed from event`);
+});
+
+emitter.close();
+```
+
 ### Subscriptions
 
 Peers subscribe to events using the `subscribe` method. When an event is published, all subscribed peers receive the event.
@@ -133,60 +189,17 @@ emitter.subscriptions.on('remove-peer', (event, peerId, metaData) => {
 
 ```
 
-## API Reference
+#### Update Metadata for subscription
 
-### `HamokEmitter<T extends HamokEmitterEventMap>` Class
-
-A class for managing events and subscriptions in a distributed system.
-
-#### Properties
-
-- `id`: `string` - The unique identifier of the emitter.
-- `closed`: `boolean` - Indicates whether the emitter is closed.
-- `connection`: `HamokConnection<string, string>` - The connection used by the emitter.
-- `payloadsCodec`: `Map<keyof T, { encode: (...args: unknown[]) => string, decode: (data: string) => unknown[] }>` - Optional codec for encoding and decoding payloads.
-- `ready: Promise<void>` - A promise that resolves when the emitter is initialized and ready to use.
-
-#### Methods
-
-- **close**(): `void` - Closes the emitter and releases any held resources.
-- **subscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Subscribes a listener to an event.
-- **unsubscribe**<K extends keyof T>(`event: K`, `listener: (...args: T[K]) => void`): `Promise<void>` - Unsubscribes a listener from an event.
-- **clear**(): `void` - Clears all subscriptions and listeners.
-- **publish**<K extends keyof T>(`event: K`, `...args: T[K]`): `Promise<string[]>` - Publishes an event to all subscribed listeners.
-- **notify**<K extends keyof T>(`event: K`, `...args: T[K]`): `void` - Notifies all subscribed listeners of an event.
-- **export**(): `HamokEmitterSnapshot` - Exports the current state of the emitter.
-- **import**(`snapshot: HamokEmitterSnapshot`): `void` - Imports the state from a snapshot.
-
-### Events
-
-- `InsertEntriesRequest`: Manages subscription and adds the source endpoint to the list.
-- `RemoveEntriesRequest`: Manages subscription and removes the source endpoint from the list.
-- `UpdateEntriesRequest`: Emits events with decoded payloads.
-- `UpdateEntriesNotification`: Emits events with decoded payloads.
-- `ClearEntriesNotification`: Manages subscription and removes the source endpoint from the list.
-- `remote-peer-removed`: Removes the remote peer from all subscriptions.
-- `close`: Closes the emitter and removes all listeners.
-
-### Example Usage
+Peers can update the metadata for an existing subscription.
 
 ```typescript
-const emitter = new HamokEmitter(connection, payloadsCodec);
-
-emitter.subscribe("event", (data) => {
-  console.log(`Received data: ${data}`);
-});
-
-emitter.publish("event", "sample data").then((peerIds) => {
-  console.log(`Event published to peers: ${peerIds}`);
-});
-
-emitter.unsubscribe("event", (data) => {
-  console.log(`Unsubscribed from event`);
-});
-
-emitter.close();
+// Update the metadata for a subscription
+emitter.subscriptions.updateSubscriptionMetaData('myEvent', 'peerId', {
+  userId
+}, prevMetaData);
 ```
+
 
 ## Examples
 
