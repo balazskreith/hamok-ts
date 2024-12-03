@@ -42,3 +42,10 @@ A ready version to use (hopefully)
 - Fixed a bug where the leader would not send a `StorageState` notification to a follower when the follower was behind the leader.
 - Fixed bug of remaining remote peer not part of the grid due to follower ENDPOINT_STATE_NOTIFICATION contained a wrong endpoint.
 - Changing follower behavior when falling out of the grid. Instead of trying to collect endpoints, it periodically sends JOIN_NOTIFICATION until a leader is not elected for the endpoint
+
+### 2.6.0
+
+ - Update `HamokEmitter` to have metaData property bind to subscriber peers per events.
+  * Add Subscriptions to `HamokEmitter` to track the subscribers of an event.
+	* Add `HamokEmitterStats` to track the number of events emitted and received by the emitter.
+ - Simplifying discovery and joining methods in `Hamok`.
