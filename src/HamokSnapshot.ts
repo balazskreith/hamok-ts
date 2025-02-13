@@ -30,3 +30,13 @@ export type HamokEmitterSnapshot = {
 		}[];
 	}[],
 }
+
+export type HamokChannelSnapshot = {
+	emitterId: string;
+	subscriptions: {
+		event: string;
+		subscribers: {
+			peerId: string, metaData: Record<string, unknown> | null
+		}[];
+	}[],
+}

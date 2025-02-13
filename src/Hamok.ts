@@ -25,6 +25,7 @@ import { EndpointStatesNotification } from './messages/messagetypes/EndpointNoti
 import { JoinNotification } from './messages/messagetypes/JoinNotification';
 import { RemoteMap } from './collections/RemoteMap';
 import { HamokRemoteMap } from './collections/HamokRemoteMap';
+import { HamokChannel, HamokChannelEventMap } from './collections/HamokChannel';
 
 const logger = createLogger('Hamok');
 
@@ -234,6 +235,14 @@ export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = Partial<
 
 }
 
+export type HamokAppChannelConfig = Partial<HamokConnectionBuilderBaseConfig> & {
+
+	/**
+	 * The unique identifier for the channel.
+	 */
+	channelId: string,
+}
+
 export type HamokFetchRemotePeersResponse = {
 	remotePeers: string[],
 	minNumberOfLogs?: number,
@@ -279,7 +288,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 	public readonly config: HamokObjectConfig<AppData>;
 	public readonly raft: RaftEngine;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	public readonly storages = new Map<string, HamokRecord<any> | HamokMap<any, any> | HamokQueue<any> | HamokRemoteMap<any, any> | HamokEmitter<any>>();
+	public readonly storages = new Map<string, HamokRecord<any> | HamokMap<any, any> | HamokQueue<any> | HamokRemoteMap<any, any> | HamokEmitter<any> | HamokChannel<any>>();
 
 	private _closed = false;
 	private _run = false;
@@ -577,6 +586,42 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 
 			this.on('leader-changed', listener);
 		});
+	}
+
+	public createChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokAppChannelConfig): HamokChannel<T> {
+		if (this._closed) throw new Error('Cannot create channel on a closed Hamok instance');
+		if (this.storages.has(options.channelId)) throw new Error(`Storage with id ${options.channelId} already exists`);
+
+		const connection = this._createStorageConnection(
+			{
+				...options,
+				keyCodec: createStrToUint8ArrayCodec(),
+				valueCodec: createStrToUint8ArrayCodec(),
+				storageId: options.channelId,
+			},
+		);
+
+		const storage = new HamokChannel<T>(
+			connection,
+		);
+
+		storage.connection.once('close', () => {
+			this.storages.delete(storage.id);
+		});
+		
+		this.storages.set(storage.id, storage);
+
+		return storage;
+	}
+
+	public getOrCreateAppChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokAppChannelConfig, callback?: (alreadyExisted: boolean) => void): HamokChannel<T> {
+		const storage = this.storages.get(options.channelId) as HamokChannel<T>;
+
+		if (!storage) return this.createChannel(options);
+
+		callback?.(true);
+		
+		return storage;
 	}
 
 	public createMap<K, V>(options: HamokMapBuilderConfig<K, V>): HamokMap<K, V> {
