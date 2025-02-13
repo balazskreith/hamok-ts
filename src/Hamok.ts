@@ -235,7 +235,7 @@ export type HamokEmitterBuilderConfig<T extends HamokEmitterEventMap> = Partial<
 
 }
 
-export type HamokAppChannelConfig = Partial<HamokConnectionBuilderBaseConfig> & {
+export type HamokChannelConfig = Partial<HamokConnectionBuilderBaseConfig> & {
 
 	/**
 	 * The unique identifier for the channel.
@@ -588,7 +588,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		});
 	}
 
-	public createChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokAppChannelConfig): HamokChannel<T> {
+	public createChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokChannelConfig): HamokChannel<T> {
 		if (this._closed) throw new Error('Cannot create channel on a closed Hamok instance');
 		if (this.storages.has(options.channelId)) throw new Error(`Storage with id ${options.channelId} already exists`);
 
@@ -614,7 +614,7 @@ export class Hamok<AppData extends Record<string, unknown> = Record<string, unkn
 		return storage;
 	}
 
-	public getOrCreateAppChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokAppChannelConfig, callback?: (alreadyExisted: boolean) => void): HamokChannel<T> {
+	public getOrCreateChannel<T extends HamokChannelEventMap = HamokChannelEventMap>(options: HamokChannelConfig, callback?: (alreadyExisted: boolean) => void): HamokChannel<T> {
 		const storage = this.storages.get(options.channelId) as HamokChannel<T>;
 
 		if (!storage) return this.createChannel(options);

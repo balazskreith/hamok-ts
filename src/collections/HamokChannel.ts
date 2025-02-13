@@ -479,12 +479,6 @@ export class HamokChannel<T extends HamokChannelEventMap, M extends Record<strin
 		this._pendingRequests.set(requestId, pendingRequest);
 
 		for (const remotePeerId of remotePeerIds ?? []) {
-			if (remotePeerId === this.connection.grid.localPeerId) {
-				this._emitter.emit(event as string, ...args);
-
-				continue;
-			}
-			
 			this.connection.notifyUpdateEntries(
 				new Map([ entry ]),
 				remotePeerId
