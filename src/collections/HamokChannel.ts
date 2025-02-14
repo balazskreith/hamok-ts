@@ -457,7 +457,7 @@ export class HamokChannel<T extends HamokChannelEventMap, M extends Record<strin
 		this._emitter.removeAllListeners();
 	}
 
-	public async request<K extends keyof T, R extends Awaited<T[K]>>(event: K, ...args: RequestListenerParameters<T[K]>): Promise<R[]> {
+	public async request<K extends keyof T, R extends Awaited<ReturnType<T[K]>>>(event: K, ...args: RequestListenerParameters<T[K]>): Promise<R[]> {
 		if (this._closed) throw new Error('Cannot publish on a closed emitter');
 		
 		await this._initializing;

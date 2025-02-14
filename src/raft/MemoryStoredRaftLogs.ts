@@ -306,7 +306,7 @@ export class MemoryStoredRaftLogs extends EventEmitter implements RaftLogs {
 		}
 		
 		this._firstIndex = newFirstIndex;
-		logger.trace(`Set the lastApplied to ${this._firstIndex} and removed ${removed} items`);
+		logger.trace('Set the firstIndex to %d and removed %d items', this._firstIndex, removed);
 	}
 
 	private _expire(): void {
