@@ -31,6 +31,13 @@ export {
 	HamokRecord
 } from './collections/HamokRecord';
 export {
+	HamokChannel,
+	HamokChannelNotificationHandler,
+	HamokChannelRequestHandler,
+	HamokChannelHandler,
+	HamokChannelEventMap,
+} from './collections/HamokChannel';
+export {
 	RaftLogs
 } from './raft/RaftLogs';
 export {

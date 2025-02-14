@@ -224,7 +224,13 @@ export function createRaftFollowerState(context: RaftFollowerStateContext) {
 
 		if (config.onlyFollower) {
 			updated = now;
-			context.extraWaitingTime = Math.max(config.followerMaxIdleInMs, Math.min((context.extraWaitingTime ?? 0) * 2, 30000));
+			context.extraWaitingTime = Math.max(
+				config.followerMaxIdleInMs, 
+				Math.min(
+					(context.extraWaitingTime ?? 0) * 2, 
+					30000
+				)
+			);
 			
 			return logger.debug('This peer is configured to be only a follower. It will not start an election.');
 		}

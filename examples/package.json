@@ -7,6 +7,7 @@
 		"format": "prettier --write \"src/**/*.ts\"",
 		"dev:my": "nodemon -x ts-node src/_mything.ts | pino-pretty",
 		"dev:run-all": "nodemon -x ts-node src/run-all.ts | pino-pretty",
+		"dev:channel:1": "nodemon -x ts-node src/channel-example.ts | pino-pretty",
 		"dev:readme": "nodemon -x ts-node src/common-readme-example.ts | pino-pretty",
 		"dev:map:1": "nodemon -x ts-node src/map-insert-get-example.ts | pino-pretty",
 		"dev:map:2": "nodemon -x ts-node src/map-update-if-example.ts | pino-pretty",
